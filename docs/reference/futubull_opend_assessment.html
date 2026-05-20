@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Futubull / OpenD Readiness Assessment — CSAM Trader V2</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --fg: #c9d1d9;
+      --muted: #8b949e;
+      --accent: #58a6ff;
+      --good: #3fb950;
+      --warn: #d29922;
+      --bad: #f85149;
+      --border: #30363d;
+      --card: #161b22;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      line-height: 1.6;
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem;
+    }
+    h1, h2, h3 {
+      color: #f0f6fc;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.3rem;
+    }
+    h1 { font-size: 1.8rem; margin-top: 0; }
+    h2 { font-size: 1.3rem; margin-top: 2rem; }
+    h3 { font-size: 1.05rem; margin-top: 1.5rem; border-bottom: none; }
+    .meta {
+      color: var(--muted);
+      font-size: 0.9rem;
+      margin-bottom: 1.5rem;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1rem 0;
+      font-size: 0.92rem;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 0.55rem 0.7rem;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      background: var(--card);
+      color: #f0f6fc;
+      font-weight: 600;
+    }
+    tr:nth-child(even) { background: rgba(255,255,255,0.02); }
+    .tag {
+      display: inline-block;
+      padding: 0.15rem 0.5rem;
+      border-radius: 999px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+    }
+    .tag.good { background: rgba(63,185,80,0.15); color: var(--good); }
+    .tag.warn { background: rgba(210,153,34,0.15); color: var(--warn); }
+    .tag.bad  { background: rgba(248,81,73,0.15); color: var(--bad); }
+    .tag.info { background: rgba(88,166,255,0.15); color: var(--accent); }
+    .callout {
+      background: var(--card);
+      border-left: 4px solid var(--accent);
+      padding: 0.9rem 1rem;
+      margin: 1rem 0;
+      border-radius: 0 6px 6px 0;
+    }
+    .callout.warn { border-left-color: var(--warn); }
+    .callout.good { border-left-color: var(--good); }
+    ul { padding-left: 1.3rem; }
+    li { margin: 0.35rem 0; }
+    code {
+      background: rgba(110,118,129,0.15);
+      padding: 0.15rem 0.35rem;
+      border-radius: 4px;
+      font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+      font-size: 0.88em;
+    }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .section-badge {
+      float: right;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-top: 0.3rem;
+    }
+  </style>
+</head>
+<body>
+
+<h1>Futubull / OpenD Readiness Assessment <span class="section-badge tag info">CSAM Trader V2</span></h1>
+<p class="meta">Prepared: 2026-05-20 &nbsp;|&nbsp; Scope: Phase 7 FUTUBULL integration &nbsp;|&nbsp; Evaluator: Kimi Code CLI</p>
+
+<div class="callout good">
+  <strong>Bottom line:</strong> The path to a working Futu integration is clear and low-risk. Tick-level data is viable, a community Nautilus adapter exists as a reference, and Docker deployment patterns align with our existing IBKR architecture.
+</div>
+
+<h2>1. Market Data — "Free" Status &amp; Tick-Level Reality</h2>
+
+<h3>1.1 What Is Actually Free</h3>
+<table>
+  <tr><th>Market</th><th>Free Tier</th><th>Depth</th><th>Notes</th></tr>
+  <tr>
+    <td><strong>US Stocks</strong></td>
+    <td>LV2 (promotion since ~Apr 2025)</td>
+    <td>60-level<br><small>(Nasdaq TotalView + NYSE ArcaBook)</small></td>
+    <td>Previously paid; now free for API. Covers common stocks + ETFs. <strong>Excludes</strong> US futures/options.</td>
+  </tr>
+  <tr>
+    <td><strong>HK Stocks</strong></td>
+    <td>LV1</td>
+    <td>1-level</td>
+    <td>LV2 (10-depth) and SF (full-depth + broker queue) require purchased quote rights.</td>
+  </tr>
+  <tr>
+    <td><strong>A-Shares</strong></td>
+    <td>LV1</td>
+    <td>5-level</td>
+    <td>Basic only.</td>
+  </tr>
+</table>
+
+<h3>1.2 Tick-Level Data for Algo Trading</h3>
+<p>OpenD explicitly supports tick-by-tick subscriptions via <code>SubType.TICKER</code>. Data is pushed asynchronously to callbacks after subscription. You can also pull the latest buffered tick data on-demand via <code>get_rt_ticker</code> without additional frequency limits (reads from OpenD's local cache).</p>
+
+<div class="callout warn">
+  <strong>Gating factors:</strong>
+  <ul>
+    <li><strong>Subscription Quotas</strong> — Concurrent real-time subscriptions are capped by account tier (see table below).</li>
+    <li><strong>Frequency Limits</strong> — Request-based interfaces have rate limits (e.g., market snapshot max 60 req/30s). <em>Subscription push data has no frequency limit.</em></li>
+    <li><strong>1-Minute Lock</strong> — You cannot unsubscribe and release quota until at least 1 minute has passed.</li>
+  </ul>
+</div>
+
+<table>
+  <tr><th>Account Tier</th><th>Subscription Quota</th><th>How to Qualify</th></tr>
+  <tr><td>Registered / &lt; HKD 10k assets</td><td>100</td><td>Open account</td></tr>
+  <tr><td>≥ HKD 10k assets</td><td>300</td><td>Deposit / hold assets</td></tr>
+  <tr><td>High activity</td><td>1,000</td><td>Assets &gt; HKD 500k <strong>OR</strong> 200+ monthly filled orders <strong>OR</strong> HKD 2M monthly volume</td></tr>
+  <tr><td>Pro</td><td>2,000</td><td>Assets &gt; HKD 5M <strong>OR</strong> 2,000+ monthly orders <strong>OR</strong> HKD 20M monthly volume</td></tr>
+</table>
+
+<p><em>Each stock + data type combo consumes 1 quota.</em> For 50 US symbols with quote + tick + order book, that's 150 subscriptions.</p>
+
+<div class="callout good">
+  <strong>Assessment:</strong> Tick-level data is viable for algo. For a focused strategy running &lt;100 instruments, the free tier (with modest assets) is sufficient. Scale beyond that requires higher tiers.
+</div>
+
+<h2>2. US vs HK Exchange Switching Considerations</h2>
+
+<h3>2.1 Symbology &amp; Venue Mapping</h3>
+<p>Futu uses a distinct code format requiring an <code>InstrumentId</code> mapping layer:</p>
+<table>
+  <tr><th>Market</th><th>Format</th><th>Example</th></tr>
+  <tr><td>HK</td><td><code>HK.code</code></td><td><code>HK.00700</code> (Tencent)</td></tr>
+  <tr><td>US</td><td><code>US.code</code></td><td><code>US.AAPL</code></td></tr>
+  <tr><td>A-Share</td><td><code>SH.code</code> / <code>SZ.code</code></td><td><code>SH.600519</code></td></tr>
+</table>
+<p>Nautilus uses <code>SYMBOL.VENUE</code> (e.g., <code>AAPL.NASDAQ</code>). Our adapter needs a bi-directional mapping.</p>
+
+<h3>2.2 Market Hours &amp; States</h3>
+<table>
+  <tr><th>Aspect</th><th>HK</th><th>US</th></tr>
+  <tr><td>Pre-market</td><td>09:00–09:30 CST (Auction)</td><td>04:00–09:30 EST</td></tr>
+  <tr><td>Regular</td><td>09:30–12:00, 13:00–16:00 CST</td><td>09:30–16:00 EST</td></tr>
+  <tr><td>After-hours</td><td>16:00–16:08 (CAS)</td><td>16:00–20:00 EST</td></tr>
+  <tr><td>Overnight</td><td>No</td><td>20:00–04:00 EST</td></tr>
+</table>
+<p>ORB and momentum session-start logic will need per-market calibration. Our <code>OrbConfig</code> already supports this via <code>session_start</code> / <code>max_trade_time</code>.</p>
+
+<h3>2.3 Quote Rights Are Market-Specific</h3>
+<table>
+  <tr><th>Market</th><th>Securities</th><th>Options</th><th>Futures</th></tr>
+  <tr><td>HK</td><td>LV1 / LV2 / SF</td><td>LV1 / LV2</td><td>LV1 / LV2</td></tr>
+  <tr><td>US</td><td>LV1 / LV2</td><td>LV1 only</td><td>LV1 / LV2</td></tr>
+</table>
+
+<h3>2.4 Data Depth Differences</h3>
+<ul>
+  <li><strong>US LV2:</strong> 60-depth (Nasdaq + ArcaBook aggregated)</li>
+  <li><strong>HK LV2:</strong> 10-depth</li>
+  <li><strong>HK SF:</strong> Full-depth + broker queue (requires separate subscription)</li>
+</ul>
+
+<h2>3. AI Services (Futu Skills)</h2>
+<p>Futu provides <strong>MCP/JSON-RPC skills</strong> for AI assistants (Claude, Cursor, etc.) to interact with Futu data and trading. These are <strong>not</strong> a trading engine feature — they are conversational AI tools.</p>
+
+<table>
+  <tr><th>Category</th><th>Requires OpenD</th><th>Relevant to CSAM</th></tr>
+  <tr><td>Search Skills</td><td>No</td><td>News search, sentiment analysis, multi-stock digest</td></tr>
+  <tr><td>Anomaly Detection</td><td>Yes</td><td>Capital flow anomalies, derivatives anomalies, technical signals</td></tr>
+  <tr><td>OpenAPI Skills</td><td>Yes</td><td>Quotes, K-lines, order book, paper/live trading, portfolio queries</td></tr>
+</table>
+
+<div class="callout">
+  <strong>Assessment:</strong> These skills are orthogonal to the Nautilus adapter build. They could complement our v2.5 pre-market pipeline (Phase 6.x) as research inputs, but they won't help with tick ingestion or order routing.
+</div>
+
+<h2>4. OpenD Docker Deployment Readiness</h2>
+
+<table>
+  <tr><th>Topic</th><th>Detail</th><th>Impact</th></tr>
+  <tr><td><strong>Login</strong></td><td>Futu ID + password. MD5 hash supported in env vars.</td><td>Manageable via <code>.env</code></td></tr>
+  <tr><td><strong>2FA / SMS</strong></td><td>First login may require SMS. Pre-auth state can be copied into image.</td><td>One-time manual step or persistent volume</td></tr>
+  <tr><td><strong>Ports</strong></td><td>API: <code>11111</code>. Telnet: <code>22222</code>. WebSocket: configurable.</td><td>Aligns with existing port-exposure pattern</td></tr>
+  <tr><td><strong>Push Frequency</strong></td><td>Configurable via <code>qot_push_frequency</code> in <code>FutuOpenD.xml</code>.</td><td>Throttle to protect Nautilus event loop for very active tickers</td></tr>
+  <tr><td><strong>Multi-market</strong></td><td>Single OpenD instance handles HK + US + A-share simultaneously.</td><td>Simpler than IBKR's per-market subscriptions</td></tr>
+</table>
+
+<div class="callout good">
+  <strong>Docker compatibility:</strong> OpenD container on <code>csam-net</code> at <code>csam-futu-opend:11111</code>. Nautilus connects via TCP — same pattern as IB Gateway. Unlike IB, OpenD doesn't require VNC/2FA on every restart if auth state is persisted.
+</div>
+
+<h2>5. NautilusTrader Adapter Landscape</h2>
+
+<h3>5.1 Community Adapter: <code>nautilus-futu</code></h3>
+<p>A mature third-party adapter (<a href="https://github.com/loadstarCN/nautilus-futu" target="_blank">loadstarCN/nautilus-futu</a>) exists with these characteristics:</p>
+<ul>
+  <li><strong>Rust + PyO3 core</strong> — Handles TCP protobuf protocol, AES encryption</li>
+  <li><strong>No <code>futu-api</code> dependency</strong> — Uses Rust prost to avoid Python protobuf conflicts</li>
+  <li><strong>Full coverage:</strong> Data client, execution client, instrument provider</li>
+  <li><strong>Market support:</strong> HK, US, A-share</li>
+  <li><strong>Config pattern:</strong> <code>FutuDataClientConfig</code> / <code>FutuExecClientConfig</code> — mirrors our IB config pattern</li>
+</ul>
+
+<h3>5.2 Build vs Adopt Decision</h3>
+<table>
+  <tr><th>Path</th><th>Effort</th><th>Risk</th><th>Recommendation</th></tr>
+  <tr>
+    <td>Use <code>nautilus-futu</code> package</td>
+    <td>Low (~1–2 weeks integration)</td>
+    <td>Third-party maintenance, version drift</td>
+    <td>Fastest, but adds external dep</td>
+  </tr>
+  <tr>
+    <td>Build custom adapter</td>
+    <td>High (~2–3 months)</td>
+    <td>Full ownership, longer time-to-market</td>
+    <td>Full control, aligns with "reduce deps" goal</td>
+  </tr>
+  <tr>
+    <td><strong>Hybrid (recommended)</strong></td>
+    <td>Medium (~4–6 weeks)</td>
+    <td>Low — proven patterns, our own code</td>
+    <td><strong class="tag good">Adopt architecture, build implementation</strong></td>
+  </tr>
+</table>
+
+<h2>6. Overall Readiness Assessment</h2>
+
+<h3>✅ Ready Now</h3>
+<table>
+  <tr><th>Item</th><th>Status</th></tr>
+  <tr><td>OpenD Docker deployment</td><td>Community images exist; auth state can be persisted</td></tr>
+  <tr><td>US stock LV2 tick data</td><td>Free promotion active; 60-depth available</td></tr>
+  <tr><td>Basic subscription quota</td><td>300 subs with HKD 10k assets — enough for initial strategies</td></tr>
+  <tr><td>Nautilus adapter foundation</td><td><code>nautilus-futu</code> provides working baseline patterns</td></tr>
+  <tr><td>Multi-market support</td><td>Single OpenD handles US + HK + A-share</td></tr>
+</table>
+
+<h3>⚠️ Needs Attention</h3>
+<table>
+  <tr><th>Item</th><th>Risk</th><th>Mitigation</th></tr>
+  <tr>
+    <td><strong>Free LV2 promotion expiry</strong></td>
+    <td>Docs say "free during the promotion" with no end date. If revoked, LV2 becomes paid.</td>
+    <td>Monitor Futu announcements; budget for quote cards</td>
+  </tr>
+  <tr>
+    <td><strong>HK LV2/SF not free</strong></td>
+    <td>Trading HK with depth requires purchased quote rights.</td>
+    <td>Start with HK LV1 (free) or focus on US initially</td>
+  </tr>
+  <tr>
+    <td><strong>Subscription quota at scale</strong></td>
+    <td>300 subs may limit multi-strategy deployments.</td>
+    <td>1,000-sub tier needs HKD 500k assets or active volume</td>
+  </tr>
+  <tr>
+    <td><strong>Unlock password for live trading</strong></td>
+    <td>Live trading requires manual unlock in OpenD UI.</td>
+    <td>Paper trading needs no unlock. For live, may need GUI access</td>
+  </tr>
+  <tr>
+    <td><strong>Initial SMS verification</strong></td>
+    <td>First OpenD login usually requires SMS.</td>
+    <td>Pre-verify locally, copy auth state to Docker volume</td>
+  </tr>
+</table>
+
+<h3>❌ Blockers</h3>
+<p><em>None identified.</em></p>
+
+<h2>7. Recommendations</h2>
+<ol>
+  <li><strong>Target US equities first</strong> — Free LV2 + deeper order book + clearer symbology. HK can follow.</li>
+  <li><strong>Paper trade via OpenD first</strong> — <code>trd_env=0</code> (simulate) requires no unlock password. Verify tick quality and latency before going live.</li>
+  <li><strong>Plan for auth persistence in Docker</strong> — Copy pre-verified OpenD config/state into a volume-mounted directory to avoid SMS loops on restart.</li>
+  <li><strong>Architect subscription management carefully</strong> — Given quota limits, build a subscription manager that prioritizes active instruments and releases unused ones (respecting the 1-minute minimum).</li>
+  <li><strong>Futu AI Skills: optional</strong> — Install for research/anomaly detection if they fit the pre-market pipeline, but don't block adapter work on them.</li>
+</ol>
+
+<hr>
+<p class="meta">End of assessment. Next step: architecture &amp; implementation planning for Phase 7.</p>
+
+</body>
+</html>

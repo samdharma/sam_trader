@@ -1,51 +1,69 @@
-# Agent Instructions
+# AGENTS.md — SAM Trader V3
 
-This project uses **bd** (beads) for issue tracking. Run `bd prime` for full workflow context.
+> **SAM Trader V3** — Production-grade autonomous trading platform on NautilusTrader.
+> Architecture and roadmap: `docs/reference/SAM_TRADER_V3_PLAN.md` — read this first.
+> Ticket plan and hierarchy: `docs/agent/TICKET_PLAN_V3.md`
 
-> **Architecture in one line:** Issues live in a local Dolt database
-> (`.beads/dolt/`); cross-machine sync uses `bd dolt push/pull` (a
-> git-compatible protocol), stored under `refs/dolt/data` on your git
-> remote — separate from `refs/heads/*` where your code lives.
-> `.beads/issues.jsonl` is a passive export, not the wire protocol.
->
-> See [SYNC_CONCEPTS.md](https://github.com/gastownhall/beads/blob/main/docs/SYNC_CONCEPTS.md)
-> for the one-screen overview and anti-patterns (don't treat JSONL as the
-> source of truth; don't `bd import` during normal operation; don't
-> reach for third-party Dolt hosting before trying the default).
+## Project Overview
 
-## Quick Reference
+Dockerized trading system: **postgres** (journal) + **redis** (state cache) + **sam-trader** (nautilus engine) + **sam-futu-opend** (futu broker) + **sam-ib-gateway** (ibkr broker, optional) + **sam-services** (operations).
+Single-script deployable on macOS via `./deploy.sh --with-futu`.
+
+## Build & Test
 
 ```bash
-bd ready              # Find available work
-bd show <id>          # View issue details
-bd update <id> --claim  # Claim work atomically
-bd close <id>         # Complete work
-bd dolt push          # Push beads data to remote
+# Run validation (tests + lint + type-check on changed files)
+bash scripts/ralph/ralph_validate.sh --tier=targeted
+
+# Run unit tests only
+pytest tests/unit/ -q --tb=short
+
+# Check git status
+git status --short
 ```
 
-## Non-Interactive Shell Commands
+## Key Decisions (see plan §2 for full rationale)
 
-**ALWAYS use non-interactive flags** with file operations to avoid hanging on confirmation prompts.
+- NautilusTrader v1.227.0 as sole engine. Standard components only. No custom implementations.
+- futu-api SDK for Futu protocol (not nautilus-futu Rust adapter).
+- Futu OpenD in separate Docker container (official image). IB Gateway in separate container (optional).
+- Parquet for historical data. PostgreSQL for relational data only. Redis for Nautilus cache persistence.
+- YAML bundle registry for strategies. ImportableStrategyConfig pattern. Multi-venue from day 1.
+- Graceful restart for all config changes (maintenance window 5am–8am HKT).
+- sam-services container decoupled from sam-trader for independent ops lifecycle.
 
-Shell commands like `cp`, `mv`, and `rm` may be aliased to include `-i` (interactive) mode on some systems, causing the agent to hang indefinitely waiting for y/n input.
+## Conventions
 
-**Use these forms instead:**
+- Python 3.12+. Type hints on all public APIs. Ruff + Black.
+- Configuration via env vars + frozen dataclasses.
+- Secrets in `.env` only (never committed).
+- Docker: one process per container.
+- Package name: `sam_trader`. Docker prefix: `sam-`. Network: `sam-net`.
+
+<!-- BEGIN RALPH LOOP INTEGRATION v:1 -->
+## Ralph Wiggum Loop System
+
+This project uses the **Ralph Wiggum Loop System** for agentic development.
+
+### Quick Reference
+
 ```bash
-# Force overwrite without prompting
-cp -f source dest           # NOT: cp source dest
-mv -f source dest           # NOT: mv source dest
-rm -f file                  # NOT: rm file
+# Start the Ralph loop (background)
+bash scripts/ralph/run_ralph_loop.sh
 
-# For recursive operations
-rm -rf directory            # NOT: rm -r directory
-cp -rf source dest          # NOT: cp -r source dest
+# Run a single ticket
+bash scripts/ralph/ralph_loop.sh --ticket=<id>
+
+# Run with a specific agent
+bash scripts/ralph/ralph_loop.sh --agent=kimi
+
+# Validate current work
+bash scripts/ralph/ralph_validate.sh --tier=targeted
+
+# Check loop health
+bash scripts/ralph/ralph_health.sh --verbose
 ```
-
-**Other commands that may prompt:**
-- `scp` - use `-o BatchMode=yes` for non-interactive
-- `ssh` - use `-o BatchMode=yes` to fail instead of prompting
-- `apt-get` - use `-y` flag
-- `brew` - use `HOMEBREW_NO_AUTO_UPDATE=1` env var
+<!-- END RALPH LOOP INTEGRATION -->
 
 <!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:7510c1e2 -->
 ## Beads Issue Tracker
@@ -77,20 +95,27 @@ bd close <id>         # Complete work
 
 1. **File issues for remaining work** - Create issues for anything that needs follow-up
 2. **Run quality gates** (if code changed) - Tests, linters, builds
-3. **Update issue status** - Close finished work, update in-progress items
-4. **PUSH TO REMOTE** - This is MANDATORY:
+3. **Commit all changes** - Stage and commit everything:
+   ```bash
+   git add -A
+   git commit -m "descriptive message summarizing the work"
+   ```
+4. **Update issue status** - Close finished work, update in-progress items
+5. **PUSH TO REMOTE** - This is MANDATORY:
    ```bash
    git pull --rebase
+   bd dolt push                # sync beads state to git remote
    git push
-   git status  # MUST show "up to date with origin"
+   git status                  # MUST show "up to date with origin"
    ```
-5. **Clean up** - Clear stashes, prune remote branches
-6. **Verify** - All changes committed AND pushed
-7. **Hand off** - Provide context for next session
+6. **Clean up** - Clear stashes, prune remote branches
+7. **Verify** - All changes committed AND pushed, `git status` clean
+8. **Hand off** - Provide context for next session
 
 **CRITICAL RULES:**
 - Work is NOT complete until `git push` succeeds
 - NEVER stop before pushing - that leaves work stranded locally
 - NEVER say "ready to push when you are" - YOU must push
+- Always run `bd dolt push` BEFORE `git push` so beads state syncs
 - If push fails, resolve and retry until it succeeds
 <!-- END BEADS INTEGRATION -->

@@ -1,5 +1,46 @@
+# SAM Trader V3 — .gitignore
 
-# Beads / Dolt files (added by bd init)
-.dolt/
-*.db
-.beads-credential-key
+# Secrets
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Docker volumes
+data/
+logs/
+backups/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Beads
+.beads/issues.jsonl
+
+# Type checking
+.mypy_cache/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/

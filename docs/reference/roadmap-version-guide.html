@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CSAM Trader V2 — Roadmap &amp; Version Management Guide</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+  :root {
+    --bg: #f8f9fa; --fg: #212529; --muted: #6c757d;
+    --accent: #0d6efd; --border: #dee2e6; --code-bg: #f1f3f5;
+    --card-bg: #ffffff; --shadow: 0 1px 3px rgba(0,0,0,0.08);
+    --v2: #2563eb; --v25: #7c3aed; --v3: #059669;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0d1117; --fg: #c9d1d9; --muted: #8b949e;
+      --accent: #58a6ff; --border: #30363d; --code-bg: #161b22;
+      --card-bg: #161b22; --shadow: 0 1px 3px rgba(0,0,0,0.35);
+    }
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    line-height: 1.6; color: var(--fg); background: var(--bg); margin: 0; padding: 0;
+  }
+  .container { max-width: 960px; margin: 0 auto; padding: 2rem 1.5rem; }
+  h1 { font-size: 2rem; border-bottom: 2px solid var(--accent); padding-bottom: .5rem; margin-top: 0; }
+  h2 { font-size: 1.5rem; border-bottom: 1px solid var(--border); padding-bottom: .4rem; margin-top: 2.5rem; }
+  h3 { font-size: 1.2rem; color: var(--accent); margin-top: 1.5rem; }
+  h4 { font-size: 1rem; color: var(--muted); }
+  p { margin: .6rem 0; }
+  a { color: var(--accent); text-decoration: none; } a:hover { text-decoration: underline; }
+  ul, ol { margin: .5rem 0; padding-left: 1.5rem; } li { margin: .25rem 0; }
+  code, pre {
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    font-size: .9rem; background: var(--code-bg); border-radius: 6px;
+  }
+  code { padding: .15rem .35rem; }
+  pre { padding: 1rem; overflow-x: auto; border: 1px solid var(--border); box-shadow: var(--shadow); }
+  pre code { background: none; padding: 0; }
+  table {
+    width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: .92rem;
+    background: var(--card-bg); box-shadow: var(--shadow); border-radius: 6px; overflow: hidden;
+  }
+  th, td { text-align: left; padding: .6rem .8rem; border-bottom: 1px solid var(--border); }
+  th { background: var(--code-bg); font-weight: 600; }
+  tr:last-child td { border-bottom: none; }
+  .mermaid {
+    background: var(--card-bg); border: 1px solid var(--border); border-radius: 8px;
+    padding: 1rem; margin: 1.5rem 0; box-shadow: var(--shadow); text-align: center;
+  }
+  .toc {
+    background: var(--card-bg); border: 1px solid var(--border);
+    border-radius: 8px; padding: 1.25rem; margin-bottom: 2rem; box-shadow: var(--shadow);
+  }
+  .toc h2 { margin-top: 0; font-size: 1.1rem; border: none; padding: 0; }
+  .toc ul { list-style: none; padding-left: 0; margin: .5rem 0 0; }
+  .toc li { margin: .35rem 0; }
+  .toc a { display: block; }
+  .callout {
+    border-left: 4px solid var(--accent); background: var(--card-bg);
+    padding: 1rem 1.25rem; margin: 1rem 0; border-radius: 0 6px 6px 0; box-shadow: var(--shadow);
+  }
+  .callout.warn { border-left-color: #f59e0b; }
+  .callout.success { border-left-color: #10b981; }
+  .version-badge {
+    display: inline-block; padding: .15rem .6rem; border-radius: 4px;
+    font-size: .8rem; font-weight: 600; margin-right: .5rem;
+  }
+  .v2  { background: var(--v2); color: #fff; }
+  .v25 { background: var(--v25); color: #fff; }
+  .v3  { background: var(--v3); color: #fff; }
+  .done { color: #10b981; } .wip { color: #f59e0b; } .future { color: var(--muted); }
+  .kbd {
+    display: inline-block; padding: .15rem .4rem; font-size: .85rem; font-family: monospace;
+    background: var(--code-bg); border: 1px solid var(--border); border-radius: 4px;
+    box-shadow: 0 1px 0 var(--border);
+  }
+  @media print {
+    body { background: #fff; color: #000; } .toc { display: none; }
+    pre { white-space: pre-wrap; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>CSAM Trader — Roadmap &amp; Version Management</h1>
+<p style="color:var(--muted)">
+  A guide to the CSAM Trader development roadmap, version history,
+  and how to manage versions with Git. Written for operators who
+  may not be familiar with Git branching.
+</p>
+
+<div class="toc">
+  <h2>Contents</h2>
+  <ul>
+    <li><a href="#versions">1. Versions at a Glance</a></li>
+    <li><a href="#v2">2. v2.0 — Phases 1–6 (Current, Deployed)</a></li>
+    <li><a href="#v25">3. v2.5 — csam-services + Pre-Market Pipeline (Next)</a></li>
+    <li><a href="#v3">4. v3.0 — Futu Broker + Advanced Dashboard (Future)</a></li>
+    <li><a href="#branching">5. Understanding Git Branches (Visual Guide)</a></li>
+    <li><a href="#daytoday">6. Day-to-Day: Working with Versions</a></li>
+    <li><a href="#commands">7. Command Reference Card</a></li>
+  </ul>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="versions">1. Versions at a Glance</h2>
+
+<div class="mermaid">
+gantt
+    title CSAM Trader Versions & Timeline
+    dateFormat  YYYY-MM-DD
+    axisFormat  %b %d
+
+    section v2.0 (Current)
+    Phase 0   :done, p0, 2026-05-15, 1d
+    Phase 1   :done, p1, after p0, 1d
+    Phase 2   :done, p2, after p1, 1d
+    Phase 3   :done, p3, after p2, 1d
+    Phase 4   :done, p4, after p3, 1d
+    Phase 5   :done, p5, after p4, 1d
+    Phase 6   :done, p6, after p5, 2d
+
+    section v2.5 (Next)
+    Phase 6.1 :active, p61, after p6, 3d
+    Phase 6.2 :p62, after p61, 2d
+    Phase 6.3 :p63, after p62, 2d
+    Phase 6.4 :p64, after p61, 1d
+    Phase 6.5 :p65, after p63, 2d
+    Phase 6.6 :p66, after p65, 1d
+    Phase 6.7 :p67, after p61, 1d
+
+    section v3.0 (Future)
+    Phase 7   :p7, after p66, 3d
+    Phase 8   :p8, after p7, 2d
+</div>
+
+<table>
+  <thead>
+    <tr><th>Version</th><th>Branch</th><th>Status</th><th>What It Contains</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><span class="version-badge v2">v2.0</span></td>
+      <td><code>master</code></td>
+      <td class="done">Deployed</td>
+      <td>Docker stack, IB Gateway, strategies, state persistence, backtesting, deploy script</td>
+    </tr>
+    <tr>
+      <td><span class="version-badge v25">v2.5</span></td>
+      <td><code>v2.5-dev</code></td>
+      <td class="wip">In Development</td>
+      <td>csam-services container, pre-market pipeline, basic dashboard</td>
+    </tr>
+    <tr>
+      <td><span class="version-badge v3">v3.0</span></td>
+      <td>(future)</td>
+      <td class="future">Planned</td>
+      <td>Futu broker integration, advanced dashboard, multi-broker support</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="v2">2. v2.0 — Phases 1–6 <span class="version-badge v2">Deployed</span></h2>
+
+<p>
+  v2.0 is the current production version, deployed on the Mac Mini as of May 18, 2026.
+  It is a complete trading platform with the following capabilities:
+</p>
+
+<h3>Phase 0: Foundation — Skeleton &amp; Docker Stack</h3>
+<table>
+  <tr><td><strong>What</strong></td><td>Project structure, Docker Compose with PostgreSQL + Redis + IB Gateway + Nautilus containers</td></tr>
+  <tr><td><strong>Key files</strong></td><td><code>docker/docker-compose.yml</code>, <code>docker/Dockerfile</code>, <code>docker/entrypoint.sh</code></td></tr>
+</table>
+
+<h3>Phase 1: Configuration &amp; Bootstrap</h3>
+<table>
+  <tr><td><strong>What</strong></td><td>Env-driven configuration, main bootstrap, IBKR data and execution client wiring</td></tr>
+  <tr><td><strong>Key files</strong></td><td><code>src/csam_trader/config.py</code>, <code>src/csam_trader/main.py</code></td></tr>
+</table>
+
+<h3>Phase 2: Actors — Journal &amp; Health</h3>
+<table>
+  <tr><td><strong>What</strong></td><td>TradeJournalActor writes fills to PostgreSQL; HealthMonitorActor emits periodic heartbeats</td></tr>
+  <tr><td><strong>Key files</strong></td><td><code>src/csam_trader/actors/trade_journal.py</code>, <code>health_monitor.py</code></td></tr>
+</table>
+
+<h3>Phase 3: Strategy Library &amp; Bundle Loader</h3>
+<table>
+  <tr><td><strong>What</strong></td><td>YAML-driven strategies (OrbStrategy, MomentumStrategy), BundleLoader, bracket orders, risk config</td></tr>
+  <tr><td><strong>Key files</strong></td><td><code>src/csam_trader/strategies/orb.py</code>, <code>momentum.py</code>, <code>bundle_loader.py</code></td></tr>
+</table>
+
+<h3>Phase 4: Graceful Restart &amp; State Management</h3>
+<table>
+  <tr><td><strong>What</strong></td><td>Redis-backed state persistence, graceful restart with maintenance window enforcement (05:00–08:00 HKT)</td></tr>
+  <tr><td><strong>Key files</strong></td><td><code>scripts/restart.sh</code>, state persistence in <code>main.py</code></td></tr>
+</table>
+
+<h3>Phase 5: Backtesting Pipeline</h3>
+<table>
+  <tr><td><strong>What</strong></td><td>Historical data download from IBKR, BacktestNode with bundle config, bundle validation gate</td></tr>
+  <tr><td><strong>Key files</strong></td><td><code>src/csam_trader/backtest.py</code>, <code>historical_download.py</code>, <code>validate_bundle.py</code></td></tr>
+</table>
+
+<h3>Phase 6: Deploy Script</h3>
+<table>
+  <tr><td><strong>What</strong></td><td>Single-script deployable: first-run wizard, git integration, health checks, backup/restore, operator commands</td></tr>
+  <tr><td><strong>Key files</strong></td><td><code>deploy.sh</code>, <code>docs/user/operator-guide.html</code></td></tr>
+</table>
+
+<h3>v2.0 Strategy Capabilities (after Phase 6 enhancements)</h3>
+<table>
+  <thead>
+    <tr><th>Strategy</th><th>Features</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>OrbStrategy</strong></td>
+      <td>Opening range breakout, ATR range filter, breakout confirmation bars, buying power checks, trailing stops, scale-out take-profits, max_daily_loss enforcement, state persistence via on_save/on_load</td>
+    </tr>
+    <tr>
+      <td><strong>MomentumStrategy</strong></td>
+      <td>Momentum at open, configurable lookback window, session gating, buying power checks, max_daily_loss enforcement, state persistence, always-in-market reversal behavior</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="v25">3. v2.5 — csam-services + Pre-Market Pipeline <span class="version-badge v25">In Development</span></h2>
+
+<p>
+  v2.5 introduces a dedicated <strong>csam-services</strong> container that separates
+  infrastructure concerns (deploy.sh) from daily operations, plus a complete
+  <strong>pre-market pipeline</strong> that autonomously discovers, analyzes, and sizes
+  trading candidates before market open.
+</p>
+
+<h3>What Changes in v2.5</h3>
+
+<div class="mermaid">
+flowchart TB
+    subgraph v2_0 ["v2.0 Architecture"]
+        PG1[("PostgreSQL")]
+        RD1[("Redis")]
+        IB1["IB Gateway"]
+        NA1["Nautilus"]
+        DS["deploy.sh<br/>500+ lines<br/>setup + ops + support"]
+    end
+
+    subgraph v2_5 ["v2.5 Architecture"]
+        PG2[("PostgreSQL")]
+        RD2[("Redis")]
+        IB2["IB Gateway"]
+        NA2["Nautilus"]
+        SV["csam-services<br/>cron + CLI + dashboard<br/>pre-market pipeline"]
+        DS2["deploy.sh<br/>~250 lines<br/>setup only"]
+    end
+
+    v2_0 --> v2_5
+</div>
+
+<h3>Feature 6.1: csam-services + Gap Scanner <span class="version-badge v25">8 functions</span></h3>
+
+<table>
+  <thead><tr><th>#</th><th>Function</th><th>What It Does</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td>Dockerfile + compose</td><td>csam-services container image (python:3.12-slim, FastAPI, cron), integrated into docker-compose.yml with healthcheck</td></tr>
+    <tr><td>2</td><td>csam CLI tool</td><td>Replaces deploy.sh ops commands: csam status, health, backup, restore, quote, validate, logs, clean-logs</td></tr>
+    <tr><td>3</td><td>Cron scheduler</td><td>Cron daemon in csam-services. Initial jobs: daily backup, log rotation. Future: gap scans, pipeline triggers</td></tr>
+    <tr><td>4</td><td>deploy.sh decouple</td><td>Remove ops modes from deploy.sh. Keep: setup wizard, docker compose lifecycle, image builds. Target: <300 lines</td></tr>
+    <tr><td>5</td><td>Gap scanner — core</td><td>IB Gateway pre-market quote engine. Computes gap%, captures symbol, volume, float, sector. Outputs JSON.</td></tr>
+    <tr><td>6</td><td>Gap scanner — filters</td><td>Configurable filters: min gap%, min volume, price range, float, blacklist. Each decision logged with reason.</td></tr>
+    <tr><td>7</td><td>Gap scanner — HK</td><td>Parallel scanner for HK equities. HK calendar, HK pre-market window. Same output format, venue=HK tag.</td></tr>
+    <tr><td>8</td><td>Gap scanner — cron</td><td>Wire into cron: 04:30 ET (early), 08:30 ET (refresh), 08:30 HKT (HK). Timestamped outputs.</td></tr>
+  </tbody>
+</table>
+
+<h3>Feature 6.2: AI-Powered Analysis <span class="version-badge v25">4 functions</span></h3>
+
+<table>
+  <thead><tr><th>#</th><th>Function</th><th>What It Does</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td>AI scoring engine</td><td>LLM integration (DeepSeek v4-pro / Kimi k2.6). Scores each candidate across 6 dimensions with structured prompts.</td></tr>
+    <tr><td>2</td><td>Recommendation grading</td><td>STRONG_BUY, BUY, CAUTIOUS, WATCH, AVOID. Based on total score 0-100. Confidence level 0.0-1.0.</td></tr>
+    <tr><td>3</td><td>Portfolio manager</td><td>AI-driven allocation: max 10 positions, ≤15% NAV each, ≥15% cash. Outputs BUY/ADD/TRIM/HOLD orders.</td></tr>
+    <tr><td>4</td><td>Rule-based fast path</td><td>Fallback when LLM unavailable. Scores via gap%, volume, float, ATR rules. Ensures pipeline never dead-ends.</td></tr>
+  </tbody>
+</table>
+
+<h3>Feature 6.3: Risk Management <span class="version-badge v25">4 functions</span></h3>
+
+<table>
+  <thead><tr><th>#</th><th>Function</th><th>What It Does</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td>Position sizer</td><td>Monte Carlo (N=10K) or Kelly Criterion. Outputs shares, $ amount, % NAV, expected value, risk of ruin.</td></tr>
+    <tr><td>2</td><td>Pre-trade risk manager</td><td>Checks: position %, heat, sector concentration, margin. Rejects/reduces violators. Fails closed.</td></tr>
+    <tr><td>3</td><td>Integrity checker</td><td>Validates symbols resolvable, sizes in bounds, buying power sufficient, no blacklist. Blocks bundle on failure.</td></tr>
+    <tr><td>4</td><td>Portfolio heat monitor</td><td>Reports total heat %, sector concentration, correlation, margin utilization, cash buffer.</td></tr>
+  </tbody>
+</table>
+
+<h3>Feature 6.4: Regime Detection <span class="version-badge v25">2 functions</span></h3>
+
+<table>
+  <thead><tr><th>#</th><th>Function</th><th>What It Does</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td>HMM regime classifier</td><td>Hidden Markov Model on SPY/QQQ. Classifies LOW_VOL, MID_VOL, HIGH_VOL, BEARISH. Outputs confidence + stability.</td></tr>
+    <tr><td>2</td><td>Regime adaptation</td><td>Adjusts: position sizes, stop widths, confidence thresholds, position count per regime. BEARISH→short-only.</td></tr>
+  </tbody>
+</table>
+
+<h3>Feature 6.5: Pipeline Orchestration <span class="version-badge v25">7 functions</span></h3>
+
+<table>
+  <thead><tr><th>#</th><th>Function</th><th>What It Does</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td>Scan discovery</td><td>Finds all gap scan files for current date. Merges, deduplicates (keeps most recent). Reports stats.</td></tr>
+    <tr><td>2</td><td>Trend-down filter</td><td>Compares early vs refresh scans. Removes fading gaps. Logs filter decisions with reason.</td></tr>
+    <tr><td>3</td><td>Pipeline runner</td><td>Sequential executor: gap→AI→risk→regime→sanity→bundle→report. Stages logged with duration. Fails gracefully.</td></tr>
+    <tr><td>4</td><td>Sanity check</td><td>20+ health validations. Each PASS/FAIL with remediation hint. FAIL blocks bundle generation.</td></tr>
+    <tr><td>5</td><td>Bundle creator</td><td>Generates config/bundles.yaml from approved candidates. Validates schema. Backs up previous version.</td></tr>
+    <tr><td>6</td><td>Readiness report</td><td>Human-readable summary: pipeline status, top-5 gaps, AI grades, risk, regime, bundles count.</td></tr>
+    <tr><td>7</td><td>Operator notification</td><td>Alerts on sanity FAIL, bundle generated, pipeline complete. Via log + dashboard.</td></tr>
+  </tbody>
+</table>
+
+<h3>Feature 6.6: Safety Controls <span class="version-badge v25">3 functions</span></h3>
+
+<table>
+  <thead><tr><th>#</th><th>Function</th><th>What It Does</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td>Kill switch</td><td>Global on/off in Redis. When ON: no orders submitted. csam killswitch on/off. Survives restarts.</td></tr>
+    <tr><td>2</td><td>Circuit breakers</td><td>Triggers on: daily loss ≥X%, margin ≥Z%, connection lost >N min. HALT/REDUCE modes. Configurable thresholds.</td></tr>
+    <tr><td>3</td><td>Emergency halt</td><td>Cancel all orders, close all positions, set kill switch. Audit: who, why, what. Operator-only reset.</td></tr>
+  </tbody>
+</table>
+
+<h3>Feature 6.7: Basic Dashboard <span class="version-badge v25">4 functions</span></h3>
+
+<table>
+  <thead><tr><th>#</th><th>Function</th><th>What It Does</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td>FastAPI backend</td><td>Serves on :8080. /health endpoint for Docker healthcheck. CORS, request logging.</td></tr>
+    <tr><td>2</td><td>Positions + fills API</td><td>/api/positions from PostgreSQL. /api/fills (last 50). JSON responses with error handling.</td></tr>
+    <tr><td>3</td><td>Health + scans API</td><td>/api/system-health (containers, IB, heartbeat, balance). /api/scan-results (latest gap scan data).</td></tr>
+    <tr><td>4</td><td>Dashboard UI</td><td>Static HTML + Chart.js. Health bar, positions table, fills table, scan results. Auto-refresh 30s. Mobile responsive.</td></tr>
+  </tbody>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="v3">4. v3.0 — Futu Broker + Advanced Dashboard <span class="version-badge v3">Planned</span></h2>
+
+<div class="callout">
+  <strong>Note:</strong> v3.0 is planned but not yet scheduled. The scope below is preliminary
+  and may change based on v2.5 outcomes.
+</div>
+
+<h3>Phase 7: Futu Broker Integration</h3>
+<table>
+  <tr><td><strong>What</strong></td><td>Add Futubull/OpenD as a second broker. Futu data client, execution client, instrument provider, Docker container. HK and US market access.</td></tr>
+  <tr><td><strong>Impact</strong></td><td>Multi-broker support — bundles can use <code>venue: FUTU</code> alongside <code>venue: IB</code>. Pre-market pipeline gets HK gap scanning via Futu data.</td></tr>
+</table>
+
+<h3>Phase 8: Advanced Dashboard</h3>
+<table>
+  <tr><td><strong>What</strong></td><td>Full-featured dashboard: interactive backtest with graphs, real-time streaming charts, multi-broker portfolio view, alerting UI, mobile app.</td></tr>
+  <tr><td><strong>Builds on</strong></td><td>v2.5 basic dashboard (Phase 6.7) — the scaffolding is already there.</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="branching">5. Understanding Git Branches</h2>
+
+<p>
+  If you're new to Git, think of <strong>branches</strong> like parallel universes of your code.
+  Each branch is a complete copy of the project at a point in time. Changes on one branch
+  do not affect other branches until you explicitly <strong>merge</strong> them.
+</p>
+
+<div class="mermaid">
+gitGraph
+    commit id: "v2.0 start"
+    commit id: "Phase 0"
+    commit id: "Phase 1"
+    commit id: "Phase 2-5"
+    commit id: "Phase 6"
+    commit id: "v2.0 deployed" tag: "v2.0"
+    branch v2.5-dev
+    commit id: "Phase 6.1"
+    commit id: "Phase 6.2"
+    commit id: "Phase 6.3"
+    checkout master
+    commit id: "hotfix: client ID" type: HIGHLIGHT
+    checkout v2.5-dev
+    merge master id: "merge hotfix"
+    commit id: "Phase 6.4"
+    commit id: "Phase 6.5-6.7"
+    checkout master
+    merge v2.5-dev id: "merge v2.5" tag: "v2.5.0"
+</div>
+
+<h3>Three branches, three purposes</h3>
+
+<table>
+  <thead>
+    <tr><th>Branch</th><th>Purpose</th><th>What lives there</th><th>Deployed where</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>master</code></td>
+      <td>Production — stable, tested</td>
+      <td>v2.0 (current)</td>
+      <td>Mac Mini</td>
+    </tr>
+    <tr>
+      <td><code>v2.5-dev</code></td>
+      <td>Development — new features</td>
+      <td>v2.5 work in progress</td>
+      <td>Nowhere yet (testing only)</td>
+    </tr>
+    <tr>
+      <td>(future)</td>
+      <td>v3.0 development branch</td>
+      <td>Futu broker + advanced dashboard</td>
+      <td>Nowhere yet</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>Why not work directly on master?</h3>
+
+<p>
+  Master is your "live" code — the version running on the Mac Mini right now.
+  If you make changes directly on master and something breaks, you have no
+  easy way to go back to the working version. A development branch gives you
+  a safe sandbox where you can experiment, fail, and retry without risk.
+</p>
+
+<h3>Merging: bringing work together</h3>
+
+<p>
+  When v2.5 is complete and tested, you <strong>merge</strong> the <code>v2.5-dev</code>
+  branch into <code>master</code>. This takes all the new features and applies them
+  to the production code. After merging, you tag the result as <code>v2.5.0</code>
+  so you can always go back to that exact version if needed.
+</p>
+
+<h3>Hotfixes: what if master has a bug while v2.5 is being built?</h3>
+
+<p>
+  This is where branches shine. You can:
+</p>
+<ol>
+  <li>Switch to master: <code>git checkout master</code></li>
+  <li>Fix the bug, commit</li>
+  <li>Deploy the fix to the Mac Mini</li>
+  <li>Switch back to v2.5-dev: <code>git checkout v2.5-dev</code></li>
+  <li>Pull the fix in: <code>git merge master</code></li>
+</ol>
+<p>
+  The v2.5 branch gets the fix without disrupting ongoing development.
+  Master gets the fix without waiting for v2.5 to be ready.
+</p>
+
+<h3>Tags: snapshot of a specific version</h3>
+
+<p>
+  A <strong>tag</strong> is like a bookmark. When you merge v2.5 into master, you
+  create a tag <code>v2.5.0</code>. This means you (or any operator) can always
+  go back to exactly that point in time:
+</p>
+<pre><code>git checkout v2.5.0          # switch to the exact v2.5 release
+git checkout v2.0            # switch to the v2.0 release tag</code></pre>
+
+<!-- ============================================================ -->
+<h2 id="daytoday">6. Day-to-Day: Working with Versions</h2>
+
+<h3>6.1 Checking what version you're on</h3>
+<pre><code>cd /path/to/csam_trader
+
+# See which branch you're on
+git branch
+# The branch with * is your current branch
+
+# See recent commits
+git log --oneline -5
+
+# See all tags (version markers)
+git tag</code></pre>
+
+<h3>6.2 Staying on v2.0 (current production)</h3>
+<p>If you just want to keep the Mac Mini running and apply occasional fixes:</p>
+<pre><code>cd /path/to/csam_trader
+
+# Ensure you're on master
+git checkout master
+
+# Pull latest fixes
+git pull --rebase
+
+# Apply to running system
+./deploy.sh --restart</code></pre>
+
+<h3>6.3 Switching to v2.5 when it's ready</h3>
+<p>When v2.5 development is complete and merged to master:</p>
+<pre><code>cd /path/to/csam_trader
+
+# Get the latest master (now includes v2.5)
+git checkout master
+git pull --rebase
+
+# Verify you have v2.5
+git tag | grep v2.5
+
+# Deploy the update
+./deploy.sh --restart --force</code></pre>
+
+<h3>6.4 Working on v2.5 development (ralph loop)</h3>
+<pre><code>cd /path/to/csam_trader
+
+# Switch to the development branch
+git checkout v2.5-dev
+
+# Start the ralph loop (will pick up v2.5 tickets)
+bash scripts/ralph/run_ralph_loop.sh
+
+# To switch back to master (for production fixes):
+git checkout master</code></pre>
+
+<h3>6.5 Viewing the roadmap in GitHub</h3>
+<p>
+  Once pushed, the branches are visible on GitHub:
+  <code>https://github.com/samdharma/csam_trader/branches</code>
+</p>
+<p>
+  You can see the network graph (visual history of all branches):
+  <code>https://github.com/samdharma/csam_trader/network</code>
+</p>
+
+<!-- ============================================================ -->
+<h2 id="commands">7. Command Reference Card</h2>
+
+<table>
+  <thead>
+    <tr><th>Task</th><th>Command</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>See current branch</td><td><code>git branch</code></td></tr>
+    <tr><td>Switch to master</td><td><code>git checkout master</code></td></tr>
+    <tr><td>Switch to v2.5-dev</td><td><code>git checkout v2.5-dev</code></td></tr>
+    <tr><td>Pull latest from GitHub</td><td><code>git pull --rebase</code></td></tr>
+    <tr><td>See commit history</td><td><code>git log --oneline -10</code></td></tr>
+    <tr><td>See version tags</td><td><code>git tag</code></td></tr>
+    <tr><td>Switch to a specific version</td><td><code>git checkout v2.0</code></td></tr>
+    <tr><td>See what changed (uncommitted)</td><td><code>git status --short</code></td></tr>
+    <tr><td>See remote branches</td><td><code>git branch -r</code></td></tr>
+    <tr><td>Create new branch from current</td><td><code>git checkout -b my-branch</code></td></tr>
+    <tr><td>Merge another branch in</td><td><code>git merge other-branch</code></td></tr>
+    <tr><td>Push current branch to GitHub</td><td><code>git push</code></td></tr>
+    <tr><td>Push new branch to GitHub</td><td><code>git push -u origin my-branch</code></td></tr>
+    <tr><td>Create version tag</td><td><code>git tag v2.5.0</code></td></tr>
+    <tr><td>Push tags to GitHub</td><td><code>git push --tags</code></td></tr>
+  </tbody>
+</table>
+
+<hr style="margin-top:3rem; border-color:var(--border)">
+<p style="color:var(--muted); font-size:.85rem;">
+  Document version 1.0 &middot; Generated for CSAM Trader &middot;
+  Tickets: <code>csam_trader-fp0</code> (v2.5 EPIC)
+</p>
+
+</div>
+
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'default',
+    securityLevel: 'loose',
+    gantt: { useMaxWidth: true },
+    flowchart: { useMaxWidth: true, htmlLabels: true },
+    gitGraph: { useMaxWidth: true }
+  });
+</script>
+</body>
+</html>
