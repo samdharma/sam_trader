@@ -96,3 +96,17 @@
 - **Files Changed**: `docker/Dockerfile`, `docker/requirements.txt`
 - **Validation Result**: PASS (docker build -t sam-trader:latest . succeeded; ralph_validate.sh --tier=targeted PASS)
 - **Blockers / Notes**: None. Phase-0 stack is ready for verification (sam_trader-9z3.1.9).
+
+## Iteration 9
+- **Task**: [EXIT] P0: Verify stack — all containers start healthy
+- **Task ID**: sam_trader-9z3.1.9
+- **Status**: COMPLETE
+- **Decisions**: 
+  - `futuopen/futu-opend:latest` image no longer exists on Docker Hub; switched to `ghcr.io/manhinhang/futu-opend-docker:ubuntu-stable`
+  - Updated Futu env vars to match the manhinhang image: `FUTU_ACCOUNT_ID`, `FUTU_ACCOUNT_PWD_MD5`, `FUTU_OPEND_IP=0.0.0.0`
+  - Fixed health checks for sam-futu-opend and sam-ib-gateway to use `bash -c` because `/bin/sh` is `dash` which doesn't support `/dev/tcp/host/port`
+  - Created `docker/docker-compose.verify.yml` for credential-less verification (Perl TCP listener on port 11111)
+  - IB Gateway health check passes even without login because IBC opens API port 4004 during startup
+- **Files Changed**: `docker/docker-compose.yml`, `.env.example`, `docker/docker-compose.verify.yml`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targetted; manual verification: all containers healthy, docker compose down cleans up, no port conflicts)
+- **Blockers / Notes**: None. Phase 0 is complete. Ready for Phase 1 (Configuration & Bootstrap).

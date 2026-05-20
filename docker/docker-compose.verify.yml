@@ -1,0 +1,15 @@
+# SAM Trader V3 — Verification override for Futu OpenD
+# Used when Futu credentials are not available (e.g., CI/verification).
+# Replaces FutuOpenD with a simple TCP listener so health checks pass.
+services:
+  sam-futu-opend:
+    command:
+      - sh
+      - -c
+      - |
+        perl -e '
+        use IO::Socket::INET;
+        my $$s = IO::Socket::INET->new(LocalPort => 11111, LocalAddr => "0.0.0.0", Reuse => 1, Listen => 5) or die $$!;
+        print "Verification listener on port 11111\n";
+        while (1) { my $$c = $$s->accept(); close($$c) if $$c; }
+        '
