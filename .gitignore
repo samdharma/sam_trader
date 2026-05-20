@@ -1,7 +1,16 @@
 # SAM Trader V3 — .gitignore
+# Base ported from csam_trader v2, enhanced for v3.
 
-# Secrets
-.env
+# Ralph Wiggum Loop
+.ralph_checkpoint.json
+.ralph_loop.pid
+logs/ralph_metrics.jsonl
+logs/ralph_loop.log
+
+# Beads / Dolt files
+.dolt/
+*.db
+.beads-credential-key
 
 # Python
 __pycache__/
@@ -18,9 +27,15 @@ build/
 venv/
 env/
 
-# Docker volumes
-data/
-logs/
+# Secrets (never commit)
+.env
+docker/.env
+
+# Parquet catalog (large binaries, local data)
+data/catalog/*
+!data/catalog/.gitkeep
+
+# Docker volumes / runtime
 backups/
 
 # IDE
@@ -34,9 +49,6 @@ backups/
 .DS_Store
 Thumbs.db
 
-# Beads
-.beads/issues.jsonl
-
 # Type checking
 .mypy_cache/
 
@@ -44,5 +56,6 @@ Thumbs.db
 .pytest_cache/
 .coverage
 htmlcov/
-.ralph_checkpoint.json
-.ralph_loop.pid
+
+# Large binaries / downloads
+downloads/
