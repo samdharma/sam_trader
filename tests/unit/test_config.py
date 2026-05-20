@@ -32,7 +32,7 @@ class TestSamTraderConfig:
             "FUTU_TRD_ENV",
             "FUTU_TRD_MARKET",
             "FUTU_UNLOCK_PWD_MD5",
-            "FUTU_ACCOUNT_ID",
+            "FUTU_LOGIN_ACCOUNT",
             "ACTOR_BAR_RESUB_ENABLED",
             "ACTOR_JOURNAL_ENABLED",
             "ACTOR_HEALTH_ENABLED",
@@ -106,7 +106,7 @@ class TestSamTraderConfig:
         monkeypatch.setenv("FUTU_TRD_ENV", "REAL")
         monkeypatch.setenv("FUTU_TRD_MARKET", "HK")
         monkeypatch.setenv("FUTU_UNLOCK_PWD_MD5", "abc123")
-        monkeypatch.setenv("FUTU_ACCOUNT_ID", "12345678")
+        monkeypatch.setenv("FUTU_LOGIN_ACCOUNT", "12345678")
         monkeypatch.setenv("ACTOR_BAR_RESUB_ENABLED", "true")
         monkeypatch.setenv("ACTOR_JOURNAL_ENABLED", "true")
         monkeypatch.setenv("ACTOR_HEALTH_ENABLED", "true")

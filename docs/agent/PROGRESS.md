@@ -59,3 +59,12 @@
 - **Files Changed**: `docker/docker-compose.yml`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targetted; no affected Python files, gate passed)
 - **Blockers / Notes**: None.
+
+## Iteration 16
+- **Task**: BUG: Futu OpenD service image and env vars deviate from ticket AC
+- **Task ID**: sam_trader-9z3.1.11
+- **Status**: COMPLETE
+- **Decisions**: Chose Option A (match ticket AC) per V3 plan D3 which specifies official `futuopen/futu-opend:latest` image. Updated `sam-futu-opend` service in docker-compose.yml: image changed to `futuopen/futu-opend:latest`, env vars aligned to `FUTU_LOGIN_ACCOUNT`, `FUTU_LOGIN_PWD_MD5`, `FUTU_TRADE_PASSWORD`, `FUTU_RSA_PRIVATE_KEY`, volume changed to `futu_opend_data:/data`. Updated `sam-trader` service env mapping to use `FUTU_LOGIN_ACCOUNT` and removed unused `FUTU_ACCOUNT_PWD_MD5`. Updated `.env.example` to match new env var names and added missing `FUTU_TRADE_PASSWORD` and `FUTU_RSA_PRIVATE_KEY`. Updated `config.py` to read `FUTU_LOGIN_ACCOUNT` for `futu_account_id`. Updated unit tests accordingly.
+- **Files Changed**: `docker/docker-compose.yml`, `.env.example`, `src/sam_trader/config.py`, `tests/unit/test_config.py`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 4/4 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None.

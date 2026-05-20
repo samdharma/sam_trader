@@ -44,8 +44,7 @@ services:
       - FUTU_ENABLED=${FUTU_ENABLED:-false}
       - FUTU_OPEND_HOST=${FUTU_OPEND_HOST:-sam-futu-opend}
       - FUTU_OPEND_PORT=${FUTU_OPEND_PORT:-11111}
-      - FUTU_ACCOUNT_ID=${FUTU_ACCOUNT_ID:-}
-      - FUTU_ACCOUNT_PWD_MD5=${FUTU_ACCOUNT_PWD_MD5:-}
+      - FUTU_LOGIN_ACCOUNT=${FUTU_LOGIN_ACCOUNT:-}
       - FUTU_TRD_ENV=${FUTU_TRD_ENV:-SIMULATE}
       - FUTU_TRD_MARKET=${FUTU_TRD_MARKET:-US}
       - FUTU_UNLOCK_PWD_MD5=${FUTU_UNLOCK_PWD_MD5:-}
@@ -107,20 +106,22 @@ services:
       start_period: 10s
 
   sam-futu-opend:
-    image: ghcr.io/manhinhang/futu-opend-docker:ubuntu-stable
+    image: futuopen/futu-opend:latest
     container_name: sam-futu-opend
     restart: unless-stopped
     ports:
       - "${FUTU_OPEND_PORT:-11111}:11111"
       - "${FUTU_OPEND_TELNET_PORT:-22222}:22222"
     environment:
-      FUTU_ACCOUNT_ID: ${FUTU_ACCOUNT_ID:-}
-      FUTU_ACCOUNT_PWD_MD5: ${FUTU_ACCOUNT_PWD_MD5:-}
+      FUTU_LOGIN_ACCOUNT: ${FUTU_LOGIN_ACCOUNT:-}
+      FUTU_LOGIN_PWD_MD5: ${FUTU_LOGIN_PWD_MD5:-}
+      FUTU_TRADE_PASSWORD: ${FUTU_TRADE_PASSWORD:-}
+      FUTU_RSA_PRIVATE_KEY: ${FUTU_RSA_PRIVATE_KEY:-}
       FUTU_OPEND_IP: ${FUTU_OPEND_IP:-0.0.0.0}
       FUTU_OPEND_PORT: ${FUTU_OPEND_PORT:-11111}
       FUTU_OPEND_TELNET_PORT: ${FUTU_OPEND_TELNET_PORT:-22222}
     volumes:
-      - futu_opend_data:/home/futu/.com.futunn.FutuOpenD
+      - futu_opend_data:/data
     networks:
       - sam-net
     profiles:
