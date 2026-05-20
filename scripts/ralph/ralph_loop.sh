@@ -300,6 +300,17 @@ while true; do
 $(cat "${TYPE_PROMPT_FILE}")"
     fi
 
+    # --- Detect phase-specific build reference doc ---
+    PHASE_LABEL=$(echo "${TASK_LABELS}" | grep -oE 'phase-[0-9]+' | head -1)
+    BUILD_PHASE_DOC=""
+    if [[ -n "${PHASE_LABEL}" ]]; then
+        PHASE_NUM=$(echo "${PHASE_LABEL}" | sed 's/phase-//')
+        CANDIDATE="${PROJECT_DIR}/docs/reference/BUILD_PHASE_${PHASE_NUM}.md"
+        if [[ -f "${CANDIDATE}" ]]; then
+            BUILD_PHASE_DOC="docs/reference/BUILD_PHASE_${PHASE_NUM}.md"
+        fi
+    fi
+
     # Append task context
     FULL_PROMPT="${FULL_PROMPT}
 
@@ -313,6 +324,19 @@ $(cat "${TYPE_PROMPT_FILE}")"
 - **Labels**: ${TASK_LABELS}
 - **Description**: ${TASK_DESC}
 - **Test Tier**: ${TEST_TIER}
+"
+
+    if [[ -n "${BUILD_PHASE_DOC}" ]]; then
+        FULL_PROMPT="${FULL_PROMPT}
+- **Build Reference**: ${BUILD_PHASE_DOC}
+
+> **MANDATORY: Read \`${BUILD_PHASE_DOC}\` BEFORE researching Nautilus or Futu APIs.**
+> This doc contains pre-discovered type mappings, SDK field references, and implementation patterns.
+> It saves ~20-30 steps of redundant research per iteration.
+"
+    fi
+
+    FULL_PROMPT="${FULL_PROMPT}
 
 Run \`bash scripts/ralph/ralph_validate.sh --tier=${TEST_TIER}\` for validation.
 "

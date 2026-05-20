@@ -28,9 +28,12 @@ At the start of EVERY iteration, read these files in order:
 2. `docs/reference/SAM_TRADER_V3_PLAN.md` — architecture, decisions, roadmap
 3. `docs/agent/TICKET_PLAN_V3.md` — ticket dependency tree
 4. `docs/agent/PROGRESS.md` — **last 10 iterations only**
-5. `docs/agent/CURRENT_ISSUES.md` — if the current task is a bug fix (if exists)
+5. `docs/reference/BUILD_PHASE_<N>.md` — **if your current task belongs to a build phase, READ THIS FIRST before researching Nautilus or Futu APIs.** These docs contain pre-discovered type mappings, SDK field references, and implementation patterns. They save ~20-30 steps of redundant research per iteration.
+6. `docs/agent/CURRENT_ISSUES.md` — if the current task is a bug fix (if exists)
 
 > **Do NOT read `docs/agent/archive/`** unless explicitly asked for deep historical context.
+
+> **Do NOT fetch external reference code (e.g., nautilus-futu GitHub) until you have first read the relevant BUILD_PHASE doc.** The BUILD_PHASE docs already contain the distilled reference information you need.
 
 ---
 

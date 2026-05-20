@@ -22,6 +22,28 @@ pytest tests/unit/ -q --tb=short
 git status --short
 ```
 
+## Build Phase Reference Docs
+
+For each build phase, a `docs/reference/BUILD_PHASE_<N>.md` doc exists containing pre-discovered Nautilus types, Futu SDK mappings, and implementation patterns.
+
+**Before starting work on any phase ticket, read the corresponding BUILD_PHASE doc first.**
+This eliminates redundant research and saves ~20-30 steps per iteration.
+
+| Phase | Doc | Status |
+|-------|-----|--------|
+| Phase 2 | `BUILD_PHASE_2.md` | — (market data patterns in existing code) |
+| Phase 3 | `BUILD_PHASE_3.md` | ✅ Complete |
+| Phase 4 | `BUILD_PHASE_4.md` | ✅ Complete |
+| Phase 5 | `BUILD_PHASE_5.md` | ✅ Complete |
+| Phase 6 | `BUILD_PHASE_6.md` | ✅ Complete |
+| Phase 7 | `BUILD_PHASE_7.md` | ✅ Complete |
+| Phase 8 | `BUILD_PHASE_8.md` | ✅ Complete |
+| Phase 9 | `BUILD_PHASE_9.md` | ✅ Complete |
+| Phase 10 | `BUILD_PHASE_10.md` | ✅ Complete |
+| Phase 11 | `BUILD_PHASE_11.md` | ✅ Complete |
+
+The Ralph loop auto-detects the ticket's phase label and injects the corresponding BUILD_PHASE doc into the agent prompt.
+
 ## Key Decisions (see plan §2 for full rationale)
 
 - NautilusTrader v1.227.0 as sole engine. Standard components only. No custom implementations.
