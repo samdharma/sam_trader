@@ -44,3 +44,5 @@ Thumbs.db
 .pytest_cache/
 .coverage
 htmlcov/
+.ralph_checkpoint.json
+.ralph_loop.pid
