@@ -12,3 +12,4 @@
 {"id":"int-5ae19cd0","kind":"field_change","created_at":"2026-05-20T11:00:42.629126Z","actor":"sam.dharma","issue_id":"sam_trader-9z3.1.9","extra":{"field":"status","new_value":"closed","old_value":"in_progress"}}
 {"id":"int-3583143f","kind":"field_change","created_at":"2026-05-20T11:05:00.07799Z","actor":"sam.dharma","issue_id":"sam_trader-0f6","extra":{"field":"status","new_value":"closed","old_value":"in_progress"}}
 {"id":"int-5afbb08e","kind":"field_change","created_at":"2026-05-20T11:15:23.322634Z","actor":"sam.dharma","issue_id":"sam_trader-9w9","extra":{"field":"status","new_value":"closed","old_value":"in_progress"}}
+{"id":"int-35dfa747","kind":"field_change","created_at":"2026-05-20T11:22:09.867425Z","actor":"sam.dharma","issue_id":"sam_trader-vec","extra":{"field":"status","new_value":"closed","old_value":"in_progress"}}
