@@ -42,3 +42,12 @@
 - **Files Changed**: `pyproject.toml`, `.env.example`, `src/sam_trader/__init__.py`, `src/sam_trader/actors/__init__.py`, `src/sam_trader/adapters/__init__.py`, `src/sam_trader/adapters/futu/__init__.py`, `src/sam_trader/adapters/futu/parsing/__init__.py`, `src/sam_trader/strategies/__init__.py`, `tests/unit/test_config.py`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted)
 - **Blockers / Notes**: None. Ready for next phase-0 task.
+
+## Iteration 3
+- **Task**: P0: Futu OpenD service definition
+- **Task ID**: sam_trader-9z3.1.7
+- **Status**: COMPLETE
+- **Decisions**: Created docker/docker-compose.yml with sam-futu-opend service using v3 naming conventions. Ported and adapted from v2 csam_trader docker-compose.yml. Added placeholder comments for other services to be defined in their respective tickets.
+- **Files Changed**: `docker/docker-compose.yml`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; docker compose config validated successfully)
+- **Blockers / Notes**: None. Ready for next phase-0 task (sam-p0-postgres, sam-p0-redis, sam-p0-entrypoint, or sam-p0-compose).
