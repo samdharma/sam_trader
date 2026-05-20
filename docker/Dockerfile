@@ -1,6 +1,6 @@
 # SAM Trader V3 — Nautilus TradingNode
 # Production stage only (dev stage added later if needed)
-FROM ghcr.io/nautechsystems/nautilus_trader:latest
+FROM ghcr.io/nautechsystems/nautilus_trader:1.227.0
 
 LABEL maintainer="SAM Trader Team"
 LABEL description="SAM Trader V3 — Production-grade autonomous trading platform built on NautilusTrader"
