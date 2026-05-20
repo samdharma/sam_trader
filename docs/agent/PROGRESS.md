@@ -119,3 +119,12 @@
 - **Files Changed**: `src/sam_trader/config.py`, `tests/unit/test_config.py`, `.env.example`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 4/4 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ready for next phase-1 ticket (sam-p1-main: TradingNode bootstrap with multi-broker placeholders).
+
+## Iteration 11
+- **Task**: P1: main.py — TradingNode bootstrap with multi-broker placeholders
+- **Task ID**: sam_trader-9w9
+- **Status**: COMPLETE
+- **Decisions**: Ported main.py from v2 csam_trader → sam_trader. Added lazy import blocks for both Futu and IB adapters with try/except ImportError. Feature flags (futu_enabled/ib_enabled) gate each broker. Dicts remain empty in Phase 1 since adapters don't exist yet. Bundle loader called with graceful failure via BundleLoaderError catch. Redis CacheConfig wired conditionally on state_load_enabled/state_save_enabled. Created bundle_loader.py stub with load_bundles() and exception classes. Removed unused BarType import to satisfy flake8.
+- **Files Changed**: `src/sam_trader/main.py`, `src/sam_trader/bundle_loader.py`, `tests/unit/test_main.py`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 2/2 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for next phase-1 ticket (sam-p1-integration: Phase 1 integration test gate).
