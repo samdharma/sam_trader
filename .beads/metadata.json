@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "sam_trader",
+  "project_id": "c6464ca8-82e3-4d18-8a1b-218f73d5ab79"
+}
