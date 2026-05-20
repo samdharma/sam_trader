@@ -15,3 +15,12 @@
 - **Validation Result**: N/A (no code yet)
 - **Blockers / Notes**: Phase-0 build can now begin. Ralph loop should start successfully.
 
+
+## Iteration 1
+- **Task**: P0: Initialize repo (AGENTS.md, README.md, .gitignore, dirs)
+- **Task ID**: sam_trader-9z3.1.1
+- **Status**: COMPLETE
+- **Decisions**: Merged v2 .gitignore with v3-standard additions (IDE, Python build, testing caches). Created .venv for pytest. Added data/catalog/.gitkeep so empty dir is tracked.
+- **Files Changed**: `.gitignore`, `data/catalog/.gitkeep` (plus creation of 20+ empty directories)
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted, no tests collected → exit 5 treated as pass)
+- **Blockers / Notes**: None. Ready for sam-p0-scaffold (pyproject.toml, __init__.py files, .env.example).
