@@ -60,3 +60,12 @@
 - **Files Changed**: `docker/docker-compose.yml`, `.env.example`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; docker compose up sam-redis → redis-cli ping returned PONG)
 - **Blockers / Notes**: None. Ready for next phase-0 task (sam-p0-postgres, sam-p0-entrypoint, or sam-p0-compose).
+
+## Iteration 5
+- **Task**: P0: PostgreSQL service with init SQL schema
+- **Task ID**: sam_trader-9z3.1.5
+- **Status**: COMPLETE
+- **Decisions**: Ported v2 PG schema with added trd_market column on fills. Added .flake8 config (max-line-length 88) to resolve black/flake8 conflict. Created unit tests validating schema SQL and docker-compose service definition.
+- **Files Changed**: `docker/docker-compose.yml`, `docker/postgres/init/01_schema.sql`, `tests/unit/test_postgres_schema.py`, `.flake8`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; docker compose config valid)
+- **Blockers / Notes**: None. Ready for next phase-0 task (sam-p0-entrypoint or sam-p0-compose).
