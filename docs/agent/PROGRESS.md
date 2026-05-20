@@ -29,6 +29,15 @@
 - **Task**: P0: Scaffold Python package (pyproject.toml, __init__.py, .env.example)
 - **Task ID**: sam_trader-9z3.1.2
 - **Status**: COMPLETE
+- **Decisions**: All acceptance criteria already satisfied from prior setup. Verified pyproject.toml pins nautilus_trader==1.227.0, package name sam_trader, version 0.3.0, requires-python >=3.12, deps include pyyaml/asyncpg/futu-api. All 6 __init__.py files present. .env.example contains all FUTU + IB + PG + Redis vars. test_config.py placeholder passes.
+- **Files Changed**: None (all requirements pre-existing)
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted, 1 passed)
+- **Blockers / Notes**: None. Ready for next phase-0 ticket (sam-p0-dockerfile).
+
+## Iteration 2
+- **Task**: P0: Scaffold Python package (pyproject.toml, __init__.py, .env.example)
+- **Task ID**: sam_trader-9z3.1.2
+- **Status**: COMPLETE
 - **Decisions**: Pinned nautilus_trader==1.227.0 per D1. Renamed package from csam_trader to sam_trader, version 0.3.0. Updated .env.example with SAM_ prefixes and Futu vars. Added __init__.py to all src/sam_trader/ subdirs.
 - **Files Changed**: `pyproject.toml`, `.env.example`, `src/sam_trader/__init__.py`, `src/sam_trader/actors/__init__.py`, `src/sam_trader/adapters/__init__.py`, `src/sam_trader/adapters/futu/__init__.py`, `src/sam_trader/adapters/futu/parsing/__init__.py`, `src/sam_trader/strategies/__init__.py`, `tests/unit/test_config.py`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted)
