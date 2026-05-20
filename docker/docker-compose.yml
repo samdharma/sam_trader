@@ -1,6 +1,61 @@
 services:
-  # Placeholder for sam-trader (Nautilus TradingNode)
-  # Defined in ticket: sam-p0-compose, sam-p0-dockerfile
+  sam-trader:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: sam-trader:latest
+    container_name: sam-trader
+    restart: unless-stopped
+    networks:
+      - sam-net
+    depends_on:
+      sam-postgres:
+        condition: service_healthy
+      sam-redis:
+        condition: service_healthy
+    volumes:
+      - ../config:/opt/sam_trader/config:ro
+      - ../data/catalog:/opt/sam_trader/data/catalog:rw
+      - ../logs:/opt/sam_trader/logs:rw
+    environment:
+      - PYTHONPATH=/opt/sam_trader/src
+      - PYTHONUNBUFFERED=1
+      - TRADER_ID=${TRADER_ID:-sam_trader}
+      - SAM_ENV=${SAM_ENV:-paper}
+      - POSTGRES_HOST=${POSTGRES_HOST:-sam-postgres}
+      - POSTGRES_PORT=${POSTGRES_PORT:-5432}
+      - POSTGRES_DB=${POSTGRES_DB:-sam_trader}
+      - POSTGRES_USER=${POSTGRES_USER:-sam}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-sam_secret}
+      - REDIS_HOST=${REDIS_HOST:-sam-redis}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - WAIT_FOR_IB_GATEWAY=${WAIT_FOR_IB_GATEWAY:-1}
+      - IB_GATEWAY_HOST=${IB_GATEWAY_HOST:-sam-ib-gateway}
+      - IB_GATEWAY_PORT=${IB_GATEWAY_PORT:-4004}
+      - IB_GATEWAY_CLIENT_ID=${IB_GATEWAY_CLIENT_ID:-11}
+      - IB_ACCOUNT_ID=${IB_ACCOUNT_ID:-}
+      - IB_SYMBOLS=${IB_SYMBOLS:-}
+      - IB_READ_ONLY_API=${IB_READ_ONLY_API:-false}
+      - IB_MARKET_DATA_TYPE=${IB_MARKET_DATA_TYPE:-REALTIME}
+      - WAIT_FOR_FUTU_OPEND=${WAIT_FOR_FUTU_OPEND:-1}
+      - FUTU_OPEND_HOST=${FUTU_OPEND_HOST:-sam-futu-opend}
+      - FUTU_OPEND_PORT=${FUTU_OPEND_PORT:-11111}
+      - FUTU_LOGIN_ACCOUNT=${FUTU_LOGIN_ACCOUNT:-}
+      - FUTU_LOGIN_PWD_MD5=${FUTU_LOGIN_PWD_MD5:-}
+      - FUTU_TRADE_PASSWORD=${FUTU_TRADE_PASSWORD:-}
+      - STATE_SAVE_ENABLED=${STATE_SAVE_ENABLED:-true}
+      - STATE_LOAD_ENABLED=${STATE_LOAD_ENABLED:-true}
+      - ACTOR_JOURNAL_ENABLED=${ACTOR_JOURNAL_ENABLED:-true}
+      - ACTOR_HEALTH_ENABLED=${ACTOR_HEALTH_ENABLED:-true}
+      - ACTOR_BAR_RESUB_ENABLED=${ACTOR_BAR_RESUB_ENABLED:-true}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    healthcheck:
+      test: ["CMD-SHELL", "cat /proc/1/cmdline | grep -q sam_trader.main"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
 
   sam-postgres:
     image: postgres:16-alpine
@@ -8,17 +63,17 @@ services:
     restart: unless-stopped
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-sam}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sam_secret}
+      POSTGRES_DB: ${POSTGRES_DB:-sam_trader}
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./postgres/init:/docker-entrypoint-initdb.d:ro
     networks:
       - sam-net
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB:-sam_trader}
-      POSTGRES_USER: ${POSTGRES_USER:-sam}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sam_secret}
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sam} -d ${POSTGRES_DB:-sam_trader}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -45,12 +100,6 @@ services:
       retries: 5
       start_period: 10s
 
-  # Placeholder for sam-ib-gateway
-  # Defined in ticket: sam-p5-ib-gateway
-
-  # Placeholder for sam-services
-  # Defined in ticket: sam-p8-dockerfile
-
   sam-futu-opend:
     image: futuopen/futu-opend:latest
     container_name: sam-futu-opend
@@ -70,6 +119,69 @@ services:
       - futu
     healthcheck:
       test: ["CMD-SHELL", "echo > /dev/tcp/localhost/11111"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  sam-ib-gateway:
+    image: ghcr.io/gnzsnz/ib-gateway:stable
+    container_name: sam-ib-gateway
+    restart: unless-stopped
+    ports:
+      - "${IB_GATEWAY_PORT:-4004}:4004"
+      - "${IB_VNC_PORT:-5900}:5900"
+    environment:
+      TWS_USERID: ${TWS_USERID:-}
+      TWS_PASSWORD: ${TWS_PASSWORD:-}
+      TRADING_MODE: ${IB_TRADING_MODE:-paper}
+      READ_ONLY_API: ${IB_READ_ONLY_API:-false}
+      VNC_SERVER_PASSWORD: ${VNC_SERVER_PASSWORD:-}
+      TWOFA_TIMEOUT_ACTION: ${TWOFA_TIMEOUT_ACTION:-restart}
+      TWOFA_EXIT_INTERVAL: ${TWOFA_EXIT_INTERVAL:-180}
+      RELOGIN_AFTER_TWOFA_TIMEOUT: ${RELOGIN_AFTER_TWOFA_TIMEOUT:-yes}
+      EXISTING_SESSION_DETECTED_ACTION: ${EXISTING_SESSION_DETECTED_ACTION:-primary}
+    networks:
+      - sam-net
+    profiles:
+      - ib
+    healthcheck:
+      test: ["CMD-SHELL", "echo > /dev/tcp/localhost/4004"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+
+  sam-services:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.services
+    image: sam-services:latest
+    container_name: sam-services
+    restart: unless-stopped
+    ports:
+      - "${SAM_SERVICES_PORT:-8080}:8080"
+    networks:
+      - sam-net
+    volumes:
+      - ../config:/opt/sam_trader/config:ro
+      - ../logs:/opt/sam_trader/logs:rw
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      - PYTHONPATH=/opt/sam_trader/src
+      - PYTHONUNBUFFERED=1
+      - POSTGRES_HOST=${POSTGRES_HOST:-sam-postgres}
+      - POSTGRES_PORT=${POSTGRES_PORT:-5432}
+      - POSTGRES_DB=${POSTGRES_DB:-sam_trader}
+      - POSTGRES_USER=${POSTGRES_USER:-sam}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-sam_secret}
+      - REDIS_HOST=${REDIS_HOST:-sam-redis}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+    profiles:
+      - services
+    healthcheck:
+      test: ["CMD-SHELL", "echo > /dev/tcp/localhost/8080"]
       interval: 10s
       timeout: 5s
       retries: 5

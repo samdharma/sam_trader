@@ -1,0 +1,3 @@
+# SAM Trader V3 — Additional Python dependencies for Nautilus container
+# Base image already includes nautilus_trader + core deps.
+# Add extras here (e.g., asyncpg, futu-api, etc.) if not in pyproject.toml.

@@ -69,3 +69,12 @@
 - **Files Changed**: `docker/docker-compose.yml`, `docker/postgres/init/01_schema.sql`, `tests/unit/test_postgres_schema.py`, `.flake8`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; docker compose config valid)
 - **Blockers / Notes**: None. Ready for next phase-0 task (sam-p0-entrypoint or sam-p0-compose).
+
+## Iteration 6
+- **Task**: P0: docker-compose.yml with all 6 services
+- **Task ID**: sam_trader-9z3.1.4
+- **Status**: COMPLETE
+- **Decisions**: Ported v2 docker-compose.yml, renaming all services to v3 conventions (sam-*). Added sam-trader (Nautilus TradingNode), sam-ib-gateway (profile:ib), sam-services (profile:services). Created placeholder Dockerfile, Dockerfile.services, entrypoint.sh, and requirements.txt to support compose validation. Updated .env.example hostnames to match v3 service names. All 6 services have health checks. Named volumes: postgres_data, redis_data, futu_opend_data. Network: sam-net (bridge). Port mappings: 5432, 6379, 11111, 4004, 5900, 8080.
+- **Files Changed**: `docker/docker-compose.yml`, `docker/Dockerfile`, `docker/Dockerfile.services`, `docker/entrypoint.sh`, `docker/requirements.txt`, `.env.example`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targetted; docker compose config validated with all profiles)
+- **Blockers / Notes**: None. Ready for next phase-0 task (sam-p0-entrypoint or sam-p0-verify).
