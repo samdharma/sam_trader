@@ -25,3 +25,12 @@
 - **Files Changed**: `src/sam_trader/adapters/futu/subscription_manager.py`, `tests/unit/adapters/futu/test_subscription_manager.py`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 13/13 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ready for next phase-2 ticket (sam-p2-exit-data: market data exit gate). Subscription manager is currently standalone; wiring into `FutuLiveDataClient` will happen in a future ticket when quota enforcement is needed at runtime.
+
+## Iteration 23
+- **Task**: [EXIT] P2: Market data subscription → QuoteTick flow
+- **Task ID**: sam_trader-9z3.3.7
+- **Status**: COMPLETE
+- **Decisions**: Wired `FutuSubscriptionManager` into `FutuLiveDataClient` via optional constructor parameter. Subscribe/unsubscribe methods now increment/decrement quota tracking before/after Futu SDK calls. Failed Futu subscriptions roll back the quota entry. Added comprehensive integration tests covering: (1) full quote tick flow (subscribe → receive → verify bid/ask/last → unsubscribe), (2) multiple concurrent instrument subscriptions, (3) subscription quota manager increment/decrement across multiple data types.
+- **Files Changed**: `src/sam_trader/adapters/futu/data.py`, `tests/integration/adapters/futu/test_data_subscription.py`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 8/8 integration tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Phase 2 exit gate complete. Ready for Phase 3 (Futu Execution Adapter).

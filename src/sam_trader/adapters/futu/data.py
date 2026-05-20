@@ -41,6 +41,10 @@ from sam_trader.adapters.futu.parsing.market_data import (
     TickerHandler,
     parse_futu_bars,
 )
+from sam_trader.adapters.futu.subscription_manager import DataType as SubDataType
+from sam_trader.adapters.futu.subscription_manager import (
+    FutuSubscriptionManager,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -101,6 +105,7 @@ class FutuLiveDataClient(LiveMarketDataClient):
         clock: LiveClock,
         instrument_provider: InstrumentProvider,
         config: FutuDataClientConfig,
+        subscription_manager: FutuSubscriptionManager | None = None,
     ) -> None:
         super().__init__(
             loop=loop,
@@ -116,6 +121,7 @@ class FutuLiveDataClient(LiveMarketDataClient):
         self._quote_ctx = client
         self._queue: asyncio.Queue[Any] = asyncio.Queue()
         self._push_task: asyncio.Task | None = None
+        self._subscription_manager = subscription_manager
 
         # Subscription tracking for reconnection restoration
         self._quote_tick_subs: set[InstrumentId] = set()
@@ -273,11 +279,25 @@ class FutuLiveDataClient(LiveMarketDataClient):
         if self._quote_ctx is None:
             self._log.error("Quote context not available for subscribe")
             return
+        if self._subscription_manager is not None:
+            ok = await self._subscription_manager.subscribe(
+                instrument_id, SubDataType.QUOTE
+            )
+            if not ok:
+                self._log.error(
+                    "Quote tick subscription rejected by quota manager for %s",
+                    instrument_id,
+                )
+                return
         ret, data = self._quote_ctx.subscribe([code], [SubType.QUOTE])
         if ret == RET_OK:
             self._quote_tick_subs.add(instrument_id)
             self._log.info(f"Subscribed quote ticks for {instrument_id}")
         else:
+            if self._subscription_manager is not None:
+                await self._subscription_manager.unsubscribe(
+                    instrument_id, SubDataType.QUOTE
+                )
             self._log.error(
                 f"Failed to subscribe quote ticks for {instrument_id}: {data}"
             )
@@ -288,11 +308,25 @@ class FutuLiveDataClient(LiveMarketDataClient):
         if self._quote_ctx is None:
             self._log.error("Quote context not available for subscribe")
             return
+        if self._subscription_manager is not None:
+            ok = await self._subscription_manager.subscribe(
+                instrument_id, SubDataType.TRADE_TICK
+            )
+            if not ok:
+                self._log.error(
+                    "Trade tick subscription rejected by quota manager for %s",
+                    instrument_id,
+                )
+                return
         ret, data = self._quote_ctx.subscribe([code], [SubType.TICKER])
         if ret == RET_OK:
             self._trade_tick_subs.add(instrument_id)
             self._log.info(f"Subscribed trade ticks for {instrument_id}")
         else:
+            if self._subscription_manager is not None:
+                await self._subscription_manager.unsubscribe(
+                    instrument_id, SubDataType.TRADE_TICK
+                )
             self._log.error(
                 f"Failed to subscribe trade ticks for {instrument_id}: {data}"
             )
@@ -308,12 +342,25 @@ class FutuLiveDataClient(LiveMarketDataClient):
         if self._quote_ctx is None:
             self._log.error("Quote context not available for subscribe")
             return
+        if self._subscription_manager is not None:
+            ok = await self._subscription_manager.subscribe(
+                instrument_id, SubDataType.KLINE
+            )
+            if not ok:
+                self._log.error(
+                    f"Bar subscription rejected by quota manager for {bar_type}"
+                )
+                return
         ret, data = self._quote_ctx.subscribe([code], [subtype])
         if ret == RET_OK:
             self._bar_subs[bar_type] = instrument_id
             self._add_kline_handler(bar_type)
             self._log.info(f"Subscribed bars for {bar_type}")
         else:
+            if self._subscription_manager is not None:
+                await self._subscription_manager.unsubscribe(
+                    instrument_id, SubDataType.KLINE
+                )
             self._log.error(f"Failed to subscribe bars for {bar_type}: {data}")
 
     async def _subscribe_order_book_deltas(self, command: SubscribeOrderBook) -> None:
@@ -322,11 +369,25 @@ class FutuLiveDataClient(LiveMarketDataClient):
         if self._quote_ctx is None:
             self._log.error("Quote context not available for subscribe")
             return
+        if self._subscription_manager is not None:
+            ok = await self._subscription_manager.subscribe(
+                instrument_id, SubDataType.ORDER_BOOK
+            )
+            if not ok:
+                self._log.error(
+                    "Order book subscription rejected by quota manager for %s",
+                    instrument_id,
+                )
+                return
         ret, data = self._quote_ctx.subscribe([code], [SubType.ORDER_BOOK])
         if ret == RET_OK:
             self._order_book_subs.add(instrument_id)
             self._log.info(f"Subscribed order book for {instrument_id}")
         else:
+            if self._subscription_manager is not None:
+                await self._subscription_manager.unsubscribe(
+                    instrument_id, SubDataType.ORDER_BOOK
+                )
             self._log.error(
                 f"Failed to subscribe order book for {instrument_id}: {data}"
             )
@@ -338,6 +399,10 @@ class FutuLiveDataClient(LiveMarketDataClient):
     async def _unsubscribe_quote_ticks(self, command: UnsubscribeQuoteTicks) -> None:
         instrument_id = command.instrument_id
         self._quote_tick_subs.discard(instrument_id)
+        if self._subscription_manager is not None:
+            await self._subscription_manager.unsubscribe(
+                instrument_id, SubDataType.QUOTE
+            )
         if self._quote_ctx is None:
             return
         code = instrument_id_to_futu_security(instrument_id)
@@ -346,6 +411,10 @@ class FutuLiveDataClient(LiveMarketDataClient):
     async def _unsubscribe_trade_ticks(self, command: UnsubscribeTradeTicks) -> None:
         instrument_id = command.instrument_id
         self._trade_tick_subs.discard(instrument_id)
+        if self._subscription_manager is not None:
+            await self._subscription_manager.unsubscribe(
+                instrument_id, SubDataType.TRADE_TICK
+            )
         if self._quote_ctx is None:
             return
         code = instrument_id_to_futu_security(instrument_id)
@@ -354,9 +423,13 @@ class FutuLiveDataClient(LiveMarketDataClient):
     async def _unsubscribe_bars(self, command: UnsubscribeBars) -> None:
         bar_type = command.bar_type
         self._bar_subs.pop(bar_type, None)
+        instrument_id = bar_type.instrument_id
+        if self._subscription_manager is not None:
+            await self._subscription_manager.unsubscribe(
+                instrument_id, SubDataType.KLINE
+            )
         if self._quote_ctx is None:
             return
-        instrument_id = bar_type.instrument_id
         code = instrument_id_to_futu_security(instrument_id)
         subtype = _bar_type_to_futu_subtype(bar_type)
         if subtype is None:
@@ -368,6 +441,10 @@ class FutuLiveDataClient(LiveMarketDataClient):
     ) -> None:
         instrument_id = command.instrument_id
         self._order_book_subs.discard(instrument_id)
+        if self._subscription_manager is not None:
+            await self._subscription_manager.unsubscribe(
+                instrument_id, SubDataType.ORDER_BOOK
+            )
         if self._quote_ctx is None:
             return
         code = instrument_id_to_futu_security(instrument_id)
