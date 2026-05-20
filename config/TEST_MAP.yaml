@@ -1,0 +1,7 @@
+mappings:
+  - source: docker/entrypoint.sh
+    tests:
+      - tests/unit/test_entrypoint.py
+
+default_tests:
+  - tests/unit/

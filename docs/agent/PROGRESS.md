@@ -78,3 +78,12 @@
 - **Files Changed**: `docker/docker-compose.yml`, `docker/Dockerfile`, `docker/Dockerfile.services`, `docker/entrypoint.sh`, `docker/requirements.txt`, `.env.example`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targetted; docker compose config validated with all profiles)
 - **Blockers / Notes**: None. Ready for next phase-0 task (sam-p0-entrypoint or sam-p0-verify).
+
+## Iteration 7
+- **Task**: P0: Entrypoint script with multi-service wait logic
+- **Task ID**: sam_trader-9z3.1.8
+- **Status**: COMPLETE
+- **Decisions**: Entrypoint.sh was already created in sam-p0-compose (iteration 6) with all AC satisfied. This iteration added targeted unit tests mocking TCP services to verify: postgres+redis wait, optional futu/ib wait, and timeout behavior. Created TEST_MAP.yaml for targeted test discovery.
+- **Files Changed**: `tests/unit/test_entrypoint.py`, `config/TEST_MAP.yaml`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 3/3 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for sam-p0-verify (phase-0 exit gate).
