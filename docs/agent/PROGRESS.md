@@ -86,3 +86,12 @@
 - **Files Changed**: `tests/unit/adapters/futu/test_parsing.py`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 20/20 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ready for next phase-2 ticket (sam-p2-config-dc: FutuDataClientConfig/FutuExecClientConfig dataclasses).
+
+## Iteration 19
+- **Task**: P2: Port Futu connection manager from v2
+- **Task ID**: sam_trader-9z3.3.1
+- **Status**: COMPLETE
+- **Decisions**: Ported connection.py from v2 csam_trader → sam_trader with no module reference changes needed (file was self-contained). Monkey-patch for is_async_connect on OpenTradeContextBase re-verified and preserved. Context caching by (host, port, env) tuple maintained via global _QUOTE_CACHE and _TRADE_CACHE with threading.Lock. _FutuDisconnectHandler invalidates cached contexts on CONN_STATUS/GTW_EVENT/PROGRAM_STATUS notifications. _wait_for_ready polls until READY with 0.05s sleep, raises TimeoutError or ConnectionError. unlock_futu_trade wrapper returns bool. close_futu_contexts closes all cached contexts for clean shutdown. Ported full v2 test suite (18 tests) with module references updated to sam_trader.
+- **Files Changed**: `src/sam_trader/adapters/futu/connection.py`, `tests/unit/adapters/futu/test_connection.py`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 18/18 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for next phase-2 ticket (sam-p2-config-dc: FutuDataClientConfig/FutuExecClientConfig dataclasses).
