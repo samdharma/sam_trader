@@ -68,3 +68,12 @@
 - **Files Changed**: `docker/docker-compose.yml`, `.env.example`, `src/sam_trader/config.py`, `tests/unit/test_config.py`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 4/4 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None.
+
+## Iteration 17
+- **Task**: BUG: Dockerfile base image not pinned to Nautilus v1.227.0
+- **Task ID**: sam_trader-9z3.1.10
+- **Status**: COMPLETE
+- **Decisions**: One-line fix per ticket AC. Changed `FROM ghcr.io/nautechsystems/nautilus_trader:latest` to `FROM ghcr.io/nautechsystems/nautilus_trader:1.227.0`. Aligns container base image with pyproject.toml pin and V3 plan D1 (version pinned, not `:latest`).
+- **Files Changed**: `docker/Dockerfile`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targetted; no affected Python files, gate passed)
+- **Blockers / Notes**: None.
