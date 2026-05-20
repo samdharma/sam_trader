@@ -34,3 +34,12 @@
 - **Files Changed**: `src/sam_trader/adapters/futu/data.py`, `tests/integration/adapters/futu/test_data_subscription.py`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 8/8 integration tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Phase 2 exit gate complete. Ready for Phase 3 (Futu Execution Adapter).
+
+## Iteration 24
+- **Task**: P3: Futu order parsing — OrderStatusReport, FillReport, PositionStatusReport
+- **Task ID**: sam_trader-9z3.4.1
+- **Status**: COMPLETE
+- **Decisions**: Created `adapters/futu/parsing/orders.py` with `TradeOrderHandler`, `TradeDealHandler`, and `parse_futu_position_to_report`. Maps Futu push data to NautilusTrader `OrderStatusReport`, `FillReport`, and `PositionStatusReport`. Added TIF and position side constants to `constants.py`. Handles all Futu order status codes (both string and int enum values). `TradeOrderHandler` pushes `OrderStatusReport` onto `asyncio.Queue`. `TradeDealHandler` pushes `FillReport` onto `asyncio.Queue`. Timestamp parser handles both string (`createTime`) and float (`createTimestamp`) protobuf fields. Adapted patterns from nautilus-futu parsing/orders.py (MIT).
+- **Files Changed**: `src/sam_trader/adapters/futu/constants.py`, `src/sam_trader/adapters/futu/parsing/orders.py`, `tests/unit/adapters/futu/test_parsing_orders.py`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 15/15 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Phase 3 ticket 1 of 3 complete. Ready for sam_trader-9z3.4.2 (FutuLiveExecutionClient skeleton and order methods).
