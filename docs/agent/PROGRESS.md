@@ -16,3 +16,12 @@
 - **Files Changed**: `src/sam_trader/adapters/futu/common.py`, `src/sam_trader/adapters/futu/data.py`, `tests/unit/adapters/futu/test_data.py`, `tests/integration/adapters/futu/test_data_subscription.py`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 18/18 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ready for next phase-2 ticket (sam-p2-sub-mgr: Futu subscription quota manager).
+
+## Iteration 22
+- **Task**: P2: Futu subscription quota manager
+- **Task ID**: sam_trader-9z3.3.6
+- **Status**: COMPLETE
+- **Decisions**: Created `adapters/futu/subscription_manager.py` with `FutuSubscriptionManager` class. Tracks subscriptions per `DataType` enum (QUOTE, TRADE_TICK, ORDER_BOOK, KLINE) with configurable limits defaulting to Futu limits (100/100/50/100). Thread-safe via `asyncio.Lock` per data type. Bundle subscriptions (`is_bundle=True`) trigger eviction of oldest ad-hoc subscriptions when quota is full. Idle release via `release_idle(timeout_seconds=60)` returns evicted entries so caller can unsubscribe from Futu. WARNING logged at 80% limit, ERROR at 95% limit.
+- **Files Changed**: `src/sam_trader/adapters/futu/subscription_manager.py`, `tests/unit/adapters/futu/test_subscription_manager.py`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 13/13 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for next phase-2 ticket (sam-p2-exit-data: market data exit gate). Subscription manager is currently standalone; wiring into `FutuLiveDataClient` will happen in a future ticket when quota enforcement is needed at runtime.
