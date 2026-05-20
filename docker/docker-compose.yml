@@ -5,8 +5,26 @@ services:
   # Placeholder for sam-postgres
   # Defined in ticket: sam-p0-postgres
 
-  # Placeholder for sam-redis
-  # Defined in ticket: sam-p0-redis
+  sam-redis:
+    image: redis:7-alpine
+    container_name: sam-redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - sam-net
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+    command: >
+      sh -c 'if [ -n "$$REDIS_PASSWORD" ]; then exec redis-server --requirepass "$$REDIS_PASSWORD"; else exec redis-server; fi'
+    healthcheck:
+      test: ["CMD-SHELL", "if [ -n \"$$REDIS_PASSWORD\" ]; then redis-cli -a \"$$REDIS_PASSWORD\" ping | grep PONG; else redis-cli ping | grep PONG; fi"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   # Placeholder for sam-ib-gateway
   # Defined in ticket: sam-p5-ib-gateway
@@ -39,6 +57,8 @@ services:
       start_period: 30s
 
 volumes:
+  redis_data:
+    driver: local
   futu_opend_data:
     driver: local
 
