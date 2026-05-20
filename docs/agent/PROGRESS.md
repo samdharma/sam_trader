@@ -128,3 +128,12 @@
 - **Files Changed**: `src/sam_trader/main.py`, `src/sam_trader/bundle_loader.py`, `tests/unit/test_main.py`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 2/2 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ready for next phase-1 ticket (sam-p1-integration: Phase 1 integration test gate).
+
+## Iteration 12
+- **Task**: [EXIT] P1: Integration test — config + bootstrap
+- **Task ID**: sam_trader-vec
+- **Status**: COMPLETE
+- **Decisions**: Created tests/integration/test_bootstrap.py with test_full_bootstrap_no_brokers. Parses .env.example and loads into env vars, then overrides STATE_SAVE_ENABLED/STATE_LOAD_ENABLED to false to avoid Redis dependency, and BUNDLES_PATH to a temp nonexistent file for graceful bundle loader failure. Verified SamTraderConfig values match .env.example defaults. build_trading_node() returns TradingNode. node.build() succeeds with no brokers registered. node.is_built() returns True confirming readiness.
+- **Files Changed**: `tests/integration/test_bootstrap.py`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 1/1 test passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Phase 1 is complete. Ready for Phase 2 (Futu Adapter — Market Data).
