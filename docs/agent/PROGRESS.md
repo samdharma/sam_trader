@@ -137,3 +137,12 @@
 - **Files Changed**: `tests/integration/test_bootstrap.py`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 1/1 test passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Phase 1 is complete. Ready for Phase 2 (Futu Adapter — Market Data).
+
+## Iteration 13
+- **Task**: P2: Futu constants — venue definitions, enum mappings, type maps
+- **Task ID**: sam_trader-9z3.3.2
+- **Status**: COMPLETE
+- **Decisions**: Created constants.py using official futu-api SDK enum values (not nautilus-futu Rust proto values). Mapped K_60M→1-HOUR (not 60-MINUTE) to match Nautilus convention. Added 120M/240M→2-HOUR/4-HOUR mappings. SecurityType→InstrumentClass: DRVT→OPTION, CRYPTO→SPOT (no CRYPTO InstrumentClass in Nautilus v1.227.0). Included bidirectional OrderType, TrdSide, OrderStatus mappings with ValueError for unsupported types.
+- **Files Changed**: `src/sam_trader/adapters/futu/constants.py`, `tests/unit/adapters/futu/test_constants.py`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 48/48 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for next phase-2 ticket (sam-p2-config-dc: FutuDataClientConfig/FutuExecClientConfig dataclasses).
