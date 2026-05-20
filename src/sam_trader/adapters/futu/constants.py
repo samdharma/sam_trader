@@ -14,6 +14,7 @@ from nautilus_trader.model.enums import (
     OrderStatus,
     OrderType,
     PriceType,
+    TimeInForce,
 )
 from nautilus_trader.model.identifiers import InstrumentId, Venue
 
@@ -312,3 +313,44 @@ NAUTILUS_VENUE_TO_FUTU_TRD_MARKET: dict[Venue, int] = {
 # Futu TrdEnv values (from futu-api)
 FUTU_TRD_ENV_SIMULATE = 0
 FUTU_TRD_ENV_REAL = 1
+
+
+# ------------------------------------------------------------------------------
+# PositionSide constants
+# ------------------------------------------------------------------------------
+
+# Futu PositionSide values (from futu-api)
+FUTU_POSITION_SIDE_LONG = 0
+FUTU_POSITION_SIDE_SHORT = 1
+
+
+# ------------------------------------------------------------------------------
+# TimeInForce constants
+# ------------------------------------------------------------------------------
+
+# Futu TimeInForce values (from futu-api)
+FUTU_TIF_DAY = 0
+FUTU_TIF_GTC = 1
+FUTU_TIF_IOC = 2
+
+
+def futu_time_in_force_to_nautilus(tif: int | None) -> TimeInForce:
+    """Convert Futu TimeInForce to NautilusTrader TimeInForce.
+
+    Parameters
+    ----------
+    tif : int | None
+        Futu TimeInForce integer value.
+
+    Returns
+    -------
+    TimeInForce
+        Mapped NautilusTrader TimeInForce.
+
+    """
+    if tif == FUTU_TIF_GTC:
+        return TimeInForce.GTC
+    elif tif == FUTU_TIF_IOC:
+        return TimeInForce.IOC
+    else:
+        return TimeInForce.DAY
