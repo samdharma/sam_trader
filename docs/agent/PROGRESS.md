@@ -110,3 +110,12 @@
 - **Files Changed**: `docker/docker-compose.yml`, `.env.example`, `docker/docker-compose.verify.yml`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targetted; manual verification: all containers healthy, docker compose down cleans up, no port conflicts)
 - **Blockers / Notes**: None. Phase 0 is complete. Ready for Phase 1 (Configuration & Bootstrap).
+
+## Iteration 10
+- **Task**: P1: SamTraderConfig — frozen dataclass with Futu + IB fields
+- **Task ID**: sam_trader-0f6
+- **Status**: COMPLETE
+- **Decisions**: Ported config.py from v2 CsamTraderConfig → SamTraderConfig. Added all Futu fields per AC. Added ib_enabled/futu_enabled feature flags. Defaults follow v3 naming (sam-postgres, sam-redis, sam-ib-gateway, sam-futu-opend). from_env() handles bool coercion via lower() in ("1", "true", "yes"). Tests cover defaults, custom values, Futu field presence, and frozen immutability.
+- **Files Changed**: `src/sam_trader/config.py`, `tests/unit/test_config.py`, `.env.example`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 4/4 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for next phase-1 ticket (sam-p1-main: TradingNode bootstrap with multi-broker placeholders).
