@@ -77,3 +77,12 @@
 - **Files Changed**: `docker/Dockerfile`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targetted; no affected Python files, gate passed)
 - **Blockers / Notes**: None.
+
+## Iteration 18
+- **Task**: P2: Futu parsing module — market data (QuoteTick, TradeTick, Bar, OrderBookDelta)
+- **Task ID**: sam_trader-9z3.3.4
+- **Status**: COMPLETE
+- **Decisions**: market_data.py implementation was already present from iteration 17 commit (458-line stub that was actually a full implementation adapted from nautilus-futu). This iteration added the missing unit tests: test_quote_tick_parsing, test_bar_parsing, test_trade_tick_parsing, test_instrument_id_conversion, plus test_order_book_parsing. All tests validate parsing functions against NautilusTrader v1.227.0 data types. Handler classes (StockQuoteHandler, CurKlineHandler, TickerHandler, OrderBookHandler) use callback → asyncio.Queue pattern with loop.call_soon_threadsafe for thread safety.
+- **Files Changed**: `tests/unit/adapters/futu/test_parsing.py`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 20/20 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for next phase-2 ticket (sam-p2-config-dc: FutuDataClientConfig/FutuExecClientConfig dataclasses).
