@@ -50,3 +50,12 @@
 - **Files Changed**: None (code already complete)
 - **Validation Result**: PASS (pytest 48/48 tests passed; ralph_validate.sh --tier=targeted PASS)
 - **Blockers / Notes**: None. Ready for next phase-2 ticket (sam-p2-config-dc: FutuDataClientConfig/FutuExecClientConfig dataclasses).
+
+## Iteration 15
+- **Task**: BUG: docker-compose.yml sam-trader service missing critical env var mappings
+- **Task ID**: sam_trader-9z3.1.12
+- **Status**: COMPLETE
+- **Decisions**: Added missing env vars to sam-trader service in docker-compose.yml following existing `- VAR=${VAR:-default}` pattern. Added IB_ENABLED/IB_TRADING_MODE in IB section, FUTU_ENABLED/FUTU_TRD_ENV/FUTU_TRD_MARKET/FUTU_UNLOCK_PWD_MD5 in Futu section, and BUNDLES_PATH before LOG_LEVEL. Defaults mirror .env.example and config.py fallbacks.
+- **Files Changed**: `docker/docker-compose.yml`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targetted; no affected Python files, gate passed)
+- **Blockers / Notes**: None.
