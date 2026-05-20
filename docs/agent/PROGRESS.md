@@ -51,3 +51,12 @@
 - **Files Changed**: `docker/docker-compose.yml`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; docker compose config validated successfully)
 - **Blockers / Notes**: None. Ready for next phase-0 task (sam-p0-postgres, sam-p0-redis, sam-p0-entrypoint, or sam-p0-compose).
+
+## Iteration 4
+- **Task**: P0: Redis service definition
+- **Task ID**: sam_trader-9z3.1.6
+- **Status**: COMPLETE
+- **Decisions**: Ported redis service from v2 csam_trader docker-compose.yml with v3 naming (sam-redis, sam-net, redis_data). Added optional REDIS_PASSWORD support via conditional command and healthcheck. Updated .env.example REDIS_HOST from redis to sam-redis for v3 consistency.
+- **Files Changed**: `docker/docker-compose.yml`, `.env.example`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; docker compose up sam-redis → redis-cli ping returned PONG)
+- **Blockers / Notes**: None. Ready for next phase-0 task (sam-p0-postgres, sam-p0-entrypoint, or sam-p0-compose).
