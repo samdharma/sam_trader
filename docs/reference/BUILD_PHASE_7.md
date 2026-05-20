@@ -143,6 +143,54 @@ elif venue == Venue("IB"):
     ...
 ```
 
+## 6. Venue-Specific Order Defaults
+
+### 6.1 IBKR `post_only` Incompatibility
+
+Interactive Brokers **does not support** the `post_only` order attribute. NautilusTrader defaults:
+
+- `OrderFactory.bracket(..., tp_post_only=True)` — take-profit limit leg
+- `OrderFactory.limit(..., post_only=True)` — standalone limit orders
+
+If left at default, IB rejects the TP leg, which cascades through OCA/OUO and kills the entire bracket order. This caused **100% execution failure** on v2's first operational day.
+
+**Required pattern for IB venue:**
+
+```python
+# Bracket order — MUST set tp_post_only=False for IB
+bracket = self.order_factory.bracket(
+    instrument_id=self.instrument_id,
+    order_side=OrderSide.BUY,
+    quantity=Quantity.from_int(100),
+    entry=Price.from_str("150.00"),
+    stop_loss=Price.from_str("145.00"),
+    take_profit=Price.from_str("160.00"),
+    tp_post_only=False,  # <-- REQUIRED for IB
+)
+
+# Standalone take-profit limit — MUST set post_only=False for IB
+tp_order = self.order_factory.limit(
+    instrument_id=self.instrument_id,
+    order_side=OrderSide.SELL,
+    quantity=Quantity.from_int(50),
+    price=Price.from_str("160.00"),
+    post_only=False,  # <-- REQUIRED for IB
+)
+```
+
+### 6.2 Venue-Aware Wrapper (Recommended)
+
+To centralize the fix and prevent future strategies from hitting this, consider a wrapper in `strategies/common.py`:
+
+```python
+def make_bracket_ib(order_factory, **kwargs):
+    """Build a bracket order with IB-safe defaults."""
+    kwargs.setdefault("tp_post_only", False)
+    return order_factory.bracket(**kwargs)
+```
+
+**Reference:** Fix doc `~/Documents/ai_agent_docs/csam_trader_post_only_fix_2026-05-20.md`
+
 ---
 
 *Last updated: 2026-05-21*

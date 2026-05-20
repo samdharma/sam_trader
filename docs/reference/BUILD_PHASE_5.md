@@ -98,7 +98,19 @@ This ticket is **too large** (config + factories + instrument provider + wiring)
 
 ---
 
-## 6. Commonly Used Imports
+## 6. Known v2 Operational Issue — IBKR `post_only` Rejection
+
+> ⚠️ **CRITICAL:** During v2's first operational day (2026-05-20), IBKR rejected **100% of bracket orders** because NautilusTrader defaults `tp_post_only=True` on the take-profit limit leg (and `post_only=True` on standalone limit orders). IB does not support this attribute. The TP leg rejection cascaded through OCA/OUO linkage and killed the entire bracket — 108 rejections, 0 fills.
+>
+> **Fix:** All `order_factory.bracket()` calls targeting IB must explicitly pass `tp_post_only=False`. All standalone `order_factory.limit()` TP orders must pass `post_only=False`.
+>
+> **Reference:** `~/Documents/ai_agent_docs/csam_trader_post_only_fix_2026-05-20.md`
+>
+> **Beads:** Bug ticket `sam_trader-9z3.6.7` tracks adapter-level handling. Phase 7 strategy tickets (`sam_trader-9z3.8.2`, `sam_trader-9z3.8.3`, `sam_trader-9z3.8.4`) mandate the fix in ported strategy code.
+
+---
+
+## 7. Commonly Used Imports
 
 ```python
 from nautilus_trader.adapters.interactive_brokers.config import (
