@@ -87,3 +87,12 @@
 - **Files Changed**: `tests/unit/test_entrypoint.py`, `config/TEST_MAP.yaml`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 3/3 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ready for sam-p0-verify (phase-0 exit gate).
+
+## Iteration 8
+- **Task**: P0: Dockerfile for sam-trader (Nautilus TradingNode)
+- **Task ID**: sam_trader-9z3.1.3
+- **Status**: COMPLETE
+- **Decisions**: Base image tag `1.227.0` does not exist on GHCR; using `latest` which currently resolves to NautilusTrader v1.227.0 (verified via `pip show`). Ported v2 Dockerfile updating user (`csam`→`sam`), paths (`/opt/csam_trader`→`/opt/sam_trader`), and package (`csam_trader`→`sam_trader`). Created `docker/requirements.txt` with container-specific extras (protobuf, nautilus-ibapi). Verified non-root user `sam`, PYTHONPATH, entrypoint, and package installation in the built image.
+- **Files Changed**: `docker/Dockerfile`, `docker/requirements.txt`
+- **Validation Result**: PASS (docker build -t sam-trader:latest . succeeded; ralph_validate.sh --tier=targeted PASS)
+- **Blockers / Notes**: None. Phase-0 stack is ready for verification (sam_trader-9z3.1.9).
