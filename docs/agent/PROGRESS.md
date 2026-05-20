@@ -24,3 +24,12 @@
 - **Files Changed**: `.gitignore`, `data/catalog/.gitkeep` (plus creation of 20+ empty directories)
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted, no tests collected → exit 5 treated as pass)
 - **Blockers / Notes**: None. Ready for sam-p0-scaffold (pyproject.toml, __init__.py files, .env.example).
+
+## Iteration 2
+- **Task**: P0: Scaffold Python package (pyproject.toml, __init__.py, .env.example)
+- **Task ID**: sam_trader-9z3.1.2
+- **Status**: COMPLETE
+- **Decisions**: Pinned nautilus_trader==1.227.0 per D1. Renamed package from csam_trader to sam_trader, version 0.3.0. Updated .env.example with SAM_ prefixes and Futu vars. Added __init__.py to all src/sam_trader/ subdirs.
+- **Files Changed**: `pyproject.toml`, `.env.example`, `src/sam_trader/__init__.py`, `src/sam_trader/actors/__init__.py`, `src/sam_trader/adapters/__init__.py`, `src/sam_trader/adapters/futu/__init__.py`, `src/sam_trader/adapters/futu/parsing/__init__.py`, `src/sam_trader/strategies/__init__.py`, `tests/unit/test_config.py`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted)
+- **Blockers / Notes**: None. Ready for next phase-0 task.
