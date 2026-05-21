@@ -124,3 +124,12 @@
 - **Files Changed**: No code changes required (already implemented). Updated `docs/agent/PROGRESS.md` and `.beads/` state.
 - **Validation Result**: PASS (pytest tests/unit/adapters/futu/test_execution.py — 22/22 passed)
 - **Blockers / Notes**: None. Ready for sam_trader-9z3.4.5 (FutuLiveExecutionClient push handler wiring).
+
+## Iteration 28
+- **Task**: P3: FutuLiveExecutionClient push handler wiring
+- **Task ID**: sam_trader-9z3.4.5
+- **Status**: COMPLETE
+- **Decisions**: Created `tests/unit/adapters/futu/test_execution_push.py` with end-to-end push handler wiring tests. `test_order_push` verifies TradeOrderHandler callback → OrderStatusReport → _run_push_loop → message bus. `test_fill_push` verifies TradeDealHandler callback → FillReport → _run_push_loop → message bus. Both tests mock the Futu SDK push callback by patching `TradeOrderHandlerBase.on_recv_rsp` and `TradeDealHandlerBase.on_recv_rsp` to return DataFrames, then capture the dispatched report via monkey-patched `_send_order_status_report` and `_send_fill_report`. The execution client wiring (`_setup_handlers`, `_run_push_loop`, `_handle_report`) was already implemented in prior iterations and is fully validated.
+- **Files Changed**: `tests/unit/adapters/futu/test_execution_push.py`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 2/2 new tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for sam_trader-9z3.4.6 (account discovery & position reconciliation).
