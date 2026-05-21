@@ -168,8 +168,8 @@ class FutuLiveDataClient(LiveMarketDataClient):
         if self._quote_ctx is not None:
             try:
                 self._quote_ctx.unsubscribe_all()
-            except Exception:
-                self._log.exception("Error unsubscribing all on disconnect")
+            except Exception as e:
+                self._log.exception(f"Error unsubscribing all on disconnect: {e}", e)
             self._clear_handlers()
 
     # -----------------------------------------------------------------------
@@ -205,8 +205,7 @@ class FutuLiveDataClient(LiveMarketDataClient):
             ret = self._quote_ctx.set_handler(handler)
             if ret != RET_OK:
                 self._log.warning(
-                    "Failed to set handler %s",
-                    type(handler).__name__,
+                    f"Failed to set handler {type(handler).__name__}",
                 )
             self._handlers.append(handler)
 
@@ -266,8 +265,8 @@ class FutuLiveDataClient(LiveMarketDataClient):
                     bars = parse_futu_bars(data.to_dict("records"), bar_type)
                     for bar in bars:
                         self._handle_data(bar)
-            except Exception:
-                self._log.exception(f"Backfill failed for {bar_type}")
+            except Exception as e:
+                self._log.exception(f"Backfill failed for {bar_type}: {e}", e)
 
     # -----------------------------------------------------------------------
     # Subscribe
@@ -285,8 +284,7 @@ class FutuLiveDataClient(LiveMarketDataClient):
             )
             if not ok:
                 self._log.error(
-                    "Quote tick subscription rejected by quota manager for %s",
-                    instrument_id,
+                    f"Quote tick subscription rejected for {instrument_id}",
                 )
                 return
         ret, data = self._quote_ctx.subscribe([code], [SubType.QUOTE])
@@ -314,8 +312,7 @@ class FutuLiveDataClient(LiveMarketDataClient):
             )
             if not ok:
                 self._log.error(
-                    "Trade tick subscription rejected by quota manager for %s",
-                    instrument_id,
+                    f"Trade tick subscription rejected for {instrument_id}",
                 )
                 return
         ret, data = self._quote_ctx.subscribe([code], [SubType.TICKER])
@@ -375,8 +372,7 @@ class FutuLiveDataClient(LiveMarketDataClient):
             )
             if not ok:
                 self._log.error(
-                    "Order book subscription rejected by quota manager for %s",
-                    instrument_id,
+                    f"Order book subscription rejected for {instrument_id}",
                 )
                 return
         ret, data = self._quote_ctx.subscribe([code], [SubType.ORDER_BOOK])
@@ -471,7 +467,6 @@ class FutuLiveDataClient(LiveMarketDataClient):
             ret = self._quote_ctx.set_handler(handler)
             if ret != RET_OK:
                 self._log.warning(
-                    "Failed to set CurKlineHandler for %s",
-                    bar_type,
+                    f"Failed to set CurKlineHandler for {bar_type}",
                 )
         self._handlers.append(handler)
