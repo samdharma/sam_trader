@@ -178,3 +178,12 @@
 - **Files Changed**: `src/sam_trader/adapters/futu/instrument_provider.py`, `tests/unit/adapters/futu/test_instrument_provider.py`, `tests/integration/adapters/futu/test_provider_integration.py`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 21/21 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ready for sam_trader-9z3.5.3 (Futu factories: FutuLiveDataClientFactory, FutuLiveExecClientFactory).
+
+## Iteration 34
+- **Task**: P4: Bundle support for Futu venue
+- **Task ID**: sam_trader-9z3.5.5
+- **Status**: COMPLETE
+- **Decisions**: Rewrote `bundle_loader.py` from stub to full YAML → `ImportableStrategyConfig` loader. Validates venue is `FUTU` or `IB`. Auto-derives `config_path` from `strategy.path` by appending `Config` to class name. Merges `bracket` and `risk` dicts into strategy config. For `FUTU` venue, converts `instrument_id` to `futu_code` via `instrument_id_to_futu_security`. Injects `venue` into config for strategy routing. Created `config/bundles.example.yaml` with Futu (TSLA.NASDAQ, 00700.HKEX) and IB (NVDA.NASDAQ) examples.
+- **Files Changed**: `src/sam_trader/bundle_loader.py`, `config/bundles.example.yaml`, `tests/unit/test_bundle_loader.py`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 10/10 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for sam_trader-9z3.5.6 (Phase 4 exit test: Futu-only TradingNode).
