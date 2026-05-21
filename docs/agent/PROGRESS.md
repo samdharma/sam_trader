@@ -115,3 +115,12 @@
 - **Files Changed**: `src/sam_trader/adapters/futu/config.py`, `src/sam_trader/adapters/futu/execution.py`, `tests/unit/adapters/futu/test_config.py`, `tests/integration/adapters/futu/test_execution_flow.py`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 32/32 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ready for sam_trader-9z3.4.4 (FutuLiveExecutionClient order methods — submit, modify, cancel). Note: order methods are already implemented; next ticket may focus on refinement or push handler wiring.
+
+## Iteration 27
+- **Task**: P3: FutuLiveExecutionClient order methods — submit, modify, cancel
+- **Task ID**: sam_trader-9z3.4.4
+- **Status**: COMPLETE
+- **Decisions**: Code was already fully implemented in prior iterations. Verified all acceptance criteria: `_submit_order` maps to `place_order` with correct parameter translation; `_modify_order` maps to `modify_order` with `ModifyOrderOp.NORMAL`; `_cancel_order` maps to `modify_order` with `ModifyOrderOp.CANCEL`; bracket orders supported via `_submit_order_list` which iterates child orders sequentially. All 22 unit tests pass including targeted tests for submit, modify, cancel, bracket, connection lifecycle, account discovery, position reconciliation, and push loop.
+- **Files Changed**: No code changes required (already implemented). Updated `docs/agent/PROGRESS.md` and `.beads/` state.
+- **Validation Result**: PASS (pytest tests/unit/adapters/futu/test_execution.py — 22/22 passed)
+- **Blockers / Notes**: None. Ready for sam_trader-9z3.4.5 (FutuLiveExecutionClient push handler wiring).
