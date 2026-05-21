@@ -133,3 +133,12 @@
 - **Files Changed**: `tests/unit/adapters/futu/test_execution_push.py`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 2/2 new tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ready for sam_trader-9z3.4.6 (account discovery & position reconciliation).
+
+## Iteration 29
+- **Task**: P3: FutuLiveExecutionClient account discovery and position reconciliation
+- **Task ID**: sam_trader-9z3.4.6
+- **Status**: COMPLETE
+- **Decisions**: Verified all acceptance criteria were already implemented in prior iterations: `_discover_accounts()` auto-discovers accounts via `get_acc_list`; `_register_venue_account_aliases()` maps Futu market codes to Nautilus venues and account IDs for multi-market support; `_reconcile_positions()` fetches positions on connect and emits `PositionStatusReport` events. Integration test `test_limit_order_lifecycle` and all 22 unit tests pass. No code changes required.
+- **Files Changed**: `docs/agent/PROGRESS.md`, `.beads/issues.jsonl`
+- **Validation Result**: PASS (test_limit_order_lifecycle + 22 unit tests passed; ralph_validate.sh --tier=targeted passed)
+- **Blockers / Notes**: None. Ready for sam_trader-9z3.4.3 (Phase 3 exit test: full order submission → fill → OrderFilled flow).
