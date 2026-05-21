@@ -187,3 +187,12 @@
 - **Files Changed**: `src/sam_trader/bundle_loader.py`, `config/bundles.example.yaml`, `tests/unit/test_bundle_loader.py`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 10/10 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ready for sam_trader-9z3.5.6 (Phase 4 exit test: Futu-only TradingNode).
+
+## Iteration 35
+- **Task**: P4: Futu factories — FutuLiveDataClientFactory, FutuLiveExecClientFactory
+- **Task ID**: sam_trader-9z3.5.3
+- **Status**: COMPLETE
+- **Decisions**: Created `adapters/futu/factories.py` with `FutuLiveDataClientFactory` and `FutuLiveExecClientFactory` subclasses of Nautilus `LiveDataClientFactory` / `LiveExecClientFactory`. Shared context helpers `_get_shared_quote_context` and `_get_shared_trade_context` delegate to existing `connection.py` cache functions. One `OpenQuoteContext` + `OpenSecTradeContext` per `(host, port, trd_env)`. Each factory creates a `FutuInstrumentProvider` using the shared quote context. Exec factory derives `AccountId` from `config.client_id`. Tests cover data client creation, exec client creation, and shared context reuse.
+- **Files Changed**: `src/sam_trader/adapters/futu/factories.py`, `tests/unit/adapters/futu/test_factories.py`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 5/5 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for sam_trader-9z3.5.6 (Phase 4 exit test: Futu-only TradingNode).
