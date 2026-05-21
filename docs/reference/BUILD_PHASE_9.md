@@ -57,9 +57,9 @@ Decompose into:
 
 | New Ticket | Title | Scope | Depends On |
 |------------|-------|-------|------------|
-| `sam-p9-risk-sizer` | Monte Carlo position sizer | Position size simulation | `sam-p9-gapscan` |
-| `sam-p9-risk-checks` | Pre-trade risk checks | Max exposure, daily loss, margin checks | `sam-p9-risk-sizer` |
-| `sam-p9-heat-monitor` | Portfolio heat monitor | Real-time heat tracking | `sam-p9-risk-checks` |
+| `sam_trader-9z3.10.7` | Monte Carlo position sizer | Position size simulation | `sam-p9-gapscan` |
+| `sam_trader-9z3.10.8` | Pre-trade risk checks | Max exposure, daily loss, margin checks | `sam_trader-9z3.10.7` |
+| `sam_trader-9z3.10.9` | Portfolio heat monitor | Real-time heat tracking | `sam_trader-9z3.10.8` |
 
 ### 2.2 Decomposition: `sam-p9-orch`
 
@@ -67,9 +67,9 @@ Decompose into:
 
 | New Ticket | Title | Scope | Depends On |
 |------------|-------|-------|------------|
-| `sam-p9-pipeline-exec` | Pipeline sequential executor | Run scan → AI → risk → regime in order | `sam-p9-heat-monitor`, `sam-p9-regime` |
-| `sam-p9-bundle-gen` | Bundle YAML generator | Convert candidates to valid bundle YAML | `sam-p9-pipeline-exec` |
-| `sam-p9-readiness` | Readiness report | Console + webhook notification | `sam-p9-bundle-gen` |
+| `sam_trader-9z3.10.10` | Pipeline sequential executor | Run scan → AI → risk → regime in order | `sam_trader-9z3.10.9`, `sam-p9-regime` |
+| `sam_trader-9z3.10.11` | Bundle YAML generator | Convert candidates to valid bundle YAML | `sam_trader-9z3.10.10` |
+| `sam_trader-9z3.10.12` | Readiness report | Console + webhook notification | `sam_trader-9z3.10.11` |
 
 ---
 
