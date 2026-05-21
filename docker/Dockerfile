@@ -1,14 +1,16 @@
 # SAM Trader V3 — Nautilus TradingNode
 # Production stage only (dev stage added later if needed)
-FROM ghcr.io/nautechsystems/nautilus_trader:1.227.0
+FROM python:3.14-slim
 
 LABEL maintainer="SAM Trader Team"
 LABEL description="SAM Trader V3 — Production-grade autonomous trading platform built on NautilusTrader"
 
 # Install system dependencies
-USER root
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
+    gcc \
+    g++ \
+    libffi-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user for runtime
