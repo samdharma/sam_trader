@@ -107,9 +107,13 @@ services:
       start_period: 10s
 
   sam-futu-opend:
-    image: ghcr.io/manhinhang/futu-opend-docker:ubuntu-stable
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.futu-opend
+    image: sam-futu-opend:latest
     container_name: sam-futu-opend
     restart: unless-stopped
+    platform: linux/amd64
     ports:
       - "${FUTU_OPEND_PORT:-11111}:11111"
       - "${FUTU_OPEND_TELNET_PORT:-22222}:22222"
@@ -120,7 +124,7 @@ services:
       FUTU_OPEND_PORT: ${FUTU_OPEND_PORT:-11111}
       FUTU_OPEND_TELNET_PORT: ${FUTU_OPEND_TELNET_PORT:-22222}
     volumes:
-      - futu_opend_data:/data
+      - futu_opend_data:/home/futu/.com.futunn.FutuOpenD
     networks:
       - sam-net
     profiles:
