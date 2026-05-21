@@ -160,3 +160,12 @@
 - **Files Changed**: `.beads/issues.jsonl`, `.beads/interactions.jsonl`, `docs/agent/PROGRESS.md`, `docs/reference/BUILD_PHASE_3.md`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; no modified files, gate passed)
 - **Blockers / Notes**: None. Phase 3 fully complete. Ready for Phase 4 (Futu Instrument Provider & TradingNode Integration).
+
+## Iteration 32
+- **Task**: P4: Futu instrument parsing — Equity, OptionContract, FuturesContract
+- **Task ID**: sam_trader-9z3.5.1
+- **Status**: COMPLETE
+- **Decisions**: Created `adapters/futu/parsing/instruments.py` with `_parse_futu_equity`, `_parse_futu_option`, `_parse_futu_future`, and `_precision_from_spread`. Used existing `security_to_instrument_id` from market_data.py for symbology mapping. Market-based precision fallback defaults: US=2, HK=3, SH=2, SZ=2. Currency derived from venue via `_venue_to_currency`. `parse_futu_instrument` dispatcher routes by `stock_type` field. Adapted patterns from nautilus-futu parsing/instruments.py (MIT). Cython constructor testing: used `id` (not `instrument_id`) and `quote_currency` (not `currency`) for assertions.
+- **Files Changed**: `src/sam_trader/adapters/futu/parsing/instruments.py`, `tests/unit/adapters/futu/test_parsing_instruments.py`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 17/17 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for sam_trader-9z3.5.2 (FutuInstrumentProvider).
