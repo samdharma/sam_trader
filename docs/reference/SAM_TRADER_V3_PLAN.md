@@ -28,7 +28,7 @@
 |---|----------|-----------|
 | D1 | **NautilusTrader as sole engine** | Rust-native, event-driven, backtest-to-live parity. Standard components for data, execution, risk, strategies. Version pinned (not `:latest`). |
 | D2 | **futu-api SDK for Futu protocol** (not nautilus-futu) | Officially maintained by Futu. Eliminates Rust build pipeline. Single `pip install futu-api`. We adopt nautilus-futu's architecture *patterns* but use futu-api as the protocol layer. See §12 Decision Record. |
-| D3 | **Futu OpenD in separate Docker container** | Official Futu image (`futuopen/futu-opend:latest`). Independent lifecycle, survives Nautilus restarts, auth persistence via volume. |
+| D3 | **Futu OpenD in separate Docker container** | Community image (`ghcr.io/manhinhang/futu-opend-docker:ubuntu-stable`). Independent lifecycle, survives Nautilus restarts, auth persistence via volume. |
 | D4 | **IB Gateway in separate Docker container** | Existing gnzsnz/ib-gateway image. Profile-based (optional). Survives Nautilus restarts, 2FA via VNC. |
 | D5 | **sam-services in separate Docker container** | Operations (pipeline, dashboard, cron, CLI) decoupled from trading. Restart independently. Zero trading downtime for ops changes. |
 | D6 | **Parquet for historical data** | Required by `BacktestNode`. DuckDB/Polars for ad-hoc SQL queries. Zero extra infrastructure. |

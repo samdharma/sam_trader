@@ -96,8 +96,8 @@ def main():
     with open(".env", "w") as f:
         f.write(f"TRADER_ID={trader_id}\n")
         f.write(f"ENV={env}\n")
-        f.write(f"FUTU_LOGIN_ACCOUNT={futu_account}\n")
-        f.write(f"FUTU_LOGIN_PWD_MD5={futu_pwd_md5}\n")
+        f.write(f"FUTU_ACCOUNT_ID={futu_account}\n")
+        f.write(f"FUTU_ACCOUNT_PWD_MD5={futu_pwd_md5}\n")
 
 if __name__ == "__main__":
     main()
