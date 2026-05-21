@@ -25,7 +25,7 @@ RUN curl -k -fL "${FUTU_DOWNLOAD_URL}" \
     && rm -rf /tmp/*
 
 # Symlink the binary to /bin for convenience
-RUN ln -s /bin/futu-opend/FutuOpenD /bin/FutuOpenD
+RUN ln -s /bin/futu-opend/Futu_OpenD_${FUTU_OPEND_VER}_Ubuntu18.04/FutuOpenD /bin/FutuOpenD
 
 # Copy startup script and config
 COPY docker/futu-opend/start.sh /bin/start.sh

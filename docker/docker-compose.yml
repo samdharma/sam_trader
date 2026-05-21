@@ -110,6 +110,8 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile.futu-opend
+      platforms:
+        - linux/amd64
     image: sam-futu-opend:latest
     container_name: sam-futu-opend
     restart: unless-stopped
