@@ -214,3 +214,12 @@
 - **Files Changed**: `src/sam_trader/strategies/test_echo.py`, `tests/integration/test_futu_node.py`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 1/1 integration test passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Phase 4 exit gate complete. Ready for Phase 5 (IBKR Adapter Re-integration).
+
+## Iteration 38
+- **Task**: P5: IBKR config wiring in main.py
+- **Task ID**: sam_trader-9z3.6.1
+- **Status**: COMPLETE
+- **Decisions**: All acceptance criteria were already implemented in prior iterations (SamTraderConfig has ib_enabled flag, main.py constructs InteractiveBrokersDataClientConfig and InteractiveBrokersExecClientConfig from SamTraderConfig, IB env vars wired into main.py). Added targeted test file `tests/unit/test_main_ib_config.py` with 3 tests: `test_ib_config_loads` (verifies config values and factory registration), `test_ib_disabled_flag` (verifies no IB entries when disabled), `test_ib_read_only_no_exec_client` (verifies exec client omitted in read-only mode). Installed `nautilus-ibapi==10.45.1` in venv and added to `pyproject.toml` dependencies so IB adapter imports work in tests.
+- **Files Changed**: `tests/unit/test_main_ib_config.py`, `pyproject.toml`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 3/3 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for sam_trader-9z3.6.5 (IBKR factory registration in main.py).
