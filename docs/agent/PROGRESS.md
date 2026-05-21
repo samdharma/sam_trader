@@ -43,3 +43,12 @@
 - **Files Changed**: `src/sam_trader/adapters/futu/constants.py`, `src/sam_trader/adapters/futu/parsing/orders.py`, `tests/unit/adapters/futu/test_parsing_orders.py`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 15/15 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Phase 3 ticket 1 of 3 complete. Ready for sam_trader-9z3.4.2 (FutuLiveExecutionClient skeleton and order methods).
+
+## Iteration 25
+- **Task**: P3: Futu order parsing — OrderStatusReport, FillReport, PositionStatusReport
+- **Task ID**: sam_trader-9z3.4.1
+- **Status**: COMPLETE
+- **Decisions**: Verified existing implementation from Iteration 24. Code was already committed (4f2479a) and all 15 unit tests pass. Closed beads ticket which had been left in `in_progress` state from rolled-back iteration tracking.
+- **Files Changed**: `.beads/issues.jsonl`, `.beads/interactions.jsonl`, `docs/agent/PROGRESS.md`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 15/15 tests passed)
+- **Blockers / Notes**: None. Ready for sam_trader-9z3.4.2 (FutuLiveExecutionClient skeleton and order methods).
