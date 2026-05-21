@@ -258,3 +258,117 @@ class TestLimitOrderLifecycle:
         event_loop.run_until_complete(client._disconnect())
         assert len(reports) == 1
         assert reports[0].trade_id.value == "T-001"
+
+    def test_full_order_lifecycle(self, event_loop, make_client, mock_trade_ctx):
+        """Complete order lifecycle: connect → submit → fill → cancel.
+
+        Verifies all acceptance criteria for the Phase 3 exit gate:
+        1. Account auto-discovered via get_acc_list
+        2. LIMIT order submitted (paper trading)
+        3. OrderAccepted event on message bus
+        4. OrderFilled event with correct price / qty / commission
+        5. OrderCancelled event
+        """
+        # --- 1. Account discovery setup ---
+        mock_trade_ctx.get_acc_list.return_value = (
+            RET_OK,
+            pd.DataFrame(
+                {
+                    "acc_id": [123],
+                    "trdMarket": [2],  # US
+                }
+            ),
+        )
+        client = make_client(trade_ctx=mock_trade_ctx)
+        event_loop.run_until_complete(client._connect())
+
+        # Verify account auto-discovered
+        from nautilus_trader.model.identifiers import Venue
+
+        assert Venue("NASDAQ") in client._venue_account_aliases
+        assert client._venue_account_aliases[Venue("NASDAQ")] == AccountId("FUTU-123")
+
+        # --- 2. Submit LIMIT order ---
+        order = _make_limit_order()
+        submit_cmd = TestCommandStubs.submit_order_command(order)
+
+        with (
+            patch.object(client, "generate_order_submitted") as mock_sub,
+            patch.object(client, "generate_order_accepted") as mock_acc,
+        ):
+            event_loop.run_until_complete(client._submit_order(submit_cmd))
+
+        # Verify OrderSubmitted + OrderAccepted
+        mock_sub.assert_called_once()
+        mock_acc.assert_called_once()
+        accepted_call = mock_acc.call_args
+        assert accepted_call.kwargs["venue_order_id"] == VenueOrderId("12345")
+
+        # Verify Futu API called with paper-trading params
+        mock_trade_ctx.place_order.assert_called_once()
+        place_kwargs = mock_trade_ctx.place_order.call_args.kwargs
+        assert place_kwargs["code"] == "US.AAPL"
+        assert place_kwargs["trd_env"] == "SIMULATE"
+        assert place_kwargs["order_type"] == 1  # LIMIT
+
+        # --- 3. Simulate fill push ---
+        fill_reports = []
+
+        def _capture_fill(report):
+            fill_reports.append(report)
+
+        client._send_fill_report = _capture_fill  # type: ignore[method-assign]
+
+        from decimal import Decimal
+
+        from nautilus_trader.execution.reports import FillReport
+        from nautilus_trader.model.enums import LiquiditySide
+        from nautilus_trader.model.identifiers import TradeId
+        from nautilus_trader.model.objects import Currency, Money
+
+        fill_report = FillReport(
+            account_id=AccountId("FUTU-123"),
+            instrument_id=InstrumentId.from_str("AAPL.NASDAQ"),
+            venue_order_id=VenueOrderId("12345"),
+            trade_id=TradeId("T-001"),
+            order_side=OrderSide.BUY,
+            last_qty=Quantity.from_int(100),
+            last_px=Price.from_str("150.50"),
+            commission=Money(Decimal("1.99"), Currency.from_str("USD")),
+            liquidity_side=LiquiditySide.TAKER,
+            report_id=UUID4(),
+            ts_event=0,
+            ts_init=0,
+        )
+
+        event_loop.run_until_complete(client._queue.put(fill_report))
+        # Give push loop a moment to process
+        event_loop.run_until_complete(asyncio.sleep(0.05))
+
+        # Verify OrderFilled event data
+        assert len(fill_reports) == 1
+        sent = fill_reports[0]
+        assert sent.trade_id.value == "T-001"
+        assert str(sent.last_qty) == "100"
+        assert str(sent.last_px) == "150.50"
+        assert sent.commission is not None
+        assert sent.commission.as_decimal() == Decimal("1.99")
+        assert sent.commission.currency.code == "USD"
+
+        # --- 4. Cancel order ---
+        mock_trade_ctx.modify_order.reset_mock()
+        cancel_cmd = TestCommandStubs.cancel_order_command(
+            instrument_id=order.instrument_id,
+            client_order_id=order.client_order_id,
+            venue_order_id=VenueOrderId("12345"),
+        )
+
+        with patch.object(client, "generate_order_canceled") as mock_can:
+            event_loop.run_until_complete(client._cancel_order(cancel_cmd))
+
+        mock_can.assert_called_once()
+        mock_trade_ctx.modify_order.assert_called_once()
+        cancel_kwargs = mock_trade_ctx.modify_order.call_args.kwargs
+        assert cancel_kwargs["order_id"] == "12345"
+
+        event_loop.run_until_complete(client._disconnect())
