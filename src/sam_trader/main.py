@@ -107,7 +107,7 @@ def build_trading_node() -> TradingNode:
                 port=cfg.futu_opend_port,
                 trd_env=cfg.futu_trd_env,
                 trd_market=cfg.futu_trd_market,
-                account_id=cfg.futu_account_id or None,
+                unlock_pwd_md5=cfg.futu_unlock_pwd_md5,
             )
 
             futu_data_factory = FutuLiveDataClientFactory

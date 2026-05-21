@@ -196,3 +196,12 @@
 - **Files Changed**: `src/sam_trader/adapters/futu/factories.py`, `tests/unit/adapters/futu/test_factories.py`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 5/5 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ready for sam_trader-9z3.5.6 (Phase 4 exit test: Futu-only TradingNode).
+
+## Iteration 36
+- **Task**: P4: Wire Futu factories into main.py TradingNode
+- **Task ID**: sam_trader-9z3.5.4
+- **Status**: COMPLETE
+- **Decisions**: Fixed invalid `account_id` kwarg passed to `FutuExecClientConfig` (not a defined field — `LiveExecClientConfig` doesn't expose it). Added `unlock_pwd_md5=cfg.futu_unlock_pwd_md5` wiring to pass the trade-unlock password through to the execution client config. Added two targeted unit tests: `test_futu_factories_registered` verifies config values from env vars are injected into `data_clients["FUTU"]` and `exec_clients["FUTU"]`, and that both factory classes are registered on `node._builder`; `test_futu_disabled_flag` verifies no Futu entries exist when `FUTU_ENABLED=false`.
+- **Files Changed**: `src/sam_trader/main.py`, `tests/unit/test_main.py`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 4/4 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for sam_trader-9z3.5.6 (Phase 4 exit test: Futu-only TradingNode).
