@@ -205,3 +205,12 @@
 - **Files Changed**: `src/sam_trader/main.py`, `tests/unit/test_main.py`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 4/4 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ready for sam_trader-9z3.5.6 (Phase 4 exit test: Futu-only TradingNode).
+
+## Iteration 37
+- **Task**: [EXIT] P4: Futu-only TradingNode — subscribe, receive data, instruments resolve
+- **Task ID**: sam_trader-9z3.5.6
+- **Status**: COMPLETE
+- **Decisions**: Created `src/sam_trader/strategies/test_echo.py` with `EchoStrategyConfig` and `EchoStrategy` — a minimal test strategy that captures quote ticks and bars. Created `tests/integration/test_futu_node.py` with `test_futu_trading_node_with_bundle` validating all Phase 4 exit criteria: (1) TradingNode builds with Futu factories only (IB disabled), (2) Futu bundle loads with TSLA.NASDAQ, (3) strategy is instantiated via `StrategyFactory.create`, (4) quote ticks pushed through mocked Futu data client reach the message bus via `_handle_data`, (5) instrument resolution works (`TSLA.NASDAQ` → `US.TSLA`), (6) bar data arrives for configured `BarType`. Monkeypatched factory helpers to avoid real Futu connection. Added `# type: ignore[call-arg]` for mypy on `StrategyConfig` subclass with `frozen=True`.
+- **Files Changed**: `src/sam_trader/strategies/test_echo.py`, `tests/integration/test_futu_node.py`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 1/1 integration test passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Phase 4 exit gate complete. Ready for Phase 5 (IBKR Adapter Re-integration).

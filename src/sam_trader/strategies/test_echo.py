@@ -1,0 +1,34 @@
+"""Minimal echo strategy for integration testing.
+
+Captures quote ticks and bars so tests can verify data flow
+through the TradingNode.
+"""
+
+from __future__ import annotations
+
+from nautilus_trader.model.data import Bar, QuoteTick
+from nautilus_trader.trading.strategy import Strategy, StrategyConfig
+
+
+class EchoStrategyConfig(StrategyConfig, frozen=True):  # type: ignore[call-arg]
+    """Configuration for ``EchoStrategy`` instances."""
+
+    instrument_id: str
+    bar_type: str
+    futu_code: str = ""
+    venue: str = ""
+
+
+class EchoStrategy(Strategy):
+    """A test strategy that records incoming quote ticks and bars."""
+
+    def __init__(self, config: EchoStrategyConfig) -> None:
+        super().__init__(config)
+        self.quote_ticks: list[QuoteTick] = []
+        self.bars: list[Bar] = []
+
+    def on_quote_tick(self, tick: QuoteTick) -> None:
+        self.quote_ticks.append(tick)
+
+    def on_bar(self, bar: Bar) -> None:
+        self.bars.append(bar)
