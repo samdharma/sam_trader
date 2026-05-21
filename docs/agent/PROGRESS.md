@@ -142,3 +142,12 @@
 - **Files Changed**: `docs/agent/PROGRESS.md`, `.beads/issues.jsonl`
 - **Validation Result**: PASS (test_limit_order_lifecycle + 22 unit tests passed; ralph_validate.sh --tier=targeted passed)
 - **Blockers / Notes**: None. Ready for sam_trader-9z3.4.3 (Phase 3 exit test: full order submission → fill → OrderFilled flow).
+
+## Iteration 30
+- **Task**: [EXIT] P3: Order submission → fill → OrderFilled flow
+- **Task ID**: sam_trader-9z3.4.3
+- **Status**: COMPLETE
+- **Decisions**: Added `test_full_order_lifecycle` integration test covering all Phase 3 exit criteria: account auto-discovery via `get_acc_list`, LIMIT order submission in SIMULATE env, OrderAccepted event generation, OrderFilled event dispatch with correct price/qty/commission verification, and OrderCancelled event generation. The test was already committed in prior work (64de349); verified it passes validation gate.
+- **Files Changed**: `tests/integration/adapters/futu/test_execution_flow.py`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 5/5 integration tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Phase 3 exit gate complete. Ready for Phase 4 (Futu Instrument Provider & TradingNode Integration).
