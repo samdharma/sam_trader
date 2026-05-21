@@ -61,6 +61,7 @@ class TestFutuExecClientConfig:
         assert config.trd_env == "SIMULATE"
         assert config.trd_market == "US"
         assert config.client_id == 1
+        assert config.unlock_pwd_md5 == ""
         assert config.client_key == ("futu-opend", 11111, "SIMULATE")
 
     def test_env_override(self) -> None:
@@ -70,6 +71,7 @@ class TestFutuExecClientConfig:
             trd_env="REAL",
             trd_market="CN",
             client_id=7,
+            unlock_pwd_md5="abc123",
         )
 
         assert config.host == "exec-host"
@@ -77,6 +79,7 @@ class TestFutuExecClientConfig:
         assert config.trd_env == "REAL"
         assert config.trd_market == "CN"
         assert config.client_id == 7
+        assert config.unlock_pwd_md5 == "abc123"
         assert config.client_key == ("exec-host", 33333, "REAL")
 
     def test_frozen_immutability(self) -> None:

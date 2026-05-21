@@ -54,6 +54,7 @@ from sam_trader.adapters.futu.common import instrument_id_to_futu_security
 from sam_trader.adapters.futu.config import FutuExecClientConfig
 from sam_trader.adapters.futu.connection import (
     get_cached_futu_trade_context,
+    unlock_futu_trade,
 )
 from sam_trader.adapters.futu.constants import (
     FUTU_TRD_MARKET_TO_VENUE,
@@ -144,10 +145,13 @@ class FutuLiveExecutionClient(LiveExecutionClient):
             )
 
         # Unlock trade (required for real trading; no-op for simulate)
-        if self._config.trd_env == "REAL":
-            # Unlock password should come from config or env; for now we log
-            # that it needs to be done externally if required.
-            self._log.info("Real trading environment: ensure trade is unlocked")
+        if self._config.trd_env == "REAL" and self._config.unlock_pwd_md5:
+            unlock_futu_trade(self._trade_ctx, self._config.unlock_pwd_md5)
+        elif self._config.trd_env == "REAL":
+            self._log.info(
+                "Real trading environment: unlock_pwd_md5 not configured; "
+                "ensure trade is unlocked externally"
+            )
 
         # Account auto-discovery
         await self._discover_accounts()

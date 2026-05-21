@@ -57,6 +57,9 @@ class FutuExecClientConfig(LiveExecClientConfig, frozen=True):
         The trading market code, e.g. 'US', 'HK', 'CN' (default: 'US').
     client_id : int
         The client identifier for this connection (default: 1).
+    unlock_pwd_md5 : str
+        The MD5 hash of the trade unlock password (default: '').
+        Required for REAL trading environment.
 
     """
 
@@ -65,6 +68,7 @@ class FutuExecClientConfig(LiveExecClientConfig, frozen=True):
     trd_env: str = "SIMULATE"
     trd_market: str = "US"
     client_id: int = 1
+    unlock_pwd_md5: str = ""
 
     @property
     def client_key(self) -> tuple[str, int, str]:
