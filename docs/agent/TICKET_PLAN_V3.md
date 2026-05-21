@@ -321,15 +321,15 @@ Phase 11 ───────────────────────�
 |---|-----------|-------|------|------|---------------|
 | 9.1 | `sam-p9-gapscan` | Gap scanner: scan pre-market gaps, filter rules, HK+US markets | task | new | Scan Futu market data for gap candidates. Configurable gap thresholds. Blacklist support. Trend-down filter. Deduplication. Output: ranked candidate list. |
 | 9.2 | `sam-p9-ai` | AI scoring engine: candidate evaluation, recommendation grading | task | new | Score gap candidates via AI (LLM). Portfolio manager context. Recommendation grades (STRONG_BUY, BUY, HOLD, SKIP). Rule-based fast path for clear signals. |
-| 9.3a | `sam_trader-9z3.10.7` | Monte Carlo position sizer | task | new | Monte Carlo simulation for position sizing. Configurable simulations (default 10,000). VaR-based risk limit. |
-| 9.3b | `sam_trader-9z3.10.8` | Pre-trade risk checks | task | new | Max exposure check per venue. Daily loss limit check. Margin check. Reject trade if any check fails. |
-| 9.3c | `sam_trader-9z3.10.9` | Portfolio heat monitor | task | new | Real-time portfolio heat tracking. Heat threshold warnings. Heat dashboard metric. |
+| 9.3a | `sam-p9-risk-sizer` | Monte Carlo position sizer | task | new | Monte Carlo simulation for position sizing. Configurable simulations (default 10,000). VaR-based risk limit. |
+| 9.3b | `sam-p9-risk-checks` | Pre-trade risk checks | task | new | Max exposure check per venue. Daily loss limit check. Margin check. Reject trade if any check fails. |
+| 9.3c | `sam-p9-heat-monitor` | Portfolio heat monitor | task | new | Real-time portfolio heat tracking. Heat threshold warnings. Heat dashboard metric. |
 
 > **Note:** 9.3 was decomposed from a monolithic ticket into 3 sequential sub-tasks.
 | 9.4 | `sam-p9-regime` | Market regime detection: HMM-based classification, regime-aware adaptation | task | new | HMM regime classifier (trending, ranging, volatile). Regime-aware parameter adaptation (e.g., tighter stops in volatile regime). Output: regime label + adapted params. |
-| 9.5a | `sam_trader-9z3.10.10` | Pipeline sequential executor | task | new | Run scan → AI → risk → regime in sequence. Pass candidate list between stages. Error handling: fail fast, log stage errors. |
-| 9.5b | `sam_trader-9z3.10.11` | Bundle YAML generator | task | new | Convert approved candidates to bundle YAML. Validate against schema. Write to `config/bundles.daily.yaml`. |
-| 9.5c | `sam_trader-9z3.10.12` | Readiness report | task | new | Daily readiness report generation. Console output formatted table. Optional webhook notification. Includes candidates, risks, recommendations. |
+| 9.5a | `sam-p9-pipeline-exec` | Pipeline sequential executor | task | new | Run scan → AI → risk → regime in sequence. Pass candidate list between stages. Error handling: fail fast, log stage errors. |
+| 9.5b | `sam-p9-bundle-gen` | Bundle YAML generator | task | new | Convert approved candidates to bundle YAML. Validate against schema. Write to `config/bundles.daily.yaml`. |
+| 9.5c | `sam-p9-readiness` | Readiness report | task | new | Daily readiness report generation. Console output formatted table. Optional webhook notification. Includes candidates, risks, recommendations. |
 
 > **Note:** 9.5 was decomposed from a monolithic ticket into 3 sequential sub-tasks.
 | 9.6 | `sam-p9-verify` | Verify: pipeline runs end-to-end, produces valid bundles | exit | — | Integration test: run pipeline on pre-market data. Pipeline produces ≥1 candidate. Risk checks pass. Bundle YAML generated and passes validation. Readiness report saved. |
