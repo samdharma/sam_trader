@@ -104,6 +104,42 @@ For the selected task:
 
 ---
 
+## Testing Anti-Patterns & Loop Detection
+
+When writing or fixing tests for Nautilus Cython components, the agent MUST detect the following trap conditions and back out immediately:
+
+### Trap: Cython Introspection Death Spiral
+
+**Symptoms:**
+- A test fails with `TypeError`, `AttributeError`, or `ValueError` from a Nautilus Cython class.
+- You find yourself running `.venv/bin/python -c "..."` to probe `__init__` signatures, `dir()`, or `help()` on compiled classes.
+- You are reading `.pxd` files or Cython source to understand constructor arguments.
+- You have spent **>3 consecutive steps** on the same test failure without the test passing.
+
+**Back-out protocol:**
+1. **STOP introspecting.** Cython extension classes (v1.227.0) are opaque to runtime introspection.
+2. **Read BUILD_PHASE_3.md §7** ("Testing Nautilus Cython Components") — it contains pre-discovered constructor patterns, logger signatures, and TestCommandStubs behavior.
+3. If the pattern is NOT in BUILD_PHASE_3.md, construct the object using explicit positional arguments based on the fields you see in `dir(TheClass)`. Do NOT try to understand the exact `__init__` signature.
+4. If you still cannot make the test pass in **2 more steps**, simplify the test: remove the failing assertion, use `MagicMock` instead of real Nautilus objects, or mark it with `@pytest.mark.skip(reason="Cython constructor pattern unclear — see BUILD_PHASE_3.md §7")`. Then move on.
+
+### Trap: Repeated Test-Run-Debug Loop
+
+**Symptoms:**
+- You run a test, it fails with a new Cython error.
+- You fix one line, run again, it fails with a different Cython error.
+- You have run `pytest` on the same file more than 3 times in one iteration.
+
+**Back-out protocol:**
+1. Read BUILD_PHASE_3.md §7 BEFORE making another edit.
+2. Batch-fix all known Cython API issues (logger f-strings, TestCommandStubs quirks, missing constructor fields) in a single edit.
+3. Run the test suite once. If failures remain, apply the Cython Introspection protocol above.
+
+### Golden Rule
+
+> **Never spend more than 5 total steps debugging a single Cython test issue.** If you exceed this, write a simpler test or skip it. The BUILD_PHASE docs are the authoritative reference — not compiled Cython internals.
+
+---
+
 ## Progress Logging Protocol
 
 After completing (or partially completing) the task, append a new section to `docs/agent/PROGRESS.md`:

@@ -215,15 +215,51 @@ def get_cached_futu_quote_context(
     return ctx
 
 
+def _parse_trd_market(trd_market: str | TrdMarket) -> TrdMarket:
+    """Convert a string market code to a ``TrdMarket`` enum value."""
+    if isinstance(trd_market, TrdMarket):
+        return trd_market
+    mapping = {
+        "US": TrdMarket.US,
+        "HK": TrdMarket.HK,
+        "CN": TrdMarket.CN,
+        "SG": TrdMarket.SG,
+        "JP": TrdMarket.JP,
+        "AU": TrdMarket.AU,
+        "CA": TrdMarket.CA,
+        "MY": TrdMarket.MY,
+    }
+    market = mapping.get(trd_market.upper())
+    if market is None:
+        raise ValueError(f"Unsupported Futu trading market: {trd_market}")
+    return market
+
+
 def get_cached_futu_trade_context(
-    host: str, port: int, trade_env: str
+    host: str,
+    port: int,
+    trade_env: str,
+    trd_market: str | TrdMarket = TrdMarket.US,
 ) -> OpenSecTradeContext:
     """Get or create a cached ``OpenSecTradeContext``.
 
     One context is maintained per ``(host, port, trade_env)`` tuple.
     If the cached context has disconnected it is closed and recreated.
+
+    Parameters
+    ----------
+    host : str
+        The Futu OpenD host address.
+    port : int
+        The Futu OpenD port.
+    trade_env : str
+        The trading environment (e.g. 'SIMULATE' or 'REAL').
+    trd_market : str | TrdMarket, default TrdMarket.US
+        The trading market filter (e.g. 'US', 'HK', 'CN').
+
     """
     key = (host, port, trade_env)
+    market_enum = _parse_trd_market(trd_market)
     with _CACHE_LOCK:
         ctx = _TRADE_CACHE.get(key)
         if ctx is not None and ctx.status == ContextStatus.READY:
@@ -236,7 +272,7 @@ def get_cached_futu_trade_context(
             _TRADE_CACHE.pop(key, None)
 
         ctx = OpenSecTradeContext(
-            filter_trdmarket=TrdMarket.US,
+            filter_trdmarket=market_enum,
             host=host,
             port=port,
         )
@@ -247,7 +283,11 @@ def get_cached_futu_trade_context(
     if ret != RET_OK:
         logger.warning("Failed to set disconnect handler on trade context %s", key)
     logger.info(
-        "Futu trade context ready: host=%s port=%s env=%s", host, port, trade_env
+        "Futu trade context ready: host=%s port=%s env=%s market=%s",
+        host,
+        port,
+        trade_env,
+        trd_market,
     )
     return ctx
 

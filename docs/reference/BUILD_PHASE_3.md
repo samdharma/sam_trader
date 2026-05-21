@@ -369,7 +369,94 @@ Use `pytest-asyncio` and mock the trade context. Verify:
 
 ---
 
-## 7. Ticket Breakdown
+## 7. Testing Nautilus Cython Components
+
+> **Critical:** Nautilus v1.227.0 uses Cython extension classes. Compiled internals are opaque to standard Python introspection (`inspect.signature`, `help()`, etc.). **Do NOT spend steps probing Cython classes with runtime introspection.** Use this section instead.
+
+### 7.1 Test Stub Factories
+
+```python
+from nautilus_trader.test_kit.stubs.commands import TestCommandStubs
+from nautilus_trader.test_kit.stubs.component import TestComponentStubs
+
+# Commands — IMPORTANT: when passing BOTH `order` and `venue_order_id`,
+# TestCommandStubs IGNORES `venue_order_id` and extracts it from `order.venue_order_id`
+# (which is None for unstubbed orders). Pass `instrument_id` + `client_order_id`
+# explicitly instead of `order` if you need a specific venue_order_id.
+
+cmd = TestCommandStubs.submit_order_command(order=order)
+cmd = TestCommandStubs.modify_order_command(
+    price=Price.from_str("155.00"),
+    quantity=Quantity.from_int(50),
+    instrument_id=order.instrument_id,          # pass explicitly
+    client_order_id=order.client_order_id,      # pass explicitly
+    venue_order_id=VenueOrderId("12345"),       # now respected
+)
+cmd = TestCommandStubs.cancel_order_command(
+    instrument_id=order.instrument_id,
+    client_order_id=order.client_order_id,
+    venue_order_id=VenueOrderId("12345"),
+)
+
+# Order lists
+from nautilus_trader.model.identifiers import OrderListId
+from nautilus_trader.model.orders.list import OrderList
+
+order_list = OrderList(
+    order_list_id=OrderListId("OL-001"),
+    orders=[entry, sl, tp],
+)
+submit_list_cmd = TestCommandStubs.submit_order_list_command(order_list)
+
+# Components
+msgbus = TestComponentStubs.msgbus()
+cache = TestComponentStubs.cache()
+clock = LiveClock()
+```
+
+### 7.2 Cython Logger API (Strict Signatures)
+
+The Nautilus `Logger` is a Cython extension. It does **NOT** accept printf-style extra arguments.
+
+| Method | Signature | Wrong | Right |
+|--------|-----------|-------|-------|
+| `info` | `info(self, message: str, color=...)` | `self._log.info("x: %s", x)` | `self._log.info(f"x: {x}")` |
+| `warning` | `warning(self, message: str, color=...)` | `self._log.warning("x: %s", x)` | `self._log.warning(f"x: {x}")` |
+| `debug` | `debug(self, message: str, color=...)` | `self._log.debug("x: %s", x)` | `self._log.debug(f"x: {x}")` |
+| `exception` | `exception(self, message: str, ex: Exception)` | `self._log.exception("msg")` | `except E as e: self._log.exception(f"msg: {e}", e)` |
+
+### 7.3 ComponentId / ClientId Trap
+
+- `ExecutionClient.id` returns a `ComponentId`, NOT a `ClientId`.
+- For string comparison, use `self.id.value`.
+- `account_id.get_issuer()` must match `self.id.value` for the client to accept its own events.
+
+### 7.4 SubmitOrder Constructor
+
+`SubmitOrder` does **not** accept `instrument_id` as a constructor argument — it derives it from `order.instrument_id`.
+
+```python
+# Wrong
+SubmitOrder(
+    instrument_id=order.instrument_id,  # TypeError: unexpected keyword
+    order=order,
+    ...
+)
+
+# Right
+SubmitOrder(
+    trader_id=command.trader_id,
+    strategy_id=command.strategy_id,
+    client_id=command.client_id,
+    order=order,
+    command_id=UUID4(),
+    ts_init=clock.timestamp_ns(),
+)
+```
+
+---
+
+## 8. Ticket Breakdown
 
 | Ticket | Title | Scope | Depends On |
 |--------|-------|-------|------------|
@@ -382,7 +469,7 @@ Use `pytest-asyncio` and mock the trade context. Verify:
 
 ---
 
-## 8. Commonly Used Imports
+## 9. Commonly Used Imports
 
 ```python
 # Nautilus core
@@ -411,7 +498,7 @@ from sam_trader.adapters.futu.constants import (
 
 ---
 
-## 9. Lint / Type-Check Notes
+## 10. Lint / Type-Check Notes
 
 - `# type: ignore[misc]` needed for mypy when assigning to frozen dataclass fields inside `pytest.raises` blocks in tests.
 - `pandas` import for DataFrame handling in push handlers — ensure `pandas` is in project deps.
