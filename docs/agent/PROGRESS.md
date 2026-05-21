@@ -169,3 +169,12 @@
 - **Files Changed**: `src/sam_trader/adapters/futu/parsing/instruments.py`, `tests/unit/adapters/futu/test_parsing_instruments.py`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 17/17 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ready for sam_trader-9z3.5.2 (FutuInstrumentProvider).
+
+## Iteration 33
+- **Task**: P4: FutuInstrumentProvider — load HK+US instruments from Futu
+- **Task ID**: sam_trader-9z3.5.2
+- **Status**: COMPLETE
+- **Decisions**: Created `adapters/futu/instrument_provider.py` subclassing `InstrumentProvider`. `load_all_async` queries `get_stock_basicinfo` for US, HK, SH, SZ markets. `load_ids_async` converts Nautilus IDs to Futu codes via `instrument_id_to_futu_security` and queries specific securities. `load_from_position_data` auto-loads unknown instruments from position data. Caching via base class `self.add()`. Symbology: HK.00700 → 00700.HKEX, US.AAPL → AAPL.NASDAQ. NYSE symbols map to US.* for Futu but resolve back to NASDAQ (Futu uses single US market prefix). Used `asyncio.get_running_loop().run_in_executor` for blocking Futu SDK calls. Integration test file renamed to `test_provider_integration.py` to avoid pytest basename collision.
+- **Files Changed**: `src/sam_trader/adapters/futu/instrument_provider.py`, `tests/unit/adapters/futu/test_instrument_provider.py`, `tests/integration/adapters/futu/test_provider_integration.py`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 21/21 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for sam_trader-9z3.5.3 (Futu factories: FutuLiveDataClientFactory, FutuLiveExecClientFactory).
