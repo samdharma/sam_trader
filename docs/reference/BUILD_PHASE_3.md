@@ -1,6 +1,6 @@
 # Build Phase 3 — Futu Execution Adapter
 
-> **Status:** In Progress (1 of 4 sub-tasks complete)  
+> **Status:** ✅ Complete (all sub-tasks closed)  
 > **Goal:** `FutuLiveExecutionClient` submits/modifies/cancels orders. OrderFilled events flow to message bus. Account auto-discovery.  
 > **Prev Phase:** [BUILD_PHASE_2.md](./BUILD_PHASE_2.md) — Futu Market Data Adapter  
 > **Next Phase:** [BUILD_PHASE_4.md](./BUILD_PHASE_4.md) — Futu Instrument Provider & TradingNode Integration
@@ -461,11 +461,11 @@ SubmitOrder(
 | Ticket | Title | Scope | Depends On |
 |--------|-------|-------|------------|
 | `sam_trader-9z3.4.1` | ✅ **CLOSED** — Order parsing module | `parsing/orders.py`, constants, tests | `9z3.3.7` |
-| `sam_trader-9z3.4.2` | **OPEN** — Skeleton, connection, unlock, aliases | `execution.py` class, `connect()`, `_register_venue_account_aliases()`, `unlock_trade()` | `9z3.4.1` |
-| `sam_trader-9z3.4.4` | **OPEN** — Order methods | `_submit_order`, `_modify_order`, `_cancel_order`, bracket support | `9z3.4.2` |
-| `sam_trader-9z3.4.5` | **OPEN** — Push handler wiring | `TradeOrderHandler`, `TradeDealHandler`, `_run_push_loop` | `9z3.4.4` |
-| `sam_trader-9z3.4.6` | **OPEN** — Account discovery & position reconciliation | `get_acc_list`, position reconciliation on connect | `9z3.4.5` |
-| `sam_trader-9z3.4.3` | **OPEN** — Exit test | Full order lifecycle integration test | `9z3.4.6` |
+| `sam_trader-9z3.4.2` | ✅ **CLOSED** — Skeleton, connection, unlock, aliases | `execution.py` class, `connect()`, `_register_venue_account_aliases()`, `unlock_trade()` | `9z3.4.1` |
+| `sam_trader-9z3.4.4` | ✅ **CLOSED** — Order methods | `_submit_order`, `_modify_order`, `_cancel_order`, bracket support | `9z3.4.2` |
+| `sam_trader-9z3.4.5` | ✅ **CLOSED** — Push handler wiring | `TradeOrderHandler`, `TradeDealHandler`, `_run_push_loop` | `9z3.4.4` |
+| `sam_trader-9z3.4.6` | ✅ **CLOSED** — Account discovery & position reconciliation | `get_acc_list`, position reconciliation on connect | `9z3.4.5` |
+| `sam_trader-9z3.4.3` | ✅ **CLOSED** — Exit test | Full order lifecycle integration test | `9z3.4.6` |
 
 ---
 
