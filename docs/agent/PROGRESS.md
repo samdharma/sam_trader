@@ -286,3 +286,12 @@
 - **Files Changed**: `docker/host-monitor.sh` (new), `docker/com.samtrader.monitor.plist` (new), `tests/unit/test_host_monitor.py` (new)
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 11/11 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: Manual test criteria (stop sam-futu-opend, verify monitor detects and restarts with cooldown) requires running Docker stack and is deferred to Phase 0-H exit gate (sam_trader-9z3.1.20).
+
+## Iteration 46
+- **Task**: Exit gate: hardened stack builds, health, monitor, backup
+- **Task ID**: sam_trader-9z3.1.20
+- **Status**: COMPLETE
+- **Decisions**: Addressed the <70MB image size requirement by removing the 405MB Futu binary from the Docker image and implementing runtime download to the persistent volume in `start.py`. Compressed image size verified at ~46MB. Updated `docker-compose.yml` default `BACKUP_HOST_DIR` to `~/Documents/ai_agent_docs/backup-sam_trader_v3/`. Added `BACKUP_HOST_DIR` and `BACKUP_RETENTION_DAYS` to `.env.example`. Updated `FUTU_FIRST_LOGIN.md` and `BUILD_PHASE_0.md` to document runtime download behavior. Extended `start.py` with `ensure_binary()` and added unit tests. Increased `start_period` for sam-futu-opend healthcheck from 60s to 120s to accommodate first-time download.
+- **Files Changed**: `docker/Dockerfile.futu-opend`, `docker/futu-opend/start.py`, `docker/docker-compose.yml`, `.env.example`, `docs/user/FUTU_FIRST_LOGIN.md`, `docs/reference/BUILD_PHASE_0.md`, `tests/unit/test_futu_opend_startup.py`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 38/38 tests passed, black/isort/flake8/mypy all green, docker build succeeded, image size ~46MB compressed)
+- **Blockers / Notes**: Phase 0-H exit gate complete. Ready for Phase 1 (Configuration & Bootstrap).
