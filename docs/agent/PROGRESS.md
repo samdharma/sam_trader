@@ -232,3 +232,12 @@
 - **Files Changed**: `docker/Dockerfile.futu-opend`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; docker build --platform linux/amd64 succeeded on Apple Silicon, container starts, tini PID 1 verified, FutuOpenD --help runs)
 - **Blockers / Notes**: None. Ready for sam_trader-9z3.1.14 (Futu OpenD: Python XML startup replaces sed-based start.sh).
+
+## Iteration 40
+- **Task**: Futu OpenD: Python XML startup replaces sed-based start.sh
+- **Task ID**: sam_trader-9z3.1.14
+- **Status**: COMPLETE
+- **Decisions**: Replaced fragile sed-based XML manipulation with robust Python XML generation using xml.etree.ElementTree. Created `docker/futu-opend/start.py` with `build_xml_tree()`, `write_xml()` (includes validation by reading back the generated file), and `get_env_or_hostname()` for default IP resolution. Handles deprecated `FUTU_ACCOUNT_PWD` with deprecation warning and MD5 computation. Dockerfile updated to install `python3`, copy `start.py` instead of `start.sh`, and execute it. Old `start.sh` removed. Added `tests/unit/test_futu_opend_startup.py` with 7 tests covering env validation, XML generation, write validation, and hostname fallback.
+- **Files Changed**: `docker/futu-opend/start.py` (new), `docker/futu-opend/start.sh` (deleted), `docker/Dockerfile.futu-opend`, `tests/unit/test_futu_opend_startup.py` (new)
+- **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 6 passed, 1 skipped, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for sam_trader-9z3.1.15 (Futu OpenD: layered health check).
