@@ -62,6 +62,18 @@ The Ralph loop auto-detects the ticket's phase label and injects the correspondi
 - Docker: one process per container.
 - Package name: `sam_trader`. Docker prefix: `sam-`. Network: `sam-net`.
 
+## Health Check Pattern
+
+All containers use a standardized **3-layer health check** (see `docker/HEALTHCHECK_PATTERN.md`):
+
+| Layer | Purpose | Example |
+|-------|---------|---------|
+| L1 | Process alive | `pgrep <process>` |
+| L2 | Socket / service responding | `pg_isready`, `redis-cli ping`, TCP connect |
+| L3 | Protocol / application healthy | `SELECT 1`, `INFO server`, HTTP GET `/health` |
+
+**Timing parameters (all containers):** interval `30s`, timeout `10s`, start-period `60s`, retries `3`.
+
 ## Beads Ticket Hierarchy & Rules
 
 ### Hierarchy

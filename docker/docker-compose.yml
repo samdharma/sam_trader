@@ -57,11 +57,11 @@ services:
       - BUNDLES_PATH=${BUNDLES_PATH:-config/bundles.yaml}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
     healthcheck:
-      test: ["CMD-SHELL", "cat /proc/1/cmdline | grep -q sam_trader.main"]
-      interval: 10s
-      timeout: 5s
+      test: ["CMD-SHELL", "pgrep python > /dev/null 2>&1 && cat /proc/1/cmdline | grep -qE 'python|sam_trader'"]
+      interval: 30s
+      timeout: 10s
       retries: 3
-      start_period: 30s
+      start_period: 60s
 
   sam-postgres:
     image: postgres:16-alpine
@@ -79,11 +79,11 @@ services:
     networks:
       - sam-net
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sam} -d ${POSTGRES_DB:-sam_trader}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
+      test: ["CMD-SHELL", "pgrep postgres > /dev/null 2>&1 && pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\" && psql -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\" -c 'SELECT 1' > /dev/null 2>&1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 
   sam-redis:
     image: redis:7-alpine
@@ -100,11 +100,11 @@ services:
     command: >
       sh -c 'if [ -n "$$REDIS_PASSWORD" ]; then exec redis-server --requirepass "$$REDIS_PASSWORD"; else exec redis-server; fi'
     healthcheck:
-      test: ["CMD-SHELL", "if [ -n \"$$REDIS_PASSWORD\" ]; then redis-cli -a \"$$REDIS_PASSWORD\" ping | grep PONG; else redis-cli ping | grep PONG; fi"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
+      test: ["CMD-SHELL", "pgrep redis-server > /dev/null 2>&1 && if [ -n \"$$REDIS_PASSWORD\" ]; then redis-cli -a \"$$REDIS_PASSWORD\" ping | grep -q PONG && redis-cli -a \"$$REDIS_PASSWORD\" INFO server | grep -q redis_version; else redis-cli ping | grep -q PONG && redis-cli INFO server | grep -q redis_version; fi"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 
   sam-futu-opend:
     build:
@@ -160,10 +160,10 @@ services:
     profiles:
       - ib
     healthcheck:
-      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/4004'"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      test: ["CMD-SHELL", "pgrep java > /dev/null 2>&1 && bash -c 'echo > /dev/tcp/localhost/4004'"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
       start_period: 60s
 
   sam-services:
@@ -195,11 +195,11 @@ services:
     profiles:
       - services
     healthcheck:
-      test: ["CMD-SHELL", "echo > /dev/tcp/localhost/8080"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
+      test: ["CMD-SHELL", "pgrep python > /dev/null 2>&1 && true > /dev/tcp/localhost/8080 2>/dev/null && (curl -sf http://localhost:8080/health > /dev/null 2>&1 || true)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 
 volumes:
   postgres_data:

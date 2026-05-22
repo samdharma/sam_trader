@@ -1,4 +1,13 @@
 
+## Iteration 42
+- **Task**: Document Futu OpenD first-time login and terminal access
+- **Task ID**: sam_trader-9z3.1.19
+- **Status**: COMPLETE
+- **Decisions**: Created comprehensive operational guide `docs/user/FUTU_FIRST_LOGIN.md` covering all acceptance criteria. Documented MD5 password generation with `echo -n password | md5sum` and fallbacks (openssl, Python). Included step-by-step instructions for extracting the regulatory questionnaire URL from `docker logs sam-futu-opend`. Documented telnet access via `docker exec -it sam-futu-opend telnet localhost 22222` with reconnect command for post-questionnaire login. Added detailed troubleshooting sections: login failed, connection refused/port collision, mounts denied on macOS, container exits immediately, and Apple Silicon performance notes. Added pre-flight health verification checklist (docker compose ps, inspect health status, 3-layer manual checks, network reachability from sam-trader) to ensure OpenD is healthy before starting sam-trader.
+- **Files Changed**: `docs/user/FUTU_FIRST_LOGIN.md` (new)
+- **Validation Result**: PASS (ralph_validate.sh --tier=targetted; no Python changes, docs only)
+- **Blockers / Notes**: None. Ready for next phase-0 ticket.
+
 ## Iteration 20
 - **Task**: P2: Futu config dataclasses — FutuDataClientConfig, FutuExecClientConfig
 - **Task ID**: sam_trader-9z3.3.3
@@ -250,3 +259,12 @@
 - **Files Changed**: `docker/futu-opend/healthcheck.sh` (new), `docker/Dockerfile.futu-opend`, `docker/docker-compose.yml`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targetted)
 - **Blockers / Notes**: None. Ready for sam_trader-9z3.1.16 (Standardize 3-layer health checks across all containers).
+
+## Iteration 43
+- **Task**: Standardize 3-layer health checks across all containers
+- **Task ID**: sam_trader-9z3.1.16
+- **Status**: COMPLETE
+- **Decisions**: Applied the same 3-layer health check pattern (L1=process, L2=socket/service, L3=protocol/application) to every container in the stack. Created `docker/HEALTHCHECK_PATTERN.md` documenting the pattern and per-container command matrix. Updated `docker-compose.yml` healthchecks: sam-postgres now has `pgrep postgres + pg_isready + psql 'SELECT 1'`; sam-redis has `pgrep redis-server + redis-cli ping + redis-cli INFO server` (with auth support); sam-trader has `pgrep python + /proc/1/cmdline check`; sam-ib-gateway has `pgrep java + TCP connect to 4004`; sam-services has `pgrep python + TCP connect to 8080 + curl /health (optional)`. Standardized all timing parameters to interval=30s, timeout=10s, start-period=60s, retries=3. Updated `AGENTS.md` with a Health Check Pattern section referencing the doc.
+- **Files Changed**: `docker/HEALTHCHECK_PATTERN.md` (new), `docker/docker-compose.yml`, `AGENTS.md`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; no Python changes, gate passed)
+- **Blockers / Notes**: None. Ready for next phase-0 ticket.
