@@ -7,3 +7,8 @@
 if [[ "${LABELS}" == *"meta-grouping"* ]]; then
     SKIP_REASON="meta_grouping_ticket_skip"
 fi
+
+# Belt-and-suspenders: also skip by container type
+if [[ "${CAND_TYPE}" == "feature" ]] || [[ "${CAND_TYPE}" == "epic" ]]; then
+    SKIP_REASON="container_type_skip"
+fi

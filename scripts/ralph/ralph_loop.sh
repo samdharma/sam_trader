@@ -245,7 +245,7 @@ while true; do
         CAND_TYPE=$(echo "${READY_JSON}" | jq -r ".[${i}].type // \"task\"")
         CAND_LABELS=$(echo "${READY_JSON}" | jq -r ".[${i}].labels // [] | join(\",\")")
 
-        PREFLIGHT_RESULT=$(bash "${PREFLIGHT_SCRIPT}" "${CAND_LABELS}" 2>/dev/null || echo "BLOCKED: preflight_script_failed")
+        PREFLIGHT_RESULT=$(bash "${PREFLIGHT_SCRIPT}" "${CAND_LABELS}" "${CAND_TYPE}" 2>/dev/null || echo "BLOCKED: preflight_script_failed")
         if [[ "${PREFLIGHT_RESULT}" == "READY" ]]; then
             TASK_ID="${CAND_ID}"
             TASK_TITLE="${CAND_TITLE}"
@@ -301,7 +301,7 @@ $(cat "${TYPE_PROMPT_FILE}")"
     fi
 
     # --- Detect phase-specific build reference doc ---
-    PHASE_LABEL=$(echo "${TASK_LABELS}" | grep -oE 'phase-[0-9]+' | head -1)
+    PHASE_LABEL=$(echo "${TASK_LABELS}" | grep -oE 'phase-[0-9]+[a-z]*' | head -1)
     BUILD_PHASE_DOC=""
     if [[ -n "${PHASE_LABEL}" ]]; then
         PHASE_NUM=$(echo "${PHASE_LABEL}" | sed 's/phase-//')

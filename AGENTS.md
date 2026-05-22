@@ -62,6 +62,38 @@ The Ralph loop auto-detects the ticket's phase label and injects the correspondi
 - Docker: one process per container.
 - Package name: `sam_trader`. Docker prefix: `sam-`. Network: `sam-net`.
 
+## Beads Ticket Hierarchy & Rules
+
+### Hierarchy
+```
+EPIC (type: epic, labels: epic, meta-grouping)
+└── FEATURE (type: feature, labels: <phase-tag>, meta-grouping)
+    ├── CHILD tickets (type: task|bug|test|docs, labels: <phase-tag> ONLY)
+    │   - One and only one label
+    │   - Must have description with acceptance criteria
+    │   - Must reference spec file or build phase doc
+    │   - Dependencies set explicitly via `bd dep add`
+    └── EXIT ticket (type: task, labels: exit, <phase-tag>)
+        - Last ticket before feature is considered complete
+        - Blocks the NEXT phase's first child ticket(s)
+```
+
+### Label Rules
+| Ticket Type | Allowed Labels |
+|-------------|----------------|
+| EPIC | `epic`, `meta-grouping` + optionally phase tags |
+| FEATURE | `<phase-tag>`, `meta-grouping` |
+| CHILD (task, bug, test, docs) | `<phase-tag>` **only** |
+| EXIT | `exit`, `<phase-tag>` |
+
+### Dependency Rules
+1. **FEATURE parents are pure containers** — they MUST NOT carry blocking dependencies.
+2. **Phase gating** is enforced by making a phase's **first child ticket(s)** depend on the **previous phase's EXIT ticket**.
+3. **Exit tickets** depend only on their own phase's child tickets (the work that must complete before validation).
+4. **Never** block a FEATURE parent from a previous phase's exit — this transitively blocks all children.
+5. **Never** add a second label to a child work ticket.
+6. **Phase labels** use the format `phase-<N>` (e.g., `phase-0`, `phase-5`). Non-numeric suffixes break Ralph's build-doc lookup.
+
 <!-- BEGIN RALPH LOOP INTEGRATION v:1 -->
 ## Ralph Wiggum Loop System
 

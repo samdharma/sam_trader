@@ -52,12 +52,19 @@ EPIC: sam-v3 (SAM Trader V3)
 
 ## 2. Labels
 
-| Label | Scope |
-|-------|-------|
-| `phase-0` through `phase-11` | Roadmap phase marker |
-| `epic` | Top-level epic or sub-epic |
-| `feature` | Feature grouping ticket (parent of tasks) |
-| `task` | Atomic work ticket |
+| Label | Scope | Allowed On |
+|-------|-------|------------|
+| `phase-0` through `phase-11` | Roadmap phase marker | All tickets |
+| `meta-grouping` | Container ticket (EPIC or FEATURE) | EPIC, FEATURE only |
+| `epic` | Top-level epic or sub-epic | EPIC only |
+| `feature` | Feature grouping ticket (parent of tasks) | FEATURE only |
+| `task` | Atomic work ticket | CHILD tickets only |
+| `exit` | Phase exit / validation gate | EXIT tickets only |
+
+**Label Rules (see `AGENTS.md` §Beads Ticket Hierarchy for full details):**
+- EPIC and FEATURE tickets MAY have multiple labels (`<phase-tag>` + `meta-grouping`).
+- All CHILD work tickets (task, bug, test, docs) MUST have exactly **one** label: the phase tag.
+- EXIT tickets have exactly two labels: `exit` + `<phase-tag>`.
 | `exit` | Integration/exit test gate for a feature |
 | `blocked` | Depends on incomplete work |
 | `docs` | Documentation task |
@@ -99,6 +106,14 @@ Phase 0 ────────────────────────
                                                       │
                                                       ▼
                                             sam-p0-verify ──► ═══ PHASE 0 GATE ═══
+
+Phase 0-H (Hardening) ────────────────────────────────────────────────────
+  sam_trader-9z3.1.13 ──► sam_trader-9z3.1.14 ──► sam_trader-9z3.1.15 ──┬──► sam_trader-9z3.1.16 ──► sam_trader-9z3.1.17
+                                                                          ├──► sam_trader-9z3.1.18
+                                                                          └──► sam_trader-9z3.1.19
+                                                                                      │
+                                                                                      ▼
+                                                                            sam_trader-9z3.1.20 ──► ═══ PHASE 0-H GATE ═══
 
 Phase 1 ──────────────────────────────────────────────────────────────────
   sam-p1-config ──► sam-p1-main ──► sam-p1-integration ──► ═══ PHASE 1 GATE ═══
@@ -188,6 +203,22 @@ Phase 11 ───────────────────────�
 | 0.7 | `sam-p0-futu-opend` | Futu OpenD service definition | task | port | `ghcr.io/manhinhang/futu-opend-docker:ubuntu-stable`. Port 11111. Env vars: FUTU_ACCOUNT_ID, FUTU_ACCOUNT_PWD_MD5. Volume: `futu_opend_data`. Health check. Profile: `futu`. |
 | 0.8 | `sam-p0-entrypoint` | Entrypoint script with multi-service wait logic | task | port | Wait for PostgreSQL, Redis. Conditional wait for Futu OpenD, IB Gateway. Python socket-based checks. |
 | 0.9 | `sam-p0-verify` | Verify stack: all containers start healthy | exit | — | `docker compose up` → all always-on containers healthy. `--profile futu` starts OpenD. `docker compose down` cleans up. |
+
+### Phase 0-H: Docker Stack Hardening
+
+> **Goal:** Retrofit Phase 0 Docker foundation with operational robustness: lightweight base image, layered health checks, host monitoring with cooldown, standardized backup/restore, and Futu first-login documentation.
+> **Parent:** `sam_trader-9z3.1` (Phase 0 feature). **Label:** `phase-0`.
+
+| # | Ticket ID | Title | Type | AC Highlights |
+|---|-----------|-------|------|---------------|
+| 0.10 | `sam_trader-9z3.1.13` | Futu OpenD: switch to debian:stable-slim + tini init | task | FROM debian:stable-slim, tini init, <70MB image, build on Apple Silicon |
+| 0.11 | `sam_trader-9z3.1.14` | Futu OpenD: Python XML startup replaces sed-based start.sh | task | xml.etree.ElementTree, validates XML, graceful error on missing env vars |
+| 0.12 | `sam_trader-9z3.1.15` | Futu OpenD: layered health check | task | L1 pgrep, L2 TCP connect, L3 log scan, Dockerfile + compose aligned |
+| 0.13 | `sam_trader-9z3.1.16` | Standardize 3-layer health checks across all containers | task | HEALTHCHECK_PATTERN.md, postgres/redis/trader/ib-gateway/services checks |
+| 0.14 | `sam_trader-9z3.1.17` | Host-level container monitor with cooldown protection | task | docker ps polling, restart counter, 3-restart/15min cooldown, launchd plist |
+| 0.15 | `sam_trader-9z3.1.18` | Backup/restore system via sam-services | task | pg_dump, Redis BGSAVE, Futu volume, config backup, HKT 06:00 weekdays, 30-day retention |
+| 0.16 | `sam_trader-9z3.1.19` | Document Futu OpenD first-time login and terminal access | task | FUTU_FIRST_LOGIN.md, questionnaire URL, telnet access, MD5 generation, troubleshooting |
+| 0.17 | `sam_trader-9z3.1.20` | Exit gate: hardened stack builds, health, monitor, backup | exit | All containers healthy within 2min, monitor detects restart, backup creates valid archive, no regression |
 
 ---
 
