@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  SAM Trader V3 — macOS launchd template for host-level container monitor
+
+  Installation:
+    1. Copy this file to ~/Library/LaunchAgents/com.samtrader.monitor.plist
+    2. Ensure docker/host-monitor.sh is executable:
+         chmod +x /path/to/sam_trader/docker/host-monitor.sh
+    3. Load the service:
+         launchctl load ~/Library/LaunchAgents/com.samtrader.monitor.plist
+    4. Start the service:
+         launchctl start com.samtrader.monitor
+    5. Check status:
+         launchctl list | grep com.samtrader.monitor
+
+  Logs:
+    - Monitor actions: logs/host-monitor.log (relative to repo root)
+    - launchd stdout/stderr: ~/Library/Logs/sam-monitor.log (if StandardOutPath/ErrorPath configured)
+
+  Unload:
+    launchctl unload ~/Library/LaunchAgents/com.samtrader.monitor.plist
+-->
+<plist version="1.0">
+  <dict>
+    <key>Label</key>
+    <string>com.samtrader.monitor</string>
+
+    <key>ProgramArguments</key>
+    <array>
+      <string>/bin/bash</string>
+      <string>/Users/sam.dharma/Trading/sam_trader/docker/host-monitor.sh</string>
+    </array>
+
+    <!-- Working directory so relative paths (e.g. logs/) resolve correctly -->
+    <key>WorkingDirectory</key>
+    <string>/Users/sam.dharma/Trading/sam_trader</string>
+
+    <!-- Run immediately on load, then keep alive while executing -->
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+
+    <!-- Prevent multiple instances -->
+    <key>ThrottleInterval</key>
+    <integer>60</integer>
+
+    <!-- Environment variables (optional overrides) -->
+    <key>EnvironmentVariables</key>
+    <dict>
+      <key>SAM_MONITOR_INTERVAL</key>
+      <string>60</string>
+      <key>SAM_MONITOR_COOLDOWN_WINDOW</key>
+      <string>900</string>
+      <key>SAM_MONITOR_COOLDOWN_BACKOFF</key>
+      <string>1800</string>
+      <key>SAM_MONITOR_MAX_RESTARTS</key>
+      <string>3</string>
+      <key>SAM_MONITOR_STATE_DIR</key>
+      <string>/tmp/sam-monitor</string>
+      <key>SAM_MONITOR_LOG</key>
+      <string>/Users/sam.dharma/Trading/sam_trader/logs/host-monitor.log</string>
+      <key>SAM_MONITOR_PREFIX</key>
+      <string>sam-</string>
+    </dict>
+
+    <!-- Redirect stdout/stderr for troubleshooting -->
+    <key>StandardOutPath</key>
+    <string>/Users/sam.dharma/Library/Logs/sam-monitor.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/sam.dharma/Library/Logs/sam-monitor.log</string>
+  </dict>
+</plist>

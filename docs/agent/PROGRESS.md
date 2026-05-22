@@ -277,3 +277,12 @@
 - **Files Changed**: `src/sam_trader/services/__init__.py` (new), `src/sam_trader/services/backup.py` (new), `src/sam_trader/services/crontab` (new), `docker/Dockerfile.services`, `docker/docker-compose.yml`, `pyproject.toml`, `tests/unit/services/__init__.py` (new), `tests/unit/services/test_backup.py` (new)
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 18/18 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ready for next phase-0 ticket (sam_trader-9z3.1.20: Exit gate hardened stack).
+
+## Iteration 45
+- **Task**: Host-level container monitor with cooldown protection
+- **Task ID**: sam_trader-9z3.1.17
+- **Status**: COMPLETE
+- **Decisions**: Created `docker/host-monitor.sh` as a unified host monitor that polls all `sam-*` containers every 60s via `docker ps` + `docker inspect` health status. Per-container restart counters stored in JSON files under `/tmp/sam-monitor/`. Cooldown logic: 3 restarts within 15 minutes triggers a 30-minute backoff. All actions logged to `logs/host-monitor.log` with ISO timestamps. Supports `--oneshot` mode for cron/manual testing and `--status` for human-readable container state. Created `docker/com.samtrader.monitor.plist` as a macOS launchd template with `RunAtLoad`, `KeepAlive`, and environment variable overrides. Documented Linux systemd service and cron line in script comments per acceptance criteria.
+- **Files Changed**: `docker/host-monitor.sh` (new), `docker/com.samtrader.monitor.plist` (new), `tests/unit/test_host_monitor.py` (new)
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 11/11 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: Manual test criteria (stop sam-futu-opend, verify monitor detects and restarts with cooldown) requires running Docker stack and is deferred to Phase 0-H exit gate (sam_trader-9z3.1.20).
