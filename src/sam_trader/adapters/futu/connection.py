@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import inspect
 import logging
+import os
 import threading
 import time
 from typing import Any
@@ -18,9 +19,16 @@ from futu import (
     ContextStatus,
     OpenQuoteContext,
     OpenSecTradeContext,
+    SysConfig,
     SysNotifyHandlerBase,
     TrdMarket,
 )
+
+# Configure RSA encryption for cross-network trading when the key is present.
+# Futu OpenD requires RSA when listening on 0.0.0.0 (the default in Docker).
+_RSA_KEY_PATH = "/.futu/futu.pem"
+if os.path.isfile(_RSA_KEY_PATH):
+    SysConfig.set_init_rsa_file(_RSA_KEY_PATH)
 
 logger = logging.getLogger(__name__)
 

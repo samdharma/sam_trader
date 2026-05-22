@@ -212,6 +212,17 @@ def main() -> None:
     print(f"FUTU_OPEND_RSA_FILE_PATH: {futu_opend_rsa_file_path}")
     print(f"FUTU_OPEND_IP: {futu_opend_ip}")
 
+    # --- RSA key check for cross-network binding ---
+    if futu_opend_ip == "0.0.0.0" and not os.path.isfile(futu_opend_rsa_file_path):
+        print(
+            "WARNING: FUTU_OPEND_IP=0.0.0.0 but RSA private key not found at "
+            f"{futu_opend_rsa_file_path}. Futu requires RSA encryption when "
+            "listening on all interfaces. Trading operations will fail.\n"
+            "Generate a key with:\n"
+            '  ssh-keygen -t rsa -b 1024 -m PEM -f docker/futu-opend/futu.pem -N ""',
+            file=sys.stderr,
+        )
+
     # --- Ensure binary is available ---
     binary_path = ensure_binary()
 

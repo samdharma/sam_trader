@@ -68,6 +68,44 @@ class TestFutuOpenDStartupEnvValidation:
         )
         assert "FUTU_ACCOUNT_PWD is deprecated" in result.stderr
 
+    def test_missing_rsa_key_warns_when_ip_is_all_interfaces(self):
+        env = {
+            **os.environ,
+            "FUTU_ACCOUNT_ID": "12345",
+            "FUTU_ACCOUNT_PWD_MD5": "abc123",
+            "FUTU_OPEND_IP": "0.0.0.0",
+            "FUTU_OPEND_RSA_FILE_PATH": "/nonexistent/key.pem",
+            "FUTU_OPEND_SKIP_DOWNLOAD": "1",
+        }
+        result = subprocess.run(
+            [sys.executable, str(START_PY)],
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+        assert (
+            "WARNING: FUTU_OPEND_IP=0.0.0.0 but RSA private key not found"
+            in result.stderr
+        )
+        assert "ssh-keygen" in result.stderr
+
+    def test_missing_rsa_key_no_warning_when_ip_is_localhost(self):
+        env = {
+            **os.environ,
+            "FUTU_ACCOUNT_ID": "12345",
+            "FUTU_ACCOUNT_PWD_MD5": "abc123",
+            "FUTU_OPEND_IP": "127.0.0.1",
+            "FUTU_OPEND_RSA_FILE_PATH": "/nonexistent/key.pem",
+            "FUTU_OPEND_SKIP_DOWNLOAD": "1",
+        }
+        result = subprocess.run(
+            [sys.executable, str(START_PY)],
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+        assert "WARNING: FUTU_OPEND_IP=0.0.0.0" not in result.stderr
+
 
 class TestFutuOpenDStartupXmlGeneration:
     def test_build_xml_tree_creates_all_elements(self):

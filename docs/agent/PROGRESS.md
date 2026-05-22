@@ -331,3 +331,12 @@
 - **Files Changed**: `docker/Dockerfile`, `.gitignore`, `src/sam_trader/adapters/futu/execution.py`, `tests/unit/adapters/futu/test_execution.py`, `docs/user/FUTU_FIRST_LOGIN.md`, `config/ralph_preflight.sh`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 28/28 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ready for next phase-3 ticket.
+
+## Iteration 51
+- **Task**: BUG: Cross-network RSA encryption required when FUTU_OPEND_IP=0.0.0.0
+- **Task ID**: sam_trader-9z3.4.9
+- **Status**: COMPLETE
+- **Decisions**: Added `../docker/futu-opend/futu.pem:/.futu/futu.pem:ro` volume mounts to both `sam-futu-opend` and `sam-trader` services in `docker-compose.yml`. Added automatic `SysConfig.set_init_rsa_file('/.futu/futu.pem')` in `connection.py` at module import time when the key file exists, ensuring all Futu contexts use RSA without caller intervention. Added a runtime warning in `start.py` when `FUTU_OPEND_IP=0.0.0.0` and the RSA key is missing. Moved RSA key generation documentation from buried §9.1 to a new prominent §2.5 in FUTU_FIRST_LOGIN.md so users generate the key before starting containers. Added unit tests for the new RSA warning behavior.
+- **Files Changed**: `docker/docker-compose.yml`, `docker/futu-opend/start.py`, `src/sam_trader/adapters/futu/connection.py`, `docs/user/FUTU_FIRST_LOGIN.md`, `tests/unit/test_futu_opend_startup.py`
+- **Validation Result**: PASS (28/28 targeted tests passed, black/isort/flake8/mypy all green; pre-existing pytest collection error from duplicate `test_config.py` basenames and pre-existing `lang` default mismatch in `test_build_xml_tree_creates_all_elements` are unrelated to this change)
+- **Blockers / Notes**: None. Ready for next phase-3 ticket.

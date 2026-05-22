@@ -17,6 +17,7 @@ services:
       - ../config:/opt/sam_trader/config:ro
       - ../data/catalog:/opt/sam_trader/data/catalog:rw
       - ../logs:/opt/sam_trader/logs:rw
+      - ../docker/futu-opend/futu.pem:/.futu/futu.pem:ro
     environment:
       - PYTHONPATH=/opt/sam_trader/src
       - PYTHONUNBUFFERED=1
@@ -128,6 +129,7 @@ services:
       FUTU_OPEND_LANG: ${FUTU_OPEND_LANG:-en}
     volumes:
       - futu_opend_data:/home/futu/.com.futunn.FutuOpenD
+      - ../docker/futu-opend/futu.pem:/.futu/futu.pem:ro
     networks:
       - sam-net
     profiles:

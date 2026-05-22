@@ -72,6 +72,28 @@ FUTU_ACCOUNT_PWD_MD5=5f4dcc3b5aa765d61d8327deb882cf99
 
 ---
 
+## 2.5 Generate RSA Key (Required for Docker)
+
+When Futu OpenD binds to `0.0.0.0` (the default inside Docker so other containers can reach it), Futu **requires RSA encryption** on the trading interface. Without it, market data works but order submission fails with an encryption error.
+
+### Generate a 1024-bit RSA key
+
+```bash
+ssh-keygen -t rsa -b 1024 -m PEM -f docker/futu-opend/futu.pem -N ""
+```
+
+> **Security:** `*.pem` is already in `.gitignore`. Never commit private keys.
+
+### Verify the key exists
+
+```bash
+ls -l docker/futu-opend/futu.pem
+```
+
+The `docker-compose.yml` automatically mounts this file into **both** `sam-futu-opend` and `sam-trader` containers at `/.futu/futu.pem`. No additional configuration is required unless you change `FUTU_OPEND_RSA_FILE_PATH`.
+
+---
+
 ## 3. Start the Futu OpenD Container
 
 > **Note:** The `sam-futu-opend` image is intentionally lightweight (~46 MB compressed). On first start it downloads the Futu OpenD binary (~405 MB) to the persistent volume. This one-time download takes 1–3 minutes depending on your connection. Subsequent restarts use the cached binary and start much faster.
@@ -451,27 +473,7 @@ The following issues were discovered during Phase 3 paper-trading validation and
 
 **Root cause:** Futu requires RSA encryption on the trading interface when listening on all interfaces (`FUTU_OPEND_IP=0.0.0.0`).
 
-**Fix:**
-1. Generate a 1024-bit RSA key:
-   ```bash
-   ssh-keygen -t rsa -b 1024 -m PEM -f docker/futu-opend/futu.pem -N ""
-   ```
-2. Ensure it is mounted into **both** containers in `docker-compose.yml`:
-   ```yaml
-   volumes:
-     - ${PWD}/docker/futu-opend/futu.pem:/.futu/futu.pem:ro
-   ```
-3. Configure OpenD XML:
-   ```bash
-   FUTU_OPEND_RSA_FILE_PATH=/.futu/futu.pem
-   ```
-4. Configure Python SDK before creating any context:
-   ```python
-   from futu import SysConfig
-   SysConfig.set_init_rsa_file('/.futu/futu.pem')
-   ```
-
-> **Security:** `*.pem` is in `.gitignore`. Never commit private keys.
+**Fix:** See §2.5 for key generation and mount setup. Ensure `docker-compose.yml` mounts the key into both containers and that `src/sam_trader/adapters/futu/connection.py` automatically configures `SysConfig.set_init_rsa_file` when the file is present.
 
 ### 9.2 Futu SDK enum strings vs integers
 
