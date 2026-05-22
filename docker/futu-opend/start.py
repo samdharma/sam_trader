@@ -41,7 +41,7 @@ def build_xml_tree(
     ET.SubElement(root, "api_port").text = api_port
     ET.SubElement(root, "login_account").text = login_account
     ET.SubElement(root, "login_pwd_md5").text = login_pwd_md5
-    ET.SubElement(root, "lang").text = "chs"
+    ET.SubElement(root, "lang").text = os.environ.get("FUTU_OPEND_LANG", "en")
 
     # Advanced parameters
     ET.SubElement(root, "log_level").text = "info"
@@ -116,7 +116,13 @@ def ensure_binary() -> str:
     os.makedirs(VOLUME_DIR, exist_ok=True)
 
     expected_dir = os.path.join(VOLUME_DIR, f"Futu_OpenD_{version}_Ubuntu18.04")
-    expected_binary = os.path.join(expected_dir, "FutuOpenD")
+    # The official tar.gz has a nested directory structure:
+    # Futu_OpenD_{ver}_Ubuntu18.04/Futu_OpenD_{ver}_Ubuntu18.04/FutuOpenD
+    nested_dir = os.path.join(expected_dir, f"Futu_OpenD_{version}_Ubuntu18.04")
+    if os.path.isdir(nested_dir):
+        expected_binary = os.path.join(nested_dir, "FutuOpenD")
+    else:
+        expected_binary = os.path.join(expected_dir, "FutuOpenD")
     if os.path.isfile(expected_binary) and os.access(expected_binary, os.X_OK):
         print(f"Using cached Futu OpenD binary: {expected_binary}")
         return expected_binary

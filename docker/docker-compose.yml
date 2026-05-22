@@ -125,6 +125,7 @@ services:
       FUTU_OPEND_IP: ${FUTU_OPEND_IP:-0.0.0.0}
       FUTU_OPEND_PORT: ${FUTU_OPEND_PORT:-11111}
       FUTU_OPEND_TELNET_PORT: ${FUTU_OPEND_TELNET_PORT:-22222}
+      FUTU_OPEND_LANG: ${FUTU_OPEND_LANG:-en}
     volumes:
       - futu_opend_data:/home/futu/.com.futunn.FutuOpenD
     networks:
