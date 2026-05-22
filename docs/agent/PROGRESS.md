@@ -322,3 +322,12 @@
 - **Files Changed**: `scripts/ralph/validate_env_hostnames.sh` (new), `scripts/ralph/validate_actors.sh`, `scripts/ralph/validate_restart.sh`, `config/ralph_preflight.sh`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targetted)
 - **Blockers / Notes**: None. Ready for next phase-3 ticket.
+
+## Iteration 50
+- **Task**: BUG: sam-trader Dockerfile — futu-api log dir creation fails without writable /opt/sam_trader
+- **Task ID**: sam_trader-9z3.4.8
+- **Status**: COMPLETE
+- **Decisions**: The Dockerfile already contained the fix (`RUN chown sam:sam /opt/sam_trader` before `USER sam`). Verified no other directories need similar treatment: `/tmp` is world-writable in python:3.14-slim base image; `~/.cache` resolves to `/opt/sam_trader/.cache` which is writable because the parent directory is chown'd to sam. Added `*.pem` and `config/bundles.yaml` to `.gitignore` to prevent accidental commits of secrets and user-specific bundle configs. Committed the Dockerfile fix along with prior uncommitted reconciliation report generation in execution.py, FUTU_FIRST_LOGIN.md Phase 4 validation section, and ralph_preflight.sh stderr redirect.
+- **Files Changed**: `docker/Dockerfile`, `.gitignore`, `src/sam_trader/adapters/futu/execution.py`, `tests/unit/adapters/futu/test_execution.py`, `docs/user/FUTU_FIRST_LOGIN.md`, `config/ralph_preflight.sh`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 28/28 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for next phase-3 ticket.
