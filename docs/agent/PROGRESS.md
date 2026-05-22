@@ -304,3 +304,12 @@
 - **Files Changed**: `.beads/issues.jsonl`, `docs/agent/PROGRESS.md`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; no modified Python files, gate passed)
 - **Blockers / Notes**: Phase 0 fully complete. Ready for Phase 1 (Configuration & Bootstrap).
+
+## Iteration 48
+- **Task**: [EXIT] P4: Futu-only TradingNode — subscribe, receive data, instruments resolve
+- **Task ID**: sam_trader-9z3.5.6
+- **Status**: COMPLETE
+- **Decisions**: Verified existing implementation from Iteration 37 is present and fully functional. Integration test `test_futu_trading_node_with_bundle` validates all Phase 4 exit criteria: TradingNode builds with Futu factories only (IB disabled), Futu bundle loads with TSLA.NASDAQ, EchoStrategy is instantiated, quote ticks pushed through mocked Futu data client reach the message bus, instrument resolution works (TSLA.NASDAQ → US.TSLA), and bar data arrives for configured BarType. No code changes required.
+- **Files Changed**: `docs/agent/PROGRESS.md`, `.beads/issues.jsonl`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 1/1 integration test passed, no lint/type issues)
+- **Blockers / Notes**: Phase 4 exit gate complete. Ready for Phase 5 (IBKR Adapter Re-integration).
