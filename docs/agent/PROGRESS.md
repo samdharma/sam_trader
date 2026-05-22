@@ -241,3 +241,12 @@
 - **Files Changed**: `docker/futu-opend/start.py` (new), `docker/futu-opend/start.sh` (deleted), `docker/Dockerfile.futu-opend`, `tests/unit/test_futu_opend_startup.py` (new)
 - **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 6 passed, 1 skipped, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ready for sam_trader-9z3.1.15 (Futu OpenD: layered health check).
+
+## Iteration 41
+- **Task**: Futu OpenD: layered health check
+- **Task ID**: sam_trader-9z3.1.15
+- **Status**: COMPLETE
+- **Decisions**: Implemented 3-layer health check for Futu OpenD per BUILD_PHASE_0.md §2. L1: `pgrep -x FutuOpenD` process check. L2: bash `/dev/tcp/localhost/11111` socket check. L3: log scan in `/home/futu/.com.futunn.FutuOpenD/log/` for login failure patterns (login fail, conn failed, authentication fail, auth fail, account login). Created `docker/futu-opend/healthcheck.sh` with all three layers. Updated `Dockerfile.futu-opend` to copy and chown the script, and changed HEALTHCHECK to use `/bin/healthcheck.sh` with `--interval=30s --timeout=10s --start-period=60s --retries=3`. Updated `docker-compose.yml` sam-futu-opend healthcheck to align with Dockerfile (same script, same timing parameters).
+- **Files Changed**: `docker/futu-opend/healthcheck.sh` (new), `docker/Dockerfile.futu-opend`, `docker/docker-compose.yml`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targetted)
+- **Blockers / Notes**: None. Ready for sam_trader-9z3.1.16 (Standardize 3-layer health checks across all containers).

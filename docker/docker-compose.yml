@@ -132,11 +132,11 @@ services:
     profiles:
       - futu
     healthcheck:
-      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/11111'"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
+      test: ["CMD-SHELL", "/bin/healthcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 
   sam-ib-gateway:
     image: ghcr.io/gnzsnz/ib-gateway:stable
