@@ -313,3 +313,12 @@
 - **Files Changed**: `docs/agent/PROGRESS.md`, `.beads/issues.jsonl`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 1/1 integration test passed, no lint/type issues)
 - **Blockers / Notes**: Phase 4 exit gate complete. Ready for Phase 5 (IBKR Adapter Re-integration).
+
+## Iteration 49
+- **Task**: BUG: .env hostname staleness — v2→v3 migration left old container names
+- **Task ID**: sam_trader-9z3.4.7
+- **Status**: COMPLETE
+- **Decisions**: `.env.example` and `config.py` were already correct. Stale references remained in `scripts/ralph/validate_actors.sh` (csam-postgres, csam-nautilus) and `scripts/ralph/validate_restart.sh` (csam-postgres, csam-redis, csam-nautilus). Created `scripts/ralph/validate_env_hostnames.sh` which reads `.env` (or `.env.example`) and warns if any `_HOST` variable does not match a service name in `docker/docker-compose.yml`. Wired this into `config/ralph_preflight.sh` as a non-blocking guard. Updated both validation scripts to use `sam-*` names.
+- **Files Changed**: `scripts/ralph/validate_env_hostnames.sh` (new), `scripts/ralph/validate_actors.sh`, `scripts/ralph/validate_restart.sh`, `config/ralph_preflight.sh`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targetted)
+- **Blockers / Notes**: None. Ready for next phase-3 ticket.
