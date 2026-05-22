@@ -223,3 +223,12 @@
 - **Files Changed**: `tests/unit/test_main_ib_config.py`, `pyproject.toml`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 3/3 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ready for sam_trader-9z3.6.5 (IBKR factory registration in main.py).
+
+## Iteration 39
+- **Task**: Futu OpenD: switch to debian:stable-slim + tini init
+- **Task ID**: sam_trader-9z3.1.13
+- **Status**: COMPLETE
+- **Decisions**: Replaced ubuntu:22.04 with debian:stable-slim base image. Added tini as PID 1 init system via ENTRYPOINT ["/usr/bin/tini", "--"]. Installed only required packages (ca-certificates, curl, libssl3, tini, procps). Removed recursive chown on /bin/futu-opend binary directory. Aligned HEALTHCHECK timeout (10s) and start-period (60s) with 3-layer health check pattern from BUILD_PHASE_0.md. Documented actual compressed image size (~441MB, dominated by ~405MB Futu binary download).
+- **Files Changed**: `docker/Dockerfile.futu-opend`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; docker build --platform linux/amd64 succeeded on Apple Silicon, container starts, tini PID 1 verified, FutuOpenD --help runs)
+- **Blockers / Notes**: None. Ready for sam_trader-9z3.1.14 (Futu OpenD: Python XML startup replaces sed-based start.sh).
