@@ -1,0 +1,8 @@
+# SAM Trader V3 — Backup cron schedule
+# Runs at 06:00 HKT on weekdays (Mon-Fri); skips US/HK trading holidays via script logic.
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+TZ=Asia/Hong_Kong
+
+# Source container environment variables written at startup
+0 6 * * 1-5 sam . /opt/sam_trader/.env_cron && cd /opt/sam_trader && /usr/local/bin/python3 -m sam_trader.services.backup backup >> /opt/sam_trader/logs/backup.log 2>&1

@@ -29,6 +29,7 @@ dependencies = [
     "asyncpg",
     "futu-api",
     "nautilus-ibapi==10.45.1",
+    "holidays",
 ]
 
 [project.optional-dependencies]

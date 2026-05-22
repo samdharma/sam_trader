@@ -181,6 +181,7 @@ services:
       - ../config:/opt/sam_trader/config:ro
       - ../logs:/opt/sam_trader/logs:rw
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ${BACKUP_HOST_DIR:-./backups}:/opt/sam_trader/backups:rw
     environment:
       - PYTHONPATH=/opt/sam_trader/src
       - PYTHONUNBUFFERED=1
@@ -192,6 +193,10 @@ services:
       - REDIS_HOST=${REDIS_HOST:-sam-redis}
       - REDIS_PORT=${REDIS_PORT:-6379}
       - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - BACKUP_DIR=/opt/sam_trader/backups
+      - BACKUP_RETENTION_DAYS=${BACKUP_RETENTION_DAYS:-30}
+      - FUTU_CONTAINER=sam-futu-opend
+      - CONFIG_DIR=/opt/sam_trader/config
     profiles:
       - services
     healthcheck:
