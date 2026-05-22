@@ -337,9 +337,194 @@ If startup exceeds 2 minutes, check Docker Desktop resource limits:
 
 ---
 
+## 8. Phase 4 Validation — TradingNode Integration & Order Testing
+
+Once OpenD is healthy, the next validation gate is a full paper-trade order through the Nautilus TradingNode.
+
+### 8.1 Start the full stack
+
+```bash
+docker compose --profile futu up -d
+```
+
+Wait for all containers to report `healthy`:
+
+```bash
+docker compose ps
+```
+
+### 8.2 Verify TradingNode connectivity
+
+Check `sam-trader` logs for successful Futu client registration:
+
+```bash
+docker logs -f sam-trader
+```
+
+Expected log lines:
+
+```
+[INF] DataClient-FUTU: Connected to Futu OpenD at sam-futu-opend:11111
+[INF] ExecClient-FUTU: Connected to Futu OpenD at sam-futu-opend:11111
+[INF] TradingNode: RUNNING
+```
+
+> **Note:** In `SIMULATE` mode you may see `Account discovery returned no accounts`. This is non-fatal for paper trading.
+
+### 8.3 One-shot paper order test
+
+Run a manual order test from inside the `sam-trader` container:
+
+```bash
+docker exec -it sam-trader python3 -c "
+from futu import SysConfig
+from sam_trader.adapters.futu.common import get_cached_futu_trade_context
+
+SysConfig.set_init_rsa_file('/.futu/futu.pem')
+ctx = get_cached_futu_trade_context(
+    host='sam-futu-opend',
+    port=11111,
+    trade_env='SIMULATE',
+    trd_market='US'
+)
+ret, data = ctx.place_order(
+    code='US.F',
+    price=15.00,
+    qty=1,
+    trd_side='BUY',
+    order_type='NORMAL',
+    time_in_force='DAY',
+    trd_env='SIMULATE',
+)
+print('RET:', ret)
+print(data)
+ctx.close()
+"
+```
+
+**Key parameters:**
+- `code='US.F'` — Ford Motor Co. (low-priced, liquid, good for 1-share tests)
+- `price=15.00` — limit price (adjust to current market)
+- `qty=1` — single share to minimize risk
+- `trd_side='BUY'` — **must be string**, not integer `TrdSide.BUY`
+- `order_type='NORMAL'` — **must be string**, not integer
+- `time_in_force='DAY'` — **must be string**, not integer
+- `trd_env='SIMULATE'` — paper trading
+
+### 8.4 Cancel the test order
+
+```bash
+docker exec -it sam-trader python3 -c "
+from futu import SysConfig
+from sam_trader.adapters.futu.common import get_cached_futu_trade_context
+
+SysConfig.set_init_rsa_file('/.futu/futu.pem')
+ctx = get_cached_futu_trade_context(host='sam-futu-opend', port=11111, trade_env='SIMULATE', trd_market='US')
+# Replace ORDER_ID with the ID printed by place_order
+ret, data = ctx.modify_order(order_id=ORDER_ID, qty=0, trd_env='SIMULATE')
+print('RET:', ret)
+print(data)
+ctx.close()
+"
+```
+
+### 8.5 Expected validation checklist
+
+| Check | Command / Indicator | Pass Criteria |
+|-------|---------------------|---------------|
+| OpenD healthy | `docker compose ps sam-futu-opend` | Status: `healthy` |
+| TradingNode running | `docker logs sam-trader \| grep "RUNNING"` | Line present |
+| Data client connected | `docker logs sam-trader \| grep "DataClient-FUTU: Connected"` | Line present |
+| Exec client connected | `docker logs sam-trader \| grep "ExecClient-FUTU: Connected"` | Line present |
+| Order submitted | `place_order` returns `ret == 0` | `RET: 0` |
+| Order cancelled | `modify_order` with `qty=0` returns `ret == 0` | `RET: 0` |
+
+---
+
+## 9. Known Runtime Fixes & Migration Notes
+
+The following issues were discovered during Phase 3 paper-trading validation and resolved. If you encounter them, ensure your environment includes the fixes.
+
+### 9.1 RSA encryption required for cross-network trading
+
+**Symptom:** `place_order` fails with an encryption or security error when OpenD binds to `0.0.0.0`.
+
+**Root cause:** Futu requires RSA encryption on the trading interface when listening on all interfaces (`FUTU_OPEND_IP=0.0.0.0`).
+
+**Fix:**
+1. Generate a 1024-bit RSA key:
+   ```bash
+   ssh-keygen -t rsa -b 1024 -m PEM -f docker/futu-opend/futu.pem -N ""
+   ```
+2. Ensure it is mounted into **both** containers in `docker-compose.yml`:
+   ```yaml
+   volumes:
+     - ${PWD}/docker/futu-opend/futu.pem:/.futu/futu.pem:ro
+   ```
+3. Configure OpenD XML:
+   ```bash
+   FUTU_OPEND_RSA_FILE_PATH=/.futu/futu.pem
+   ```
+4. Configure Python SDK before creating any context:
+   ```python
+   from futu import SysConfig
+   SysConfig.set_init_rsa_file('/.futu/futu.pem')
+   ```
+
+> **Security:** `*.pem` is in `.gitignore`. Never commit private keys.
+
+### 9.2 Futu SDK enum strings vs integers
+
+**Symptom:** `place_order` raises `TypeError` or submits with wrong side/type.
+
+**Root cause:** `futu-api` expects **string** constants (e.g., `'BUY'`), not integer enum values (e.g., `TrdSide.BUY` which is `0`).
+
+**Correct usage:**
+```python
+ctx.place_order(
+    code="US.F", price=15.00, qty=1,
+    trd_side='BUY',          # NOT TrdSide.BUY (integer 0)
+    order_type='NORMAL',     # NOT OrderType.NORMAL (integer)
+    time_in_force='DAY',     # NOT TimeInForce.DAY (integer)
+    trd_env='SIMULATE',      # NOT TrdEnv.SIMULATE (integer)
+)
+```
+
+### 9.3 sam-trader container permission error
+
+**Symptom:** `PermissionError: [Errno 13] Permission denied: '/opt/sam_trader/.com.futunn.FutuOpenD'`
+
+**Root cause:** The `sam` non-root user cannot write to `/opt/sam_trader` because the directory is owned by `root`.
+
+**Fix:** Ensure `docker/Dockerfile` contains:
+```dockerfile
+RUN chown sam:sam /opt/sam_trader
+```
+**before** the `USER sam` directive.
+
+### 9.4 .env hostname staleness (v2 → v3 migration)
+
+**Symptom:** `sam-trader` cannot connect to PostgreSQL, Redis, or IB Gateway; logs show connection refused to unknown hosts.
+
+**Root cause:** `.env` or `.env.example` still contains container names from `csam_trader_v2`.
+
+**Stale → Correct mappings:**
+
+| Stale (v2) | Correct (v3) | Service |
+|------------|--------------|---------|
+| `csam-postgres` | `sam-postgres` | PostgreSQL |
+| `redis` | `sam-redis` | Redis |
+| `ib-gateway` | `sam-ib-gateway` | IB Gateway |
+
+**Fix:** Audit `.env`, `.env.example`, and `src/sam_trader/config.py` defaults. Replace all occurrences with the `sam-` prefixed names.
+
+---
+
 ## See Also
 
 - `docs/reference/BUILD_PHASE_0.md` — Docker stack hardening reference
+- `docs/reference/BUILD_PHASE_3.md` — Futu execution adapter reference
+- `docs/reference/BUILD_PHASE_4.md` — Futu instrument provider & TradingNode integration
 - `docker/docker-compose.yml` — Full service definitions
 - `docker/Dockerfile.futu-opend` — Image build instructions
 - `AGENTS.md` — SAM Trader conventions and commands

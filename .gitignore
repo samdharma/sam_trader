@@ -30,6 +30,8 @@ env/
 # Secrets (never commit)
 .env
 docker/.env
+*.pem
+config/bundles.yaml
 
 # Parquet catalog (large binaries, local data)
 data/catalog/*

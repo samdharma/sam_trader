@@ -21,6 +21,9 @@ from nautilus_trader.common.providers import InstrumentProvider
 from nautilus_trader.core.uuid import UUID4
 from nautilus_trader.execution.messages import (
     CancelOrder,
+    GenerateFillReports,
+    GenerateOrderStatusReports,
+    GeneratePositionStatusReports,
     ModifyOrder,
     SubmitOrder,
     SubmitOrderList,
@@ -65,6 +68,8 @@ from sam_trader.adapters.futu.constants import (
 from sam_trader.adapters.futu.parsing.orders import (
     TradeDealHandler,
     TradeOrderHandler,
+    parse_futu_fill_to_report,
+    parse_futu_order_to_report,
     parse_futu_position_to_report,
 )
 
@@ -536,6 +541,172 @@ class FutuLiveExecutionClient(LiveExecutionClient):
             venue_order_id=venue_order_id,
             ts_event=self._clock.timestamp_ns(),
         )
+
+    # -----------------------------------------------------------------------
+    # Reconciliation reports (required by LiveExecutionClient)
+    # -----------------------------------------------------------------------
+
+    async def generate_order_status_reports(
+        self,
+        command: GenerateOrderStatusReports,
+    ) -> list[OrderStatusReport]:
+        """Query Futu for order status reports.
+
+        Uses ``history_order_list_query`` to retrieve recent orders and
+        maps each row to a :class:`OrderStatusReport`.
+
+        Parameters
+        ----------
+        command : GenerateOrderStatusReports
+            The reconciliation command (filters are best-effort).
+
+        Returns
+        -------
+        list[OrderStatusReport]
+
+        """
+        if self._trade_ctx is None:
+            return []
+
+        reports: list[OrderStatusReport] = []
+        trd_env = TrdEnv.SIMULATE if self._config.trd_env == "SIMULATE" else TrdEnv.REAL
+        acc_id = int(self._account_id.get_id()) if self._account_id.get_id() else 0
+
+        code = ""
+        if command.instrument_id is not None:
+            try:
+                code = instrument_id_to_futu_security(command.instrument_id)
+            except ValueError:
+                pass
+
+        try:
+            ret, data = self._trade_ctx.history_order_list_query(
+                code=code,
+                trd_env=trd_env,
+                acc_id=acc_id,
+            )
+            if ret != RET_OK or data is None or data.empty:
+                return reports
+
+            for _, row in data.iterrows():
+                try:
+                    order_dict = row.to_dict()
+                    report = parse_futu_order_to_report(order_dict, self._account_id)
+                    reports.append(report)
+                except Exception:
+                    continue
+        except Exception as e:
+            self._log.exception(f"Failed to generate order status reports: {e}", e)
+
+        return reports
+
+    async def generate_fill_reports(
+        self,
+        command: GenerateFillReports,
+    ) -> list[FillReport]:
+        """Query Futu for fill/deal reports.
+
+        Uses ``history_deal_list_query`` to retrieve recent fills and
+        maps each row to a :class:`FillReport`.
+
+        Parameters
+        ----------
+        command : GenerateFillReports
+            The reconciliation command.
+
+        Returns
+        -------
+        list[FillReport]
+
+        """
+        if self._trade_ctx is None:
+            return []
+
+        reports: list[FillReport] = []
+        trd_env = TrdEnv.SIMULATE if self._config.trd_env == "SIMULATE" else TrdEnv.REAL
+        acc_id = int(self._account_id.get_id()) if self._account_id.get_id() else 0
+
+        code = ""
+        if command.instrument_id is not None:
+            try:
+                code = instrument_id_to_futu_security(command.instrument_id)
+            except ValueError:
+                pass
+
+        try:
+            ret, data = self._trade_ctx.history_deal_list_query(
+                code=code,
+                trd_env=trd_env,
+                acc_id=acc_id,
+            )
+            if ret != RET_OK or data is None or data.empty:
+                return reports
+
+            for _, row in data.iterrows():
+                try:
+                    deal_dict = row.to_dict()
+                    report = parse_futu_fill_to_report(deal_dict, self._account_id)
+                    reports.append(report)
+                except Exception:
+                    continue
+        except Exception as e:
+            self._log.exception(f"Failed to generate fill reports: {e}", e)
+
+        return reports
+
+    async def generate_position_status_reports(
+        self,
+        command: GeneratePositionStatusReports,
+    ) -> list[PositionStatusReport]:
+        """Query Futu for position status reports.
+
+        Uses ``position_list_query`` to retrieve current positions and
+        maps each row to a :class:`PositionStatusReport`.
+
+        Parameters
+        ----------
+        command : GeneratePositionStatusReports
+            The reconciliation command.
+
+        Returns
+        -------
+        list[PositionStatusReport]
+
+        """
+        if self._trade_ctx is None:
+            return []
+
+        reports: list[PositionStatusReport] = []
+        trd_env = TrdEnv.SIMULATE if self._config.trd_env == "SIMULATE" else TrdEnv.REAL
+        acc_id = int(self._account_id.get_id()) if self._account_id.get_id() else 0
+
+        code = ""
+        if command.instrument_id is not None:
+            try:
+                code = instrument_id_to_futu_security(command.instrument_id)
+            except ValueError:
+                pass
+
+        try:
+            ret, data = self._trade_ctx.position_list_query(
+                code=code,
+                trd_env=trd_env,
+                acc_id=acc_id,
+            )
+            if ret != RET_OK or data is None or data.empty:
+                return reports
+
+            for _, row in data.iterrows():
+                try:
+                    pos_dict = row.to_dict()
+                    report = parse_futu_position_to_report(pos_dict, self._account_id)
+                    reports.append(report)
+                except Exception:
+                    continue
+        except Exception as e:
+            self._log.exception(f"Failed to generate position status reports: {e}", e)
+
+        return reports
 
     # -----------------------------------------------------------------------
     # Helpers

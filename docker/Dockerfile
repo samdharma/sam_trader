@@ -16,8 +16,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Create non-root user for runtime
 RUN groupadd -r sam && useradd -r -g sam -d /opt/sam_trader -s /bin/bash sam
 
-# Set working directory
+# Set working directory and ensure sam user can write to it
 WORKDIR /opt/sam_trader
+RUN chown sam:sam /opt/sam_trader
 
 # Copy source code and install package in editable mode
 COPY --chown=sam:sam src/ ./src/

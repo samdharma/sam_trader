@@ -17,5 +17,5 @@ fi
 # Warn if hostnames in .env do not match docker-compose service names.
 # This is non-blocking; it just prints warnings to stdout.
 if [[ -f "${PROJECT_DIR}/scripts/ralph/validate_env_hostnames.sh" ]]; then
-    bash "${PROJECT_DIR}/scripts/ralph/validate_env_hostnames.sh" || true
+    bash "${PROJECT_DIR}/scripts/ralph/validate_env_hostnames.sh" >&2 || true
 fi

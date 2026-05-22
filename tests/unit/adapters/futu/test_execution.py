@@ -508,6 +508,194 @@ class TestPositionReconciliation:
 
 
 # ---------------------------------------------------------------------------
+# Reconciliation report generation
+# ---------------------------------------------------------------------------
+
+
+class TestReconciliationReports:
+    """Tests for generate_order_status_reports, generate_fill_reports,
+    generate_position_status_reports.
+    """
+
+    def test_generate_order_status_reports(
+        self, event_loop, make_client, mock_trade_ctx
+    ):
+        mock_trade_ctx.history_order_list_query.return_value = (
+            RET_OK,
+            pd.DataFrame(
+                {
+                    "code": ["US.AAPL"],
+                    "order_id": ["12345"],
+                    "trd_side": ["BUY"],
+                    "order_type": ["NORMAL"],
+                    "order_status": ["SUBMITTED"],
+                    "qty": [100],
+                    "dealt_qty": [0],
+                    "price": [150.0],
+                    "create_time": ["2026-05-22 10:00:00"],
+                    "updated_time": ["2026-05-22 10:01:00"],
+                }
+            ),
+        )
+        client = make_client()
+        from nautilus_trader.execution.messages import GenerateOrderStatusReports
+
+        cmd = GenerateOrderStatusReports.from_dict(
+            {
+                "instrument_id": "AAPL.NASDAQ",
+                "venue_order_id": None,
+                "open_only": False,
+                "start": None,
+                "end": None,
+                "command_id": str(UUID4()),
+                "ts_init": 0,
+            }
+        )
+        reports = event_loop.run_until_complete(
+            client.generate_order_status_reports(cmd)
+        )
+
+        assert len(reports) == 1
+        assert reports[0].venue_order_id.value == "12345"
+        assert reports[0].instrument_id == InstrumentId.from_str("AAPL.NASDAQ")
+
+    def test_generate_order_status_reports_empty_on_failure(
+        self, event_loop, make_client, mock_trade_ctx
+    ):
+        mock_trade_ctx.history_order_list_query.return_value = (-1, "Error")
+        client = make_client()
+        from nautilus_trader.execution.messages import GenerateOrderStatusReports
+
+        cmd = GenerateOrderStatusReports.from_dict(
+            {
+                "instrument_id": None,
+                "venue_order_id": None,
+                "open_only": False,
+                "start": None,
+                "end": None,
+                "command_id": str(UUID4()),
+                "ts_init": 0,
+            }
+        )
+        reports = event_loop.run_until_complete(
+            client.generate_order_status_reports(cmd)
+        )
+
+        assert reports == []
+
+    def test_generate_fill_reports(self, event_loop, make_client, mock_trade_ctx):
+        mock_trade_ctx.history_deal_list_query.return_value = (
+            RET_OK,
+            pd.DataFrame(
+                {
+                    "code": ["US.AAPL"],
+                    "deal_id": ["D-001"],
+                    "order_id": ["12345"],
+                    "trd_side": ["BUY"],
+                    "qty": [50],
+                    "price": [150.5],
+                    "create_time": ["2026-05-22 10:00:00"],
+                }
+            ),
+        )
+        client = make_client()
+        from nautilus_trader.execution.messages import GenerateFillReports
+
+        cmd = GenerateFillReports.from_dict(
+            {
+                "instrument_id": "AAPL.NASDAQ",
+                "venue_order_id": None,
+                "start": None,
+                "end": None,
+                "command_id": str(UUID4()),
+                "ts_init": 0,
+            }
+        )
+        reports = event_loop.run_until_complete(client.generate_fill_reports(cmd))
+
+        assert len(reports) == 1
+        assert reports[0].trade_id.value == "D-001"
+        assert reports[0].instrument_id == InstrumentId.from_str("AAPL.NASDAQ")
+
+    def test_generate_fill_reports_empty_on_failure(
+        self, event_loop, make_client, mock_trade_ctx
+    ):
+        mock_trade_ctx.history_deal_list_query.return_value = (-1, "Error")
+        client = make_client()
+        from nautilus_trader.execution.messages import GenerateFillReports
+
+        cmd = GenerateFillReports.from_dict(
+            {
+                "instrument_id": None,
+                "venue_order_id": None,
+                "start": None,
+                "end": None,
+                "command_id": str(UUID4()),
+                "ts_init": 0,
+            }
+        )
+        reports = event_loop.run_until_complete(client.generate_fill_reports(cmd))
+
+        assert reports == []
+
+    def test_generate_position_status_reports(
+        self, event_loop, make_client, mock_trade_ctx
+    ):
+        mock_trade_ctx.position_list_query.return_value = (
+            RET_OK,
+            pd.DataFrame(
+                {
+                    "code": ["US.AAPL"],
+                    "qty": [100],
+                    "position_side": [0],  # LONG
+                    "cost_price": [150.0],
+                }
+            ),
+        )
+        client = make_client()
+        from nautilus_trader.execution.messages import GeneratePositionStatusReports
+
+        cmd = GeneratePositionStatusReports.from_dict(
+            {
+                "instrument_id": "AAPL.NASDAQ",
+                "start": None,
+                "end": None,
+                "command_id": str(UUID4()),
+                "ts_init": 0,
+            }
+        )
+        reports = event_loop.run_until_complete(
+            client.generate_position_status_reports(cmd)
+        )
+
+        assert len(reports) == 1
+        assert reports[0].instrument_id == InstrumentId.from_str("AAPL.NASDAQ")
+        assert str(reports[0].quantity) == "100"
+
+    def test_generate_position_status_reports_empty_on_failure(
+        self, event_loop, make_client, mock_trade_ctx
+    ):
+        mock_trade_ctx.position_list_query.return_value = (-1, "Error")
+        client = make_client()
+        from nautilus_trader.execution.messages import GeneratePositionStatusReports
+
+        cmd = GeneratePositionStatusReports.from_dict(
+            {
+                "instrument_id": None,
+                "start": None,
+                "end": None,
+                "command_id": str(UUID4()),
+                "ts_init": 0,
+            }
+        )
+        reports = event_loop.run_until_complete(
+            client.generate_position_status_reports(cmd)
+        )
+
+        assert reports == []
+
+
+# ---------------------------------------------------------------------------
 # Push loop
 # ---------------------------------------------------------------------------
 
