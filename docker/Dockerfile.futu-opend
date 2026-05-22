@@ -1,17 +1,21 @@
 # Futu OpenD — locally built from official Futubull download
 # The Futu OpenD binary is x86_64 only; on Apple Silicon use platform: linux/amd64
 # in docker-compose so Docker Desktop runs it via Rosetta 2 emulation.
+# Base OS + deps compressed: ~50MB. Total image ~441MB compressed
+# (Futu OpenD binary download is ~405MB and dominates image size).
 
-FROM ubuntu:22.04
+FROM debian:stable-slim
 
 ARG FUTU_OPEND_VER=10.5.6508
 ARG FUTU_DOWNLOAD_URL=https://softwaredownload.futunn.com/Futu_OpenD_${FUTU_OPEND_VER}_Ubuntu18.04.tar.gz
 
-# Install dependencies
+# Install dependencies: ca-certificates, curl, libssl3, tini, procps
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
     ca-certificates \
+    curl \
     libssl3 \
+    tini \
+    procps \
     && rm -rf /var/lib/apt/lists/*
 
 # Download and extract Futu OpenD
@@ -37,7 +41,7 @@ COPY docker/futu-opend/FutuOpenD.xml /bin/FutuOpenD.xml
 # /home/futu/.com.futunn.FutuOpenD is FutuOpenD's runtime state dir
 RUN groupadd -r futu && useradd -r -g futu -m -d /home/futu futu && \
     mkdir -p /.futu /home/futu/.com.futunn.FutuOpenD && \
-    chown -R futu:futu /.futu /bin/start.sh /bin/FutuOpenD.xml /bin/futu-opend /home/futu
+    chown -R futu:futu /.futu /bin/start.sh /bin/FutuOpenD.xml /home/futu
 
 ENV FUTU_ACCOUNT_ID=
 ENV FUTU_ACCOUNT_PWD=
@@ -49,7 +53,9 @@ ENV FUTU_OPEND_TELNET_PORT=22222
 
 USER futu
 
-HEALTHCHECK --interval=30s --timeout=600s --start-period=180s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD pgrep FutuOpenD || exit 1
+
+ENTRYPOINT ["/usr/bin/tini", "--"]
 
 CMD ["/bin/start.sh"]
