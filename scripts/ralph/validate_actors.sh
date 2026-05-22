@@ -8,11 +8,11 @@
 set -euo pipefail
 
 COMPOSE="docker compose -f docker/docker-compose.yml"
-POSTGRES_SERVICE="csam-postgres"
-NAUTILUS_SERVICE="csam-nautilus"
+POSTGRES_SERVICE="sam-postgres"
+NAUTILUS_SERVICE="sam-trader"
 
 echo "========================================"
-echo "[CSAM] Phase 2 Actor Validation"
+echo "[SAM] Phase 2 Actor Validation"
 echo "========================================"
 echo
 
@@ -76,5 +76,5 @@ echo "OK: positions table exists (rows: $POS_COUNT)"
 echo
 
 echo "========================================"
-echo "[CSAM] Phase 2 Actor Validation Complete"
+echo "[SAM] Phase 2 Actor Validation Complete"
 echo "========================================"

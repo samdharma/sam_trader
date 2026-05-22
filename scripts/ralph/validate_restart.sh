@@ -27,9 +27,9 @@ cd "${PROJECT_DIR}"
 
 COMPOSE="docker compose -f docker/docker-compose.yml"
 COMPOSE_CMD="docker compose"
-NAUTILUS_SERVICE="csam-nautilus"
-POSTGRES_SERVICE="csam-postgres"
-REDIS_SERVICE="csam-redis"
+NAUTILUS_SERVICE="sam-trader"
+POSTGRES_SERVICE="sam-postgres"
+REDIS_SERVICE="sam-redis"
 RESTART_SCRIPT="scripts/restart.sh"
 
 PASS=0
@@ -58,7 +58,7 @@ if ! docker info &>/dev/null; then
 fi
 
 echo "========================================="
-echo "[CSAM] Phase 4 Restart Smoke Test"
+echo "[SAM] Phase 4 Restart Smoke Test"
 echo "========================================="
 echo ""
 
@@ -309,7 +309,7 @@ fi
 
 echo ""
 echo "========================================="
-echo "[CSAM] Phase 4 Restart Smoke Test Results"
+echo "[SAM] Phase 4 Restart Smoke Test Results"
 echo "========================================="
 echo "  Passed: ${PASS}"
 echo "  Failed: ${FAIL}"
