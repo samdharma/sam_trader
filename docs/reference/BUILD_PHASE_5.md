@@ -72,8 +72,9 @@ from nautilus_trader.adapters.interactive_brokers.providers import InteractiveBr
 |--------|-------|-------|------------|
 | `sam-p5-ib-port` | Port IBKR adapter from v2 | Config, factories, instrument provider wiring in `main.py` | ⚠️ **LARGE** — ports 3 major components |
 | `sam-p5-ib-gateway` | IB Gateway Docker service | `docker-compose.yml` service definition | ✅ Small |
-| `sam-p5-ib-enhance` | Enhance IB adapter for v3 | Multi-venue config, venue aliasing | ✅ Medium |
-| `sam-p5-exit-ib` | Exit: dual-venue TradingNode | Integration test: Futu + IB simultaneously | ✅ Medium |
+| `sam_trader-9z3.6.3` | Enhance IB adapter for v3 | Multi-venue config, venue aliasing, **SMART routing default** | ✅ Medium |
+| `sam_trader-9z3.6.8` | Pre-flight IB account permission check | Query IB trading permissions, disable strategies if shorts blocked | ✅ Medium |
+| `sam_trader-9z3.6.4` | [EXIT] P5: Dual-venue TradingNode | Integration test: Futu + IB simultaneously | ✅ Medium |
 
 ### 4.1 Decomposition: `sam-p5-ib-port`
 
@@ -95,6 +96,46 @@ This ticket is **too large** (config + factories + instrument provider + wiring)
 2. **Subscription isolation:** Futu subscription manager tracks only Futu subs. IB subs managed internally by Nautilus IB adapter.
 3. **Bundle venue field:** Each bundle declares `venue: FUTU` or `venue: IB`. Loader routes to correct factory.
 4. **No cross-venue order routing:** An order for `AAPL.NASDAQ` (Futu) must never be routed to IB gateway.
+
+---
+
+## 6.3 SMART Routing Default (Gap Remediation)
+
+> **v2 Post-Mortem (21-May):** 52 IB code 10311 warnings — "directly routed to NASDAQ" — caused higher per-trade fees.
+
+**Fix:** Default IB order routing to `SMART` when `venue: IB` and no explicit `exchange` override in bundle.
+
+```yaml
+# bundles.yaml — IB bundle with SMART default
+- id: "nvda-momentum-5m-ib"
+  venue: IB
+  strategy:
+    path: sam_trader.strategies.momentum:MomentumStrategy
+    config:
+      instrument_id: "NVDA.NASDAQ"
+      # exchange omitted → defaults to SMART
+  bracket:
+    stop_loss_ticks: 15
+```
+
+**Explicit opt-in for direct routing:**
+```yaml
+  strategy:
+    config:
+      exchange: "NASDAQ"  # opt-in; logs WARNING
+```
+
+**Implementation:** Update IB exec client order submission to inject `exchange="SMART"` into Nautilus `Order` when bundle omits `exchange`.
+
+---
+
+## 6.4 Pre-Flight Account Permission Check (Gap Remediation)
+
+> **v2 Post-Mortem (21-May):** 189 short order rejections because paper account lacked short-selling permissions. No pre-flight check.
+
+**Fix:** On IB exec client connect, query account trading permissions. If short-selling is disabled and an active bundle requires it, emit CRITICAL log and disable the strategy.
+
+**Beads ticket:** `sam_trader-9z3.6.8`
 
 ---
 

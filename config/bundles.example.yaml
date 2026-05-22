@@ -61,9 +61,31 @@ bundles:
         session_start: "09:30:00"
         session_end: "16:00:00"
         trade_size: 50
+        entry_order_type: "LIMIT"       # MARKET | LIMIT | STOP_MARKET
+        allowed_directions: ["LONG"]    # Fallback to long-only if shorts blocked
     bracket:
       stop_loss_ticks: 15
       take_profit_ticks: 45
     risk:
       max_position: 200
       max_daily_loss: 500
+
+  # IB bundle with explicit SMART routing (default) and exchange override example
+  - id: "aapl-orb-15m-ib"
+    enabled: false
+    venue: IB
+    strategy:
+      path: sam_trader.strategies.orb:OrbStrategy
+      config:
+        instrument_id: "AAPL.NASDAQ"
+        bar_type: "AAPL.NASDAQ-15-MINUTE-LAST-INTERNAL"
+        first_candle_minutes: 15
+        trade_size: 10
+        entry_order_type: "LIMIT"
+    bracket:
+      stop_loss_ticks: 10
+      take_profit_ticks: 30
+    risk:
+      max_position: 100
+      max_daily_loss: 250
+    # exchange: "NASDAQ"  # Optional: default is SMART; uncomment for direct routing

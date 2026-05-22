@@ -99,11 +99,11 @@ class SafetyController:
 
 | Ticket | Title | Scope | Assessment |
 |--------|-------|-------|------------|
-| `sam-p10-safety` | Safety controls | Kill switch + circuit breakers + emergency halt | ✅ Medium |
-| `sam-p10-db` | Dashboard database | Portfolio snapshots, scan history tables | ✅ Small |
-| `sam-p10-api` | FastAPI backend | Health, positions, fills, scans, alerts endpoints | ✅ Medium |
-| `sam-p10-dashboard` | Static HTML dashboard | Single-page auto-refreshing UI | ✅ Medium |
-| `sam-p10-verify` | Verify safety + dashboard | Integration test: kill switch, circuit breaker, dashboard data | ✅ Medium |
+| `sam_trader-9z3.11.1` | Safety controls | Kill switch + circuit breakers + emergency halt + **Phase 6 actor integration** | ✅ Medium |
+| `sam_trader-9z3.11.2` | Dashboard database | Portfolio snapshots, scan history tables | ✅ Small |
+| `sam_trader-9z3.11.3` | FastAPI backend | Health, positions, fills, scans, alerts endpoints | ✅ Medium |
+| `sam_trader-9z3.11.4` | Static HTML dashboard | Single-page auto-refreshing UI | ✅ Medium |
+| `sam_trader-9z3.11.5` | [EXIT] Verify safety + dashboard | Integration test: kill switch, circuit breaker, dashboard data | ✅ Medium |
 
 **No decomposition needed for Phase 10.** All tickets are well-scoped.
 
@@ -141,4 +141,25 @@ class SafetyController:
 
 ---
 
-*Last updated: 2026-05-21*
+## 5. Integration with Phase 6 Actors (Gap Remediation)
+
+> **v2 Post-Mortem (21-May):** 189 rejections with no self-halt; max_daily_loss triggered 9× with ambiguous unrealized P&L behavior.
+
+**Circuit breaker trigger sources expanded from 3 to 5:**
+
+1. `DAILY_PNL` (existing)
+2. `MARGIN_LIMIT` (existing)
+3. `CONNECTIVITY_LOSS` (existing)
+4. **`REJECTION_STREAK`** (new) — triggered by `StrategyHaltRequest` from RejectionMonitorActor (`sam_trader-9z3.7.7`)
+5. **`REALIZED_LOSS_LIMIT`** (new) — uses `RealizedPnLTrackerActor.get_realized_pnl()` (`sam_trader-9z3.7.8`)
+
+**Key design points:**
+- `REALIZED_LOSS_LIMIT` uses **purely realized** P&L, eliminating the v2 ambiguity where unrealized gains offset daily-loss calculations.
+- `REJECTION_STREAK` auto-resets when RejectionMonitorActor cooldown expires.
+- Defensive checks: if Phase 6 actors are not running, skip those trigger sources (no hard dependency).
+
+**Beads ticket:** `sam_trader-9z3.11.1`
+
+---
+
+*Last updated: 2026-05-22*

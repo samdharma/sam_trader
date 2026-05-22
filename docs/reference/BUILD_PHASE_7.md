@@ -119,12 +119,12 @@ def load_bundles(path: str) -> list[ImportableStrategyConfig]:
 
 | Ticket | Title | Scope | Assessment |
 |--------|-------|-------|------------|
-| `sam-p7-loader` | BundleLoader | Multi-venue YAML → `ImportableStrategyConfig` | ✅ Medium |
-| `sam-p7-orb` | OrbStrategy | Port from v2, venue-aware | ✅ Medium |
-| `sam-p7-momentum` | MomentumStrategy | Port from v2, venue-aware | ✅ Medium |
-| `sam-p7-template` | Strategy template | `_template.py` copy-paste starter | ✅ Small |
-| `sam-p7-bundle-validate` | Bundle validation | Schema + backtest gate | ✅ Medium |
-| `sam-p7-verify` | Exit: strategy lifecycle | Integration test: full strategy → order → fill | ✅ Medium |
+| `sam_trader-9z3.8.1` | BundleLoader | Multi-venue YAML → `ImportableStrategyConfig` | ✅ Medium |
+| `sam_trader-9z3.8.2` | OrbStrategy | Port from v2, venue-aware, **configurable entry order type** | ✅ Medium |
+| `sam_trader-9z3.8.3` | MomentumStrategy | Port from v2, venue-aware, **direction filter + entry order type** | ✅ Medium |
+| `sam_trader-9z3.8.4` | Strategy template | `_template.py` copy-paste starter | ✅ Small |
+| `sam_trader-9z3.8.5` | Bundle validation | Schema + backtest gate | ✅ Medium |
+| `sam_trader-9z3.8.6` | [EXIT] Verify strategy lifecycle | Integration test: full strategy → order → fill | ✅ Medium |
 
 **No decomposition needed for Phase 7.** All tickets are within healthy step budgets.
 
@@ -193,4 +193,42 @@ def make_bracket_ib(order_factory, **kwargs):
 
 ---
 
-*Last updated: 2026-05-21*
+## 7. Configurable Entry Order Type (Gap Remediation)
+
+> **v2 Post-Mortem (21-May):** MARKET entries caused slippage. No LIMIT entry option existed.
+
+**Added to `OrbConfig` and `MomentumConfig`:**
+```python
+entry_order_type: Literal["MARKET", "LIMIT", "STOP_MARKET"] = "MARKET"
+```
+
+**Behavior:**
+- `"MARKET"` (default) — identical to v2
+- `"LIMIT"` — submit `LimitOrder` at breakout level ± 1 tick
+- `"STOP_MARKET"` — submit `StopMarketOrder` at breakout level
+
+**Beads tickets:** `sam_trader-9z3.8.2` (Orb), `sam_trader-9z3.8.3` (Momentum)
+
+---
+
+## 8. Direction Filter for MomentumStrategy (Gap Remediation)
+
+> **v2 Post-Mortem (21-May):** 189 short rejections because paper account blocked shorts. No long-only fallback.
+
+**Added to `MomentumConfig`:**
+```python
+allowed_directions: list[str] = ["LONG", "SHORT"]
+```
+
+**Behavior:**
+- `["LONG", "SHORT"]` (default) — both directions trade
+- `["LONG"]` — short signals skipped, long signals execute
+- `["SHORT"]` — long signals skipped, short signals execute
+
+This enables immediate fallback to long-only without code changes.
+
+**Beads ticket:** `sam_trader-9z3.8.3`
+
+---
+
+*Last updated: 2026-05-22*

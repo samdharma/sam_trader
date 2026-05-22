@@ -116,16 +116,61 @@ cache_config = CacheConfig(
 
 ---
 
+## 2.3 RejectionMonitorActor (Gap Remediation)
+
+> **v2 Post-Mortem (21-May):** 189 rejections over 9 hours with no self-halt. NVDA Momentum kept submitting rejected orders.
+
+**Purpose:** Subscribe to `OrderRejected` events. Track consecutive rejections per `(instrument_id, strategy_id, reason)`. Emit `StrategyHaltRequest` after threshold (default 3 identical rejections). Cooldown retry after 15 minutes.
+
+```python
+class RejectionMonitorActor(Actor):
+    def on_start(self) -> None:
+        self.subscribe_event(OrderRejected, handler=self.on_order_rejected)
+
+    def on_order_rejected(self, event: OrderRejected) -> None:
+        key = (event.instrument_id, event.strategy_id, event.reason)
+        self._counters[key] += 1
+        if self._counters[key] >= self.config.max_consecutive:
+            self.msgbus.publish(
+                "StrategyHaltRequest",
+                StrategyHaltRequest(key, count=self._counters[key]),
+            )
+```
+
+**Beads ticket:** `sam_trader-9z3.7.7`
+
+---
+
+## 2.4 RealizedPnLTrackerActor (Gap Remediation)
+
+> **v2 Post-Mortem (21-May):** `max_daily_loss` triggered 9× with ambiguous behavior because unrealized P&L was partially offsetting realized losses.
+
+**Purpose:** Listen to `OrderFilled` events, compute **realized** P&L per strategy using FIFO matching, persist to Redis. Resets at 00:00 UTC. Does NOT track unrealized P&L.
+
+**Key method:**
+```python
+def get_realized_pnl(strategy_id: str) -> Decimal:
+    """Return realized P&L for strategy today."""
+```
+
+**Redis key:** `sam:pnl:{strategy_id}:{date}`
+
+**Beads ticket:** `sam_trader-9z3.7.8`
+
+---
+
 ## 5. Ticket Breakdown
 
 | Ticket | Title | Scope | Assessment |
 |--------|-------|-------|------------|
-| `sam-p6-pg-schema` | PostgreSQL schema | Add venue columns to fills | ✅ Small |
-| `sam-p6-journal` | TradeJournalActor | Port from v2, multi-venue fills | ✅ Medium |
-| `sam-p6-health` | HealthMonitorActor | Port from v2, heartbeat | ✅ Small |
-| `sam-p6-bar-resub` | BarResubscriptionActor | Port from v2, re-subscribe logic | ✅ Small |
-| `sam-p6-state` | Redis state wiring | `CacheConfig` in `main.py` | ✅ Small |
-| `sam-p6-verify` | Verify actors | Integration test: fill → PG, state → Redis | ✅ Medium |
+| `sam_trader-9z3.7.1` | PostgreSQL schema | Add venue columns to fills | ✅ Small |
+| `sam_trader-9z3.7.2` | TradeJournalActor | Port from v2, multi-venue fills | ✅ Medium |
+| `sam_trader-9z3.7.3` | HealthMonitorActor | Port from v2, heartbeat | ✅ Small |
+| `sam_trader-9z3.7.4` | BarResubscriptionActor | Port from v2, re-subscribe logic | ✅ Small |
+| `sam_trader-9z3.7.5` | Redis state wiring | `CacheConfig` in `main.py` | ✅ Small |
+| `sam_trader-9z3.7.7` | RejectionMonitorActor | Per-instrument rejection circuit breaker | ✅ Medium |
+| `sam_trader-9z3.7.8` | RealizedPnLTrackerActor | Per-strategy realized P&L to Redis | ✅ Medium |
+| `sam_trader-9z3.7.6` | [EXIT] Verify actors | Integration test: fill → PG, state → Redis | ✅ Medium |
 
 **No decomposition needed for Phase 6.** All tickets are well-scoped.
 

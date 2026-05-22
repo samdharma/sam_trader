@@ -23,6 +23,9 @@ All new features are **opt-in** (disabled by default). Existing bundles continue
 class OrbConfig(StrategyConfig, frozen=True):
     # ... existing fields ...
 
+    # Entry order type (gap remediation: v2 post-mortem 21-May)
+    entry_order_type: str = "MARKET"               # "MARKET" | "LIMIT" | "STOP_MARKET"
+
     # Volume confirmation
     volume_ma_period: PositiveInt = 20
     volume_breakout_multiple: float = 0.0          # 0 = disabled
