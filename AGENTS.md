@@ -1,8 +1,8 @@
 # AGENTS.md — SAM Trader V3
 
 > **SAM Trader V3** — Production-grade autonomous trading platform on NautilusTrader.
-> Architecture and roadmap: `docs/reference/SAM_TRADER_V3_PLAN.md` — read this first.
-> Ticket plan and hierarchy: `docs/agent/TICKET_PLAN_V3.md`
+> Architecture & roadmap: `docs/reference/SAM_TRADER_V3_PLAN.md` (read first).  
+> Ticket hierarchy: `docs/agent/TICKET_PLAN_V3.md`
 
 ## Project Overview
 
@@ -31,7 +31,7 @@ This eliminates redundant research and saves ~20-30 steps per iteration.
 
 | Phase | Doc | Status |
 |-------|-----|--------|
-| Phase 2 | `BUILD_PHASE_2.md` | — (market data patterns in existing code) |
+| Phase 2 | `BUILD_PHASE_2.md` | In code only |
 | Phase 3 | `BUILD_PHASE_3.md` | ✅ Complete |
 | Phase 4 | `BUILD_PHASE_4.md` | ✅ Complete |
 | Phase 5 | `BUILD_PHASE_5.md` | ✅ Complete |
@@ -46,7 +46,7 @@ The Ralph loop auto-detects the ticket's phase label and injects the correspondi
 
 ## Key Decisions (see plan §2 for full rationale)
 
-- NautilusTrader v1.227.0 as sole engine. Standard components only. No custom implementations.
+- NautilusTrader v1.227.0 as sole engine. Standard components only — no custom `DataEngine`, `LiveExecEngine`, etc.
 - futu-api SDK for Futu protocol (not nautilus-futu Rust adapter).
 - Futu OpenD in separate Docker container (official image). IB Gateway in separate container (optional).
 - Parquet for historical data. PostgreSQL for relational data only. Redis for Nautilus cache persistence.
@@ -78,33 +78,32 @@ All containers use a standardized **3-layer health check** (see `docker/HEALTHCH
 
 ### Hierarchy
 ```
-EPIC (type: epic, labels: epic, meta-grouping)
+EPIC (type: epic, labels: epic, meta-grouping, optional: <phase-tag>)
 └── FEATURE (type: feature, labels: <phase-tag>, meta-grouping)
-    ├── CHILD tickets (type: task|bug|test|docs, labels: <phase-tag> ONLY)
-    │   - One and only one label
+    ├── WORK tickets (type: task|bug|test|docs, labels: <phase-tag> ONLY)
+    │   - Use `bug` for regressions/defects; `task` for new work
     │   - Must have description with acceptance criteria
     │   - Must reference spec file or build phase doc
     │   - Dependencies set explicitly via `bd dep add`
     └── EXIT ticket (type: task, labels: exit, <phase-tag>)
-        - Last ticket before feature is considered complete
-        - Blocks the NEXT phase's first child ticket(s)
+        - Last ticket before feature is complete
+        - Blocks the NEXT phase's first work ticket(s)
 ```
 
 ### Label Rules
 | Ticket Type | Allowed Labels |
 |-------------|----------------|
-| EPIC | `epic`, `meta-grouping` + optionally phase tags |
+| EPIC | `epic`, `meta-grouping`, optional `<phase-tag>` |
 | FEATURE | `<phase-tag>`, `meta-grouping` |
-| CHILD (task, bug, test, docs) | `<phase-tag>` **only** |
+| WORK (task, bug, test, docs) | `<phase-tag>` **only** |
 | EXIT | `exit`, `<phase-tag>` |
 
 ### Dependency Rules
-1. **FEATURE parents are pure containers** — they MUST NOT carry blocking dependencies.
-2. **Phase gating** is enforced by making a phase's **first child ticket(s)** depend on the **previous phase's EXIT ticket**.
-3. **Exit tickets** depend only on their own phase's child tickets (the work that must complete before validation).
-4. **Never** block a FEATURE parent from a previous phase's exit — this transitively blocks all children.
-5. **Never** add a second label to a child work ticket.
-6. **Phase labels** use the format `phase-<N>` (e.g., `phase-0`, `phase-5`). Non-numeric suffixes break Ralph's build-doc lookup.
+1. **FEATURE parents are pure containers** — they MUST NOT carry blocking dependencies (including on previous phase EXIT tickets).
+2. **Phase gating** — a phase's first work ticket(s) depend on the previous phase's EXIT ticket.
+3. **EXIT tickets** depend only on their own phase's work tickets.
+4. **Work tickets** MUST have exactly one label (`<phase-tag>`).
+5. **Phase labels** use `phase-<N>`. Non-numeric suffixes break Ralph's build-doc lookup.
 
 <!-- BEGIN RALPH LOOP INTEGRATION v:1 -->
 ## Ralph Wiggum Loop System
@@ -114,14 +113,11 @@ This project uses the **Ralph Wiggum Loop System** for agentic development.
 ### Quick Reference
 
 ```bash
-# Start the Ralph loop (background)
+# Background daemon wrapper
 bash scripts/ralph/run_ralph_loop.sh
 
-# Run a single ticket
-bash scripts/ralph/ralph_loop.sh --ticket=<id>
-
-# Run with a specific agent
-bash scripts/ralph/ralph_loop.sh --agent=kimi
+# Direct harness (single-shot)
+bash scripts/ralph/ralph_loop.sh --ticket=<id> --agent=kimi
 
 # Validate current work
 bash scripts/ralph/ralph_validate.sh --tier=targeted
@@ -129,6 +125,8 @@ bash scripts/ralph/ralph_validate.sh --tier=targeted
 # Check loop health
 bash scripts/ralph/ralph_health.sh --verbose
 ```
+
+**Preflight guardrails:** `config/ralph_preflight.sh` gates ticket selection. It must output exactly `READY` to stdout; anything else skips the ticket.
 <!-- END RALPH LOOP INTEGRATION -->
 
 <!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:7510c1e2 -->
@@ -148,8 +146,9 @@ bd close <id>         # Complete work
 ### Rules
 
 - Use `bd` for ALL task tracking — do NOT use TodoWrite, TaskCreate, or markdown TODO lists
-- Run `bd prime` for detailed command reference and session close protocol
-- Use `bd remember` for persistent knowledge — do NOT use MEMORY.md files
+- Run `bd prime` for command reference
+- Use `bd remember <key>` for persistent notes (e.g., `bd remember ralph_checkpoint`)
+- Do NOT use MEMORY.md files
 
 **Architecture in one line:** issues live in a local Dolt DB; sync uses `refs/dolt/data` on your git remote; `.beads/issues.jsonl` is a passive export. See https://github.com/gastownhall/beads/blob/main/docs/SYNC_CONCEPTS.md for details and anti-patterns.
 
@@ -176,7 +175,7 @@ bd close <id>         # Complete work
    ```
 6. **Clean up** - Clear stashes, prune remote branches
 7. **Verify** - All changes committed AND pushed, `git status` clean
-8. **Hand off** - Provide context for next session
+8. **Hand off** - Add context to the ticket or `bd remember` for the next session
 
 **CRITICAL RULES:**
 - Work is NOT complete until `git push` succeeds

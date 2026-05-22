@@ -134,7 +134,12 @@ def build_trading_node() -> TradingNode:
             )
             from nautilus_trader.adapters.interactive_brokers.factories import (
                 InteractiveBrokersLiveDataClientFactory,
-                InteractiveBrokersLiveExecClientFactory,
+            )
+            from sam_trader.adapters.ib.factories import (
+                SamInteractiveBrokersLiveExecClientFactory,
+            )
+            from sam_trader.adapters.ib.permissions import (
+                set_bundle_permission_requirements,
             )
 
             instrument_provider = InteractiveBrokersInstrumentProviderConfig(
@@ -170,7 +175,7 @@ def build_trading_node() -> TradingNode:
 
             ib_data_factory = InteractiveBrokersLiveDataClientFactory
             ib_exec_factory = (
-                InteractiveBrokersLiveExecClientFactory
+                SamInteractiveBrokersLiveExecClientFactory
                 if not cfg.ib_read_only_api
                 else None
             )
@@ -195,6 +200,9 @@ def build_trading_node() -> TradingNode:
             cfg.bundles_path,
             exc,
         )
+
+    if cfg.ib_enabled and ib_exec_factory is not None:
+        set_bundle_permission_requirements(strategies)
 
     # Build CacheConfig with Redis database for state persistence.
     # Only wire Redis when state persistence is enabled to avoid unnecessary
