@@ -268,3 +268,12 @@
 - **Files Changed**: `docker/HEALTHCHECK_PATTERN.md` (new), `docker/docker-compose.yml`, `AGENTS.md`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; no Python changes, gate passed)
 - **Blockers / Notes**: None. Ready for next phase-0 ticket.
+
+## Iteration 44
+- **Task**: Backup/restore system via sam-services
+- **Task ID**: sam_trader-9z3.1.18
+- **Status**: COMPLETE
+- **Decisions**: Created `src/sam_trader/services/backup.py` with full backup/restore logic: PostgreSQL dump via pg_dump, Redis BGSAVE + RDB copy, Futu OpenD volume backup via `docker run --volumes-from`, config directory tar.gz. Skips weekends and US/HK trading holidays (hardcoded 2024-2026 + optional `holidays` package). 30-day retention via `BACKUP_RETENTION_DAYS`. Restore validates archive integrity (manifest + component checks) before restoring. Created `src/sam_trader/services/crontab` for HKT 06:00 weekday schedule. Updated `docker/Dockerfile.services` with postgresql-client, redis-tools, Docker CLI static binary, cron setup, and env_cron generation. Updated `docker/docker-compose.yml` with backups bind mount and backup env vars. Added `holidays` to `pyproject.toml`. 18 unit tests covering holiday skip, archive creation/validation, retention cleanup, restore flow.
+- **Files Changed**: `src/sam_trader/services/__init__.py` (new), `src/sam_trader/services/backup.py` (new), `src/sam_trader/services/crontab` (new), `docker/Dockerfile.services`, `docker/docker-compose.yml`, `pyproject.toml`, `tests/unit/services/__init__.py` (new), `tests/unit/services/test_backup.py` (new)
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 18/18 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for next phase-0 ticket (sam_trader-9z3.1.20: Exit gate hardened stack).
