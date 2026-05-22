@@ -151,8 +151,8 @@ class TestSubmitOrder:
         assert call_kwargs["code"] == "US.AAPL"
         assert call_kwargs["price"] == 150.5
         assert call_kwargs["qty"] == "100"
-        assert call_kwargs["trd_side"] == 1  # BUY
-        assert call_kwargs["order_type"] == 1  # LIMIT
+        assert call_kwargs["trd_side"] == "BUY"
+        assert call_kwargs["order_type"] == "NORMAL"
         assert call_kwargs["time_in_force"] == "DAY"
         assert call_kwargs["trd_env"] == "SIMULATE"
 
@@ -166,7 +166,7 @@ class TestSubmitOrder:
 
         call_kwargs = mock_trade_ctx.place_order.call_args.kwargs
         assert call_kwargs["price"] == 0.0
-        assert call_kwargs["order_type"] == 2  # MARKET
+        assert call_kwargs["order_type"] == "MARKET"
 
     def test_submit_sell_order(self, event_loop, make_client, mock_trade_ctx):
         """A SELL order maps to the correct trd_side."""
@@ -177,7 +177,7 @@ class TestSubmitOrder:
         event_loop.run_until_complete(client._submit_order(cmd))
 
         call_kwargs = mock_trade_ctx.place_order.call_args.kwargs
-        assert call_kwargs["trd_side"] == 2  # SELL
+        assert call_kwargs["trd_side"] == "SELL"
 
     def test_submit_order_generates_events(self, event_loop, make_client):
         """Successful submission generates Submitted and Accepted events."""

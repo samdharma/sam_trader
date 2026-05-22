@@ -168,14 +168,10 @@ class TestOrderTypeMapping:
         )
 
     def test_nautilus_limit_to_futu(self) -> None:
-        assert (
-            c.nautilus_order_type_to_futu(OrderType.LIMIT) == c.FUTU_ORDER_TYPE_NORMAL
-        )
+        assert c.nautilus_order_type_to_futu(OrderType.LIMIT) == "NORMAL"
 
     def test_nautilus_market_to_futu(self) -> None:
-        assert (
-            c.nautilus_order_type_to_futu(OrderType.MARKET) == c.FUTU_ORDER_TYPE_MARKET
-        )
+        assert c.nautilus_order_type_to_futu(OrderType.MARKET) == "MARKET"
 
     def test_unsupported_futu_raises(self) -> None:
         with pytest.raises(ValueError):
@@ -202,10 +198,10 @@ class TestDirectionMapping:
         assert c.futu_trd_side_to_nautilus(c.FUTU_TRD_SIDE_SELL_SHORT) == OrderSide.SELL
 
     def test_nautilus_buy_to_futu(self) -> None:
-        assert c.nautilus_order_side_to_futu(OrderSide.BUY) == c.FUTU_TRD_SIDE_BUY
+        assert c.nautilus_order_side_to_futu(OrderSide.BUY) == "BUY"
 
     def test_nautilus_sell_to_futu(self) -> None:
-        assert c.nautilus_order_side_to_futu(OrderSide.SELL) == c.FUTU_TRD_SIDE_SELL
+        assert c.nautilus_order_side_to_futu(OrderSide.SELL) == "SELL"
 
     def test_invalid_trd_side_raises(self) -> None:
         with pytest.raises(ValueError):

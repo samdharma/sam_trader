@@ -140,8 +140,8 @@ class TestLimitOrderLifecycle:
         assert call_kwargs["code"] == "US.AAPL"
         assert call_kwargs["price"] == 150.5
         assert call_kwargs["qty"] == "100"
-        assert call_kwargs["trd_side"] == 1  # BUY
-        assert call_kwargs["order_type"] == 1  # LIMIT
+        assert call_kwargs["trd_side"] == "BUY"
+        assert call_kwargs["order_type"] == "NORMAL"
         assert call_kwargs["time_in_force"] == "DAY"
         assert call_kwargs["trd_env"] == "SIMULATE"
 
@@ -309,7 +309,7 @@ class TestLimitOrderLifecycle:
         place_kwargs = mock_trade_ctx.place_order.call_args.kwargs
         assert place_kwargs["code"] == "US.AAPL"
         assert place_kwargs["trd_env"] == "SIMULATE"
-        assert place_kwargs["order_type"] == 1  # LIMIT
+        assert place_kwargs["order_type"] == "NORMAL"
 
         # --- 3. Simulate fill push ---
         fill_reports = []

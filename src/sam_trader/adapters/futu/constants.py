@@ -153,15 +153,15 @@ FUTU_ORDER_TYPE_TO_NAUTILUS: dict[int, OrderType] = {
     FUTU_ORDER_TYPE_TRAILING_STOP_LIMIT: OrderType.TRAILING_STOP_LIMIT,
 }
 
-NAUTILUS_ORDER_TYPE_TO_FUTU: dict[OrderType, int] = {
-    OrderType.LIMIT: FUTU_ORDER_TYPE_NORMAL,
-    OrderType.MARKET: FUTU_ORDER_TYPE_MARKET,
-    OrderType.STOP_LIMIT: FUTU_ORDER_TYPE_STOP_LIMIT,
-    OrderType.STOP_MARKET: FUTU_ORDER_TYPE_STOP,
-    OrderType.MARKET_IF_TOUCHED: FUTU_ORDER_TYPE_MARKET_IF_TOUCHED,
-    OrderType.LIMIT_IF_TOUCHED: FUTU_ORDER_TYPE_LIMIT_IF_TOUCHED,
-    OrderType.TRAILING_STOP_MARKET: FUTU_ORDER_TYPE_TRAILING_STOP,
-    OrderType.TRAILING_STOP_LIMIT: FUTU_ORDER_TYPE_TRAILING_STOP_LIMIT,
+NAUTILUS_ORDER_TYPE_TO_FUTU: dict[OrderType, str] = {
+    OrderType.LIMIT: "NORMAL",
+    OrderType.MARKET: "MARKET",
+    OrderType.STOP_LIMIT: "STOP_LIMIT",
+    OrderType.STOP_MARKET: "STOP",
+    OrderType.MARKET_IF_TOUCHED: "MARKET_IF_TOUCHED",
+    OrderType.LIMIT_IF_TOUCHED: "LIMIT_IF_TOUCHED",
+    OrderType.TRAILING_STOP_MARKET: "TRAILING_STOP",
+    OrderType.TRAILING_STOP_LIMIT: "TRAILING_STOP_LIMIT",
 }
 
 
@@ -173,8 +173,8 @@ def futu_order_type_to_nautilus(order_type: int) -> OrderType:
     return result
 
 
-def nautilus_order_type_to_futu(order_type: OrderType) -> int:
-    """Convert NautilusTrader OrderType to Futu OrderType."""
+def nautilus_order_type_to_futu(order_type: OrderType) -> str:
+    """Convert NautilusTrader OrderType to Futu OrderType string."""
     result = NAUTILUS_ORDER_TYPE_TO_FUTU.get(order_type)
     if result is None:
         raise ValueError(f"Unsupported Nautilus order type: {order_type}")
@@ -201,12 +201,12 @@ def futu_trd_side_to_nautilus(trd_side: int) -> OrderSide:
     raise ValueError(f"Unsupported Futu trade side: {trd_side}")
 
 
-def nautilus_order_side_to_futu(order_side: OrderSide) -> int:
-    """Convert NautilusTrader OrderSide to Futu TrdSide."""
+def nautilus_order_side_to_futu(order_side: OrderSide) -> str:
+    """Convert NautilusTrader OrderSide to Futu TrdSide string."""
     if order_side == OrderSide.BUY:
-        return FUTU_TRD_SIDE_BUY
+        return "BUY"
     elif order_side == OrderSide.SELL:
-        return FUTU_TRD_SIDE_SELL
+        return "SELL"
     raise ValueError(f"Unsupported Nautilus order side: {order_side}")
 
 

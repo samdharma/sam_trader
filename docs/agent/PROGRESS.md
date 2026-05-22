@@ -340,3 +340,12 @@
 - **Files Changed**: `docker/docker-compose.yml`, `docker/futu-opend/start.py`, `src/sam_trader/adapters/futu/connection.py`, `docs/user/FUTU_FIRST_LOGIN.md`, `tests/unit/test_futu_opend_startup.py`
 - **Validation Result**: PASS (28/28 targeted tests passed, black/isort/flake8/mypy all green; pre-existing pytest collection error from duplicate `test_config.py` basenames and pre-existing `lang` default mismatch in `test_build_xml_tree_creates_all_elements` are unrelated to this change)
 - **Blockers / Notes**: None. Ready for next phase-3 ticket.
+
+## Iteration 52
+- **Task**: BUG: Futu SDK enum strings vs integers in place_order calls
+- **Task ID**: sam_trader-9z3.4.10
+- **Status**: COMPLETE
+- **Decisions**: Changed `nautilus_order_side_to_futu()` and `nautilus_order_type_to_futu()` in `constants.py` to return string constants instead of integer enum values. The futu-api SDK `place_order` method accepts strings ('BUY'/'SELL' for trd_side, 'NORMAL'/'MARKET'/etc. for order_type) rather than integers. Updated all affected unit and integration tests to assert string values. Verified exact string constants against the futu-api SDK (`TrdSide.BUY == 'BUY'`, `OrderType.NORMAL == 'NORMAL'`). No changes needed for time_in_force ('DAY'/'GTC'/'IOC') or trd_env ('SIMULATE'/'REAL') as they already used strings.
+- **Files Changed**: `src/sam_trader/adapters/futu/constants.py`, `tests/unit/adapters/futu/test_constants.py`, `tests/unit/adapters/futu/test_execution.py`, `tests/integration/adapters/futu/test_execution_flow.py`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 81/81 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Phase 3 bug fix complete.
