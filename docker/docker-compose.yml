@@ -136,7 +136,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 60s
+      start_period: 120s
 
   sam-ib-gateway:
     image: ghcr.io/gnzsnz/ib-gateway:stable
@@ -181,7 +181,7 @@ services:
       - ../config:/opt/sam_trader/config:ro
       - ../logs:/opt/sam_trader/logs:rw
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ${BACKUP_HOST_DIR:-./backups}:/opt/sam_trader/backups:rw
+      - ${BACKUP_HOST_DIR:-~/Documents/ai_agent_docs/backup-sam_trader_v3}:/opt/sam_trader/backups:rw
     environment:
       - PYTHONPATH=/opt/sam_trader/src
       - PYTHONUNBUFFERED=1

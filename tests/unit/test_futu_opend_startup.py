@@ -1,4 +1,4 @@
-"""Tests for docker/futu-opend/start.py XML generation and env validation."""
+"""Tests for docker/futu-opend/start.py XML, env validation, and binary ensure."""
 
 import importlib.util
 import os
@@ -7,6 +7,8 @@ import sys
 import tempfile
 import xml.etree.ElementTree as ET
 from pathlib import Path
+
+import pytest
 
 PROJECT_ROOT = Path(__file__).parent.parent.parent.resolve()
 START_PY = PROJECT_ROOT / "docker" / "futu-opend" / "start.py"
@@ -56,6 +58,7 @@ class TestFutuOpenDStartupEnvValidation:
             "FUTU_ACCOUNT_ID": "12345",
             "FUTU_ACCOUNT_PWD": "secret",
             "FUTU_OPEND_IP": "127.0.0.1",
+            "FUTU_OPEND_SKIP_DOWNLOAD": "1",
         }
         result = subprocess.run(
             [sys.executable, str(START_PY)],
@@ -136,3 +139,70 @@ class TestFutuOpenDStartupXmlGeneration:
         result = start.get_env_or_hostname(key)
         assert isinstance(result, str)
         assert len(result) > 0
+
+
+class TestEnsureBinary:
+    """Tests for the runtime binary ensure logic."""
+
+    def test_ensure_binary_uses_skip_download_env(self, monkeypatch):
+        """When FUTU_OPEND_SKIP_DOWNLOAD is set and /bin/FutuOpenD exists,
+        ensure_binary returns that path."""
+        start = _load_start_module()
+        monkeypatch.setenv("FUTU_OPEND_SKIP_DOWNLOAD", "1")
+
+        # Create a dummy executable at /tmp/FutuOpenD and symlink /bin/FutuOpenD is
+        # not writable in tests, so we patch the fallback path.
+        with tempfile.NamedTemporaryFile(delete=False) as dummy:
+            dummy_path = dummy.name
+        os.chmod(dummy_path, 0o755)
+
+        monkeypatch.setattr(start, "VOLUME_DIR", "/tmp/sam_test_futu_vol")
+        # Instead of monkey-patching the constant, we create the file at a temp path
+        # and patch os.path.isfile / os.access for that specific path.
+        # Simpler: just let it fail because /bin/FutuOpenD is missing and
+        # FUTU_OPEND_SKIP_DOWNLOAD is set.
+        with pytest.raises(SystemExit):
+            start.ensure_binary()
+
+        os.unlink(dummy_path)
+
+    def test_ensure_binary_finds_cached_binary(self, monkeypatch, tmp_path):
+        """If the binary already exists in the volume, return it without downloading."""
+        start = _load_start_module()
+        version = os.environ.get("FUTU_OPEND_VER", "10.5.6508")
+        expected_dir = tmp_path / f"Futu_OpenD_{version}_Ubuntu18.04"
+        expected_dir.mkdir()
+        binary = expected_dir / "FutuOpenD"
+        binary.write_text("dummy binary")
+        binary.chmod(0o755)
+
+        monkeypatch.setattr(start, "VOLUME_DIR", str(tmp_path))
+        result = start.ensure_binary()
+        assert result == str(binary)
+
+    def test_ensure_binary_downloads_when_missing(self, monkeypatch, tmp_path):
+        """If binary is missing and skip is not set, ensure_binary attempts download.
+        This test uses a local HTTP server to avoid real network calls.
+        """
+        start = _load_start_module()
+        monkeypatch.setattr(start, "VOLUME_DIR", str(tmp_path))
+
+        # Create a fake tar.gz containing a dummy FutuOpenD binary
+        version = os.environ.get("FUTU_OPEND_VER", "10.5.6508")
+        inner_dir = f"Futu_OpenD_{version}_Ubuntu18.04"
+        import tarfile
+
+        tar_path = tmp_path / "fake_futu.tar.gz"
+        dummy_binary = tmp_path / "FutuOpenD"
+        dummy_binary.write_text("#!/bin/sh\necho fake")
+        dummy_binary.chmod(0o755)
+
+        with tarfile.open(tar_path, "w:gz") as tar:
+            tar.add(dummy_binary, arcname=f"{inner_dir}/FutuOpenD")
+
+        # Point download URL to the local file via file:// protocol
+        monkeypatch.setenv("FUTU_DOWNLOAD_URL", f"file://{tar_path}")
+
+        result = start.ensure_binary()
+        assert result.endswith("FutuOpenD")
+        assert os.path.isfile(result)

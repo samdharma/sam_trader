@@ -1,8 +1,18 @@
-# Futu OpenD — locally built from official Futubull download
-# The Futu OpenD binary is x86_64 only; on Apple Silicon use platform: linux/amd64
-# in docker-compose so Docker Desktop runs it via Rosetta 2 emulation.
-# Base OS + deps compressed: ~50MB. Total image ~441MB compressed
-# (Futu OpenD binary download is ~405MB and dominates image size).
+# Futu OpenD — lightweight image with runtime binary download
+# The Futu OpenD binary (~405 MB) is downloaded on first start to the persistent
+# volume (/home/futu/.com.futunn.FutuOpenD) so the image itself stays <70 MB.
+# On Apple Silicon use platform: linux/amd64 in docker-compose so Docker Desktop
+# runs it via Rosetta 2 emulation.
+#
+# Compressed image size breakdown (approximate):
+#   debian:stable-slim          ~30 MB
+#   ca-certificates + curl      ~10 MB
+#   libssl3                     ~ 5 MB
+#   python3 (minimal runtime)   ~15 MB
+#   tini + procps               ~ 2 MB
+#   scripts & config            ~ 1 MB
+#   ─────────────────────────────────
+#   Total base image            ~63 MB
 
 FROM debian:stable-slim
 
@@ -19,20 +29,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     procps \
     && rm -rf /var/lib/apt/lists/*
 
-# Download and extract Futu OpenD
-WORKDIR /tmp
-RUN curl -k -fL "${FUTU_DOWNLOAD_URL}" \
-    -H 'accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8' \
-    -H 'user-agent: Mozilla/5.0' \
-    -o Futu_OpenD.tar.gz \
-    && tar -xzf Futu_OpenD.tar.gz \
-    && mv Futu_OpenD_${FUTU_OPEND_VER}_Ubuntu18.04 /bin/futu-opend \
-    && rm -rf /tmp/*
-
-# Symlink the binary to /bin for convenience
-RUN ln -s /bin/futu-opend/Futu_OpenD_${FUTU_OPEND_VER}_Ubuntu18.04/FutuOpenD /bin/FutuOpenD
-
-# Copy startup script and config
+# Copy startup script, health check, and base config
 COPY docker/futu-opend/start.py /bin/start.py
 RUN chmod +x /bin/start.py
 
@@ -42,11 +39,14 @@ RUN chmod +x /bin/healthcheck.sh
 COPY docker/futu-opend/FutuOpenD.xml /bin/FutuOpenD.xml
 
 # Create non-root user and directories
-# /home/futu/.com.futunn.FutuOpenD is FutuOpenD's runtime state dir
+# /home/futu/.com.futunn.FutuOpenD is FutuOpenD's runtime state dir AND the
+# persistent volume where the binary is cached after first download.
 RUN groupadd -r futu && useradd -r -g futu -m -d /home/futu futu && \
     mkdir -p /.futu /home/futu/.com.futunn.FutuOpenD && \
     chown -R futu:futu /.futu /bin/start.py /bin/healthcheck.sh /bin/FutuOpenD.xml /home/futu
 
+ENV FUTU_OPEND_VER=${FUTU_OPEND_VER}
+ENV FUTU_DOWNLOAD_URL=${FUTU_DOWNLOAD_URL}
 ENV FUTU_ACCOUNT_ID=
 ENV FUTU_ACCOUNT_PWD=
 ENV FUTU_ACCOUNT_PWD_MD5=
@@ -57,7 +57,7 @@ ENV FUTU_OPEND_TELNET_PORT=22222
 
 USER futu
 
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \
     CMD /bin/healthcheck.sh
 
 ENTRYPOINT ["/usr/bin/tini", "--"]

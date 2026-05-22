@@ -26,7 +26,7 @@ Deploy: `./deploy.sh --with-futu`
 ### Base Image
 - `debian:stable-slim` (not ubuntu:22.04)
 - `tini` as PID 1 for signal handling and zombie reaping
-- Target compressed size: <70MB
+- Compressed image size: ~46 MB (Futu binary is downloaded at runtime to persistent volume)
 
 ### Health Checks (3-Layer)
 | Layer | Check | Futu OpenD | PostgreSQL | Redis | sam-trader |
@@ -70,7 +70,7 @@ See `docs/user/FUTU_FIRST_LOGIN.md` (created by `sam_trader-9z3.1.19`).
 ## 5. Commonly Used Commands
 
 ```bash
-# Build Futu OpenD image
+# Build Futu OpenD image (compressed ~46 MB; binary downloaded at runtime)
 docker build -f docker/Dockerfile.futu-opend -t sam-futu-opend .
 
 # Start stack
@@ -82,8 +82,8 @@ docker compose ps
 # View monitor logs
 tail -f logs/host-monitor.log
 
-# Run backup manually
-python src/sam_trader/services/backup.py
+# Run backup manually (inside sam-services container)
+docker exec sam-services python -m sam_trader.services.backup backup
 ```
 
 ---

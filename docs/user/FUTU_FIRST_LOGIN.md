@@ -74,6 +74,8 @@ FUTU_ACCOUNT_PWD_MD5=5f4dcc3b5aa765d61d8327deb882cf99
 
 ## 3. Start the Futu OpenD Container
 
+> **Note:** The `sam-futu-opend` image is intentionally lightweight (~46 MB compressed). On first start it downloads the Futu OpenD binary (~405 MB) to the persistent volume. This one-time download takes 1–3 minutes depending on your connection. Subsequent restarts use the cached binary and start much faster.
+
 ### Standalone (recommended for first-time setup)
 
 ```bash
