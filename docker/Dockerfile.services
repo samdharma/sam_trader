@@ -4,10 +4,11 @@ FROM python:3.12-slim
 LABEL maintainer="SAM Trader Team"
 LABEL description="SAM Trader V3 — Operations container (CLI, cron, dashboard, pipeline, backup)"
 
-# Install system dependencies: cron, postgresql-client, redis-tools, curl (for docker CLI)
+# Install system dependencies: cron, postgresql-client, redis-tools, curl, git
 USER root
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
+    git \
     cron \
     postgresql-client \
     redis-tools \
@@ -20,14 +21,24 @@ RUN ARCH=$(dpkg --print-architecture) \
     && curl -fsSL "https://download.docker.com/linux/static/stable/${DOCKER_ARCH}/docker-${DOCKER_VERSION}.tgz" \
     | tar xz --strip-components=1 -C /usr/local/bin docker/docker
 
+# Install Docker Buildx plugin for multi-stage builds
+ARG BUILDX_VERSION=0.15.1
+RUN ARCH=$(dpkg --print-architecture) \
+    && if [ "$ARCH" = "amd64" ]; then BUILDX_ARCH="linux-amd64"; elif [ "$ARCH" = "arm64" ]; then BUILDX_ARCH="linux-arm64"; else BUILDX_ARCH="linux-${ARCH}"; fi \
+    && mkdir -p /usr/local/lib/docker/cli-plugins \
+    && curl -fsSL "https://github.com/docker/buildx/releases/download/v${BUILDX_VERSION}/buildx-v${BUILDX_VERSION}.${BUILDX_ARCH}" \
+    -o /usr/local/lib/docker/cli-plugins/docker-buildx \
+    && chmod +x /usr/local/lib/docker/cli-plugins/docker-buildx
+
 # Create non-root user for runtime
 RUN groupadd -r sam && useradd -r -g sam -d /opt/sam_trader -s /bin/bash sam
 
 # Set working directory
 WORKDIR /opt/sam_trader
 
-# Ensure log and backup directories exist with correct ownership
-RUN mkdir -p /opt/sam_trader/logs /opt/sam_trader/backups && chown -R sam:sam /opt/sam_trader
+# Ensure config, log and backup directories exist with correct ownership
+RUN mkdir -p /opt/sam_trader/config /opt/sam_trader/logs /opt/sam_trader/backups \
+    && chown -R sam:sam /opt/sam_trader
 
 # Copy source code and install package in editable mode
 COPY --chown=sam:sam src/ ./src/
@@ -42,6 +53,15 @@ ENV PYTHONPATH="/opt/sam_trader/src"
 # Copy cron schedule
 COPY --chown=root:root src/sam_trader/services/crontab /etc/cron.d/sam-trader
 RUN chmod 644 /etc/cron.d/sam-trader
+
+# Expose the operations HTTP port
+EXPOSE 8080
+
+# 3-layer health check per AGENTS.md
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+  CMD pgrep python > /dev/null 2>&1 && \
+      bash -c 'true > /dev/tcp/localhost/8080' 2>/dev/null && \
+      (curl -sf http://localhost:8080/health > /dev/null 2>&1 || true)
 
 # Switch to non-root user
 USER sam
