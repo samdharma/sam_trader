@@ -135,12 +135,12 @@ def _load_bundle(bundle: dict[str, Any]) -> ImportableStrategyConfig:
     )
 
 
-def load_bundles(path: str) -> list[ImportableStrategyConfig]:
+def load_bundles(path: str | os.PathLike[str]) -> list[ImportableStrategyConfig]:
     """Load strategy bundles from a YAML file.
 
     Parameters
     ----------
-    path : str
+    path : str | os.PathLike[str]
         Path to the bundles YAML file.
 
     Returns
@@ -156,11 +156,15 @@ def load_bundles(path: str) -> list[ImportableStrategyConfig]:
         If the file content is invalid.
 
     """
-    if not os.path.exists(path):
-        raise BundleLoaderError(f"Bundles file not found: {path}")
+    path_str = os.fspath(path)
+    if not os.path.exists(path_str):
+        raise BundleLoaderError(f"Bundles file not found: {path_str}")
 
-    with open(path, "r", encoding="utf-8") as f:
-        raw = yaml.safe_load(f)
+    try:
+        with open(path_str, "r", encoding="utf-8") as f:
+            raw = yaml.safe_load(f)
+    except yaml.YAMLError as exc:
+        raise BundleLoaderError(f"Failed to parse YAML: {exc}") from exc
 
     if raw is None:
         return []
@@ -173,21 +177,26 @@ def load_bundles(path: str) -> list[ImportableStrategyConfig]:
         raise BundleValidationError("'bundles' must be a list")
 
     result: list[ImportableStrategyConfig] = []
+    seen_ids: set[str] = set()
     for bundle in bundles:
         if not isinstance(bundle, dict):
             raise BundleValidationError("Each bundle must be a mapping")
 
+        bundle_id = bundle.get("id", "unknown")
         if not bundle.get("enabled", True):
             logger.info(
                 "Skipping disabled bundle: %s",
-                bundle.get("id", "unknown"),
+                bundle_id,
             )
             continue
+
+        if bundle_id in seen_ids:
+            raise BundleValidationError(f"Duplicate bundle id: {bundle_id!r}")
+        seen_ids.add(bundle_id)
 
         try:
             result.append(_load_bundle(bundle))
         except (BundleValidationError, ValueError) as exc:
-            bundle_id = bundle.get("id", "unknown")
             raise BundleValidationError(f"Bundle {bundle_id!r}: {exc}") from exc
 
     return result

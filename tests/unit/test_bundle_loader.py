@@ -198,6 +198,57 @@ bundles:
         configs = load_bundles(str(path))
         assert configs == []
 
+    def test_path_object_accepted(self, tmp_path: pathlib.Path) -> None:
+        """load_bundles accepts a pathlib.Path object."""
+        yaml_content = """
+bundles:
+  - id: "path-test"
+    enabled: true
+    venue: FUTU
+    strategy:
+      path: s:S
+      config:
+        instrument_id: "TSLA.NASDAQ"
+"""
+        path = tmp_path / "bundles.yaml"
+        path.write_text(yaml_content)
+
+        configs = load_bundles(path)
+        assert len(configs) == 1
+
+    def test_malformed_yaml_raises(self, tmp_path: pathlib.Path) -> None:
+        """A malformed YAML file raises BundleLoaderError."""
+        path = tmp_path / "bad.yaml"
+        path.write_text("not: [ valid yaml {{\n")
+
+        with pytest.raises(BundleLoaderError, match="Failed to parse YAML"):
+            load_bundles(str(path))
+
+    def test_duplicate_bundle_id_raises(self, tmp_path: pathlib.Path) -> None:
+        """Duplicate bundle IDs raise BundleValidationError."""
+        yaml_content = """
+bundles:
+  - id: "dup"
+    enabled: true
+    venue: FUTU
+    strategy:
+      path: s:S
+      config:
+        instrument_id: "TSLA.NASDAQ"
+  - id: "dup"
+    enabled: true
+    venue: IB
+    strategy:
+      path: s:S
+      config:
+        instrument_id: "NVDA.NASDAQ"
+"""
+        path = tmp_path / "bundles.yaml"
+        path.write_text(yaml_content)
+
+        with pytest.raises(BundleValidationError, match="Duplicate bundle id"):
+            load_bundles(str(path))
+
     def test_custom_config_path(self, tmp_path: pathlib.Path) -> None:
         """A bundle can specify an explicit config_path."""
         yaml_content = """

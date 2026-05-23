@@ -554,3 +554,12 @@
 - **Files Changed**: `src/sam_trader/actors/realized_pnl.py` (new), `src/sam_trader/actors/__init__.py`, `tests/unit/actors/test_realized_pnl.py` (new), `pyproject.toml`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 17/17 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ready for next P6 ticket (sam_trader-9z3.7.9: [EXIT] Verify actors) or other remaining Phase 6 work.
+
+## Iteration 72
+- **Task**: P7: BundleLoader — multi-venue YAML to ImportableStrategyConfig
+- **Task ID**: sam_trader-9z3.8.1
+- **Status**: COMPLETE
+- **Decisions**: Verified existing bundle_loader.py already satisfies all acceptance criteria (multi-venue support, venue validation for FUTU/IB, bracket+risk merging, list[ImportableStrategyConfig] return). Ported minor v2 robustness enhancements: added os.PathLike support to load_bundles(), added yaml.YAMLError handling with BundleLoaderError wrapping, and added duplicate bundle ID detection. Added 3 new unit tests covering Path object acceptance, malformed YAML handling, and duplicate ID rejection. Pre-existing untracked tests/integration/test_actors.py (WIP for Phase 6 exit gate 9z3.7.9) was temporarily moved aside during validation as it is unrelated to this ticket.
+- **Files Changed**: `src/sam_trader/bundle_loader.py`, `tests/unit/test_bundle_loader.py`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 15/15 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for next Phase 7 ticket (sam_trader-9z3.8.2: OrbStrategy, or sam_trader-9z3.8.5: Bundle validation).
