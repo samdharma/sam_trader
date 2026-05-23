@@ -45,6 +45,10 @@ class TestSamTraderConfig:
             "REDIS_HOST",
             "REDIS_PORT",
             "REDIS_PASSWORD",
+            "RISK_MAX_ORDER_SUBMIT_RATE",
+            "RISK_MAX_ORDER_MODIFY_RATE",
+            "RISK_MAX_NOTIONAL_PER_ORDER",
+            "RISK_BYPASS",
         ):
             monkeypatch.delenv(key, raising=False)
 
@@ -81,6 +85,10 @@ class TestSamTraderConfig:
         assert cfg.redis_host == "sam-redis"
         assert cfg.redis_port == 6379
         assert cfg.redis_password == ""
+        assert cfg.risk_max_order_submit_rate == "100/00:00:01"
+        assert cfg.risk_max_order_modify_rate == "100/00:00:01"
+        assert cfg.risk_max_notional_per_order == ""
+        assert cfg.risk_bypass is False
 
     def test_from_env_custom(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test that from_env() reads custom env vars correctly."""
@@ -115,6 +123,10 @@ class TestSamTraderConfig:
         monkeypatch.setenv("REDIS_HOST", "custom-redis")
         monkeypatch.setenv("REDIS_PORT", "6380")
         monkeypatch.setenv("REDIS_PASSWORD", "redis_pass")
+        monkeypatch.setenv("RISK_MAX_ORDER_SUBMIT_RATE", "50/00:00:05")
+        monkeypatch.setenv("RISK_MAX_ORDER_MODIFY_RATE", "20/00:00:10")
+        monkeypatch.setenv("RISK_MAX_NOTIONAL_PER_ORDER", '{"USD": 100000}')
+        monkeypatch.setenv("RISK_BYPASS", "1")
 
         cfg = SamTraderConfig.from_env()
 
@@ -149,6 +161,10 @@ class TestSamTraderConfig:
         assert cfg.redis_host == "custom-redis"
         assert cfg.redis_port == 6380
         assert cfg.redis_password == "redis_pass"
+        assert cfg.risk_max_order_submit_rate == "50/00:00:05"
+        assert cfg.risk_max_order_modify_rate == "20/00:00:10"
+        assert cfg.risk_max_notional_per_order == '{"USD": 100000}'
+        assert cfg.risk_bypass is True
 
     def test_futu_fields_present(self) -> None:
         """Test that all required Futu fields exist on the dataclass."""
@@ -184,6 +200,10 @@ class TestSamTraderConfig:
             redis_host="sam-redis",
             redis_port=6379,
             redis_password="",
+            risk_max_order_submit_rate="100/00:00:01",
+            risk_max_order_modify_rate="100/00:00:01",
+            risk_max_notional_per_order="",
+            risk_bypass=False,
         )
 
         assert cfg.futu_enabled is True
@@ -227,7 +247,36 @@ class TestSamTraderConfig:
             redis_host="sam-redis",
             redis_port=6379,
             redis_password="",
+            risk_max_order_submit_rate="100/00:00:01",
+            risk_max_order_modify_rate="100/00:00:01",
+            risk_max_notional_per_order="",
+            risk_bypass=False,
         )
 
         with pytest.raises(FrozenInstanceError):
             cfg.trader_id = "hacker"  # type: ignore[misc]
+
+    def test_risk_config_env_vars(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Risk engine env vars are parsed correctly with all combinations."""
+        monkeypatch.setenv("RISK_MAX_ORDER_SUBMIT_RATE", "10/00:00:01")
+        monkeypatch.setenv("RISK_MAX_ORDER_MODIFY_RATE", "5/00:00:05")
+        monkeypatch.setenv(
+            "RISK_MAX_NOTIONAL_PER_ORDER", '{"USD": 50000, "HKD": 200000}'
+        )
+        monkeypatch.setenv("RISK_BYPASS", "true")
+
+        cfg = SamTraderConfig.from_env()
+        assert cfg.risk_max_order_submit_rate == "10/00:00:01"
+        assert cfg.risk_max_order_modify_rate == "5/00:00:05"
+        assert cfg.risk_max_notional_per_order == '{"USD": 50000, "HKD": 200000}'
+        assert cfg.risk_bypass is True
+
+        # Test bypass with "1"
+        monkeypatch.setenv("RISK_BYPASS", "1")
+        cfg = SamTraderConfig.from_env()
+        assert cfg.risk_bypass is True
+
+        # Test bypass off with empty string
+        monkeypatch.setenv("RISK_BYPASS", "")
+        cfg = SamTraderConfig.from_env()
+        assert cfg.risk_bypass is False

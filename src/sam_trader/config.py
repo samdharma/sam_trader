@@ -57,6 +57,12 @@ class SamTraderConfig:
     redis_port: int
     redis_password: str
 
+    # Risk Engine
+    risk_max_order_submit_rate: str
+    risk_max_order_modify_rate: str
+    risk_max_notional_per_order: str
+    risk_bypass: bool
+
     @classmethod
     def from_env(cls) -> SamTraderConfig:
         """Load configuration from environment variables.
@@ -113,4 +119,15 @@ class SamTraderConfig:
             redis_host=os.environ.get("REDIS_HOST", "sam-redis"),
             redis_port=int(os.environ.get("REDIS_PORT", "6379")),
             redis_password=os.environ.get("REDIS_PASSWORD", ""),
+            risk_max_order_submit_rate=os.environ.get(
+                "RISK_MAX_ORDER_SUBMIT_RATE", "100/00:00:01"
+            ),
+            risk_max_order_modify_rate=os.environ.get(
+                "RISK_MAX_ORDER_MODIFY_RATE", "100/00:00:01"
+            ),
+            risk_max_notional_per_order=os.environ.get(
+                "RISK_MAX_NOTIONAL_PER_ORDER", ""
+            ),
+            risk_bypass=os.environ.get("RISK_BYPASS", "").lower()
+            in ("1", "true", "yes"),
         )

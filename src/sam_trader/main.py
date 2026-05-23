@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import json
 import logging
 
 from nautilus_trader.cache.config import CacheConfig
 from nautilus_trader.common.config import DatabaseConfig, LoggingConfig
 from nautilus_trader.config import RoutingConfig
-from nautilus_trader.live.config import TradingNodeConfig
+from nautilus_trader.live.config import LiveRiskEngineConfig, TradingNodeConfig
 from nautilus_trader.live.node import TradingNode
 from nautilus_trader.model.identifiers import InstrumentId, Symbol, Venue
 
@@ -235,6 +236,17 @@ def build_trading_node() -> TradingNode:
         )
         cache_config = CacheConfig(database=cache_db)
 
+    notional_limits: dict[str, int] = {}
+    if cfg.risk_max_notional_per_order:
+        notional_limits = json.loads(cfg.risk_max_notional_per_order)
+
+    risk_config = LiveRiskEngineConfig(
+        bypass=cfg.risk_bypass,
+        max_order_submit_rate=cfg.risk_max_order_submit_rate,
+        max_order_modify_rate=cfg.risk_max_order_modify_rate,
+        max_notional_per_order=notional_limits,
+    )
+
     node_config = TradingNodeConfig(
         trader_id=_make_trader_id(cfg.trader_id),
         logging=LoggingConfig(log_level=cfg.log_level.upper()),
@@ -243,6 +255,7 @@ def build_trading_node() -> TradingNode:
         save_state=cfg.state_save_enabled,
         data_clients=data_clients,
         exec_clients=exec_clients,
+        risk_engine=risk_config,
         strategies=strategies,
     )
 

@@ -742,3 +742,18 @@
 - **Files Changed**: `deploy.sh` (new), `src/sam_trader/services/cli.py` (hotfix trigger), `tests/integration/test_deploy_decouple.py` (new), `tests/unit/services/test_cli.py` (updated hotfix test for trigger)
 - **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 45/45 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ready for next Phase 8 ticket.
+
+## Iteration 86
+- **Task**: P8: LiveRiskEngine integration — Nautilus native pre-trade risk
+- **Task ID**: sam_trader-9z3.9.7
+- **Status**: COMPLETE
+- **Decisions**:
+  1. Added four new env vars to `SamTraderConfig`: `risk_max_order_submit_rate` (default "100/00:00:01"), `risk_max_order_modify_rate` (default "100/00:00:01"), `risk_max_notional_per_order` (default ""), `risk_bypass` (default False).
+  2. Wired `LiveRiskEngineConfig` in `main.py` `build_trading_node()`: parses optional JSON notional dict, constructs config with all four fields, and passes `risk_engine=risk_config` to `TradingNodeConfig`.
+  3. **ZERO custom risk logic** — 100% Nautilus standard `LiveRiskEngine`.
+  4. Discovered that `max_notional_per_order` keys must be valid `InstrumentId` strings (e.g. `"AAPL.NASDAQ"`), not currency codes. Updated `.env.example` comment and test to use a valid instrument ID example. Nautilus `RiskEngine._initialize_risk_checks` parses keys via `InstrumentId.from_str_c()`.
+  5. Added `test_risk_config_env_vars` to `test_config.py` covering all four fields plus bypass "1" and empty-string behavior.
+  6. Added three tests to `test_main.py`: `test_live_risk_engine_config_wired` (custom values), `test_live_risk_engine_defaults_when_no_env` (Nautilus defaults), `test_live_risk_engine_empty_notional_skips_json_parse` (empty string → empty dict).
+- **Files Changed**: `src/sam_trader/config.py`, `src/sam_trader/main.py`, `tests/unit/test_config.py`, `tests/unit/test_main.py`, `.env.example`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 15/15 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for next Phase 8 ticket.

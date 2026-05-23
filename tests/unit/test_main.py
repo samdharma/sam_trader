@@ -352,3 +352,91 @@ bundles:
         finally:
             loop.close()
             asyncio.set_event_loop(None)
+
+
+class TestLiveRiskEngineWiring:
+    """Tests for LiveRiskEngine config wiring in build_trading_node."""
+
+    def test_live_risk_engine_config_wired(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """LiveRiskEngineConfig is passed to TradingNodeConfig with env values."""
+        monkeypatch.setenv("IB_ENABLED", "false")
+        monkeypatch.setenv("FUTU_ENABLED", "false")
+        monkeypatch.setenv("BUNDLES_PATH", "config/nonexistent_bundles.yaml")
+        monkeypatch.setenv("STATE_SAVE_ENABLED", "false")
+        monkeypatch.setenv("STATE_LOAD_ENABLED", "false")
+        monkeypatch.setenv("RISK_MAX_ORDER_SUBMIT_RATE", "50/00:00:01")
+        monkeypatch.setenv("RISK_MAX_ORDER_MODIFY_RATE", "20/00:00:05")
+        monkeypatch.setenv("RISK_MAX_NOTIONAL_PER_ORDER", '{"AAPL.NASDAQ": 100000}')
+        monkeypatch.setenv("RISK_BYPASS", "1")
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            node = build_trading_node()
+
+            risk_cfg = node._config.risk_engine
+            assert risk_cfg is not None
+            assert risk_cfg.bypass is True
+            assert risk_cfg.max_order_submit_rate == "50/00:00:01"
+            assert risk_cfg.max_order_modify_rate == "20/00:00:05"
+            assert risk_cfg.max_notional_per_order == {"AAPL.NASDAQ": 100000}
+        finally:
+            loop.close()
+            asyncio.set_event_loop(None)
+
+    def test_live_risk_engine_defaults_when_no_env(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """LiveRiskEngineConfig uses Nautilus defaults when env vars are unset."""
+        monkeypatch.setenv("IB_ENABLED", "false")
+        monkeypatch.setenv("FUTU_ENABLED", "false")
+        monkeypatch.setenv("BUNDLES_PATH", "config/nonexistent_bundles.yaml")
+        monkeypatch.setenv("STATE_SAVE_ENABLED", "false")
+        monkeypatch.setenv("STATE_LOAD_ENABLED", "false")
+        monkeypatch.delenv("RISK_MAX_ORDER_SUBMIT_RATE", raising=False)
+        monkeypatch.delenv("RISK_MAX_ORDER_MODIFY_RATE", raising=False)
+        monkeypatch.delenv("RISK_MAX_NOTIONAL_PER_ORDER", raising=False)
+        monkeypatch.delenv("RISK_BYPASS", raising=False)
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            node = build_trading_node()
+
+            risk_cfg = node._config.risk_engine
+            assert risk_cfg is not None
+            assert risk_cfg.bypass is False
+            assert risk_cfg.max_order_submit_rate == "100/00:00:01"
+            assert risk_cfg.max_order_modify_rate == "100/00:00:01"
+            assert risk_cfg.max_notional_per_order == {}
+        finally:
+            loop.close()
+            asyncio.set_event_loop(None)
+
+    def test_live_risk_engine_empty_notional_skips_json_parse(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Empty RISK_MAX_NOTIONAL_PER_ORDER results in empty dict."""
+        monkeypatch.setenv("IB_ENABLED", "false")
+        monkeypatch.setenv("FUTU_ENABLED", "false")
+        monkeypatch.setenv("BUNDLES_PATH", "config/nonexistent_bundles.yaml")
+        monkeypatch.setenv("STATE_SAVE_ENABLED", "false")
+        monkeypatch.setenv("STATE_LOAD_ENABLED", "false")
+        monkeypatch.setenv("RISK_MAX_NOTIONAL_PER_ORDER", "")
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            node = build_trading_node()
+
+            risk_cfg = node._config.risk_engine
+            assert risk_cfg is not None
+            assert risk_cfg.max_notional_per_order == {}
+        finally:
+            loop.close()
+            asyncio.set_event_loop(None)
