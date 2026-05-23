@@ -563,3 +563,12 @@
 - **Files Changed**: `src/sam_trader/bundle_loader.py`, `tests/unit/test_bundle_loader.py`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 15/15 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ready for next Phase 7 ticket (sam_trader-9z3.8.2: OrbStrategy, or sam_trader-9z3.8.5: Bundle validation).
+
+## Iteration 73
+- **Task**: P7: OrbStrategy — port from v2 with venue-aware config
+- **Task ID**: sam_trader-9z3.8.2
+- **Status**: COMPLETE
+- **Decisions**: Verified existing `src/sam_trader/strategies/orb.py` already satisfies all acceptance criteria: venue-aware order routing via `config.venue` (IB gets `tp_post_only=False` and `post_only=False`), ATR range filter with `min_range_atr_multiple`, breakout confirmation with configurable `confirmation_bars`, bracket orders via `order_factory.bracket()`, three entry order types (`MARKET`, `LIMIT`, `STOP_MARKET`), and state persistence via `on_save`/`on_load` using pickle. All 26 unit tests pass. Closed beads ticket which had been left in `in_progress` state from a prior rolled-back iteration tracking.
+- **Files Changed**: `.beads/issues.jsonl`, `.beads/interactions.jsonl`, `docs/agent/PROGRESS.md`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 26/26 orb tests + 8/8 common tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for next Phase 7 ticket (sam_trader-9z3.8.3: MomentumStrategy, or sam_trader-9z3.8.4: Strategy template, or sam_trader-9z3.8.5: Bundle validation).
