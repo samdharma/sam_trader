@@ -22,6 +22,7 @@ from nautilus_trader.model.identifiers import (
 )
 from nautilus_trader.model.objects import Currency, Money, Price, Quantity
 from nautilus_trader.test_kit.stubs.component import TestComponentStubs
+from nautilus_trader.test_kit.stubs.execution import TestExecStubs
 
 from sam_trader.actors.trade_journal import TradeJournalActor, TradeJournalActorConfig
 
@@ -52,7 +53,11 @@ def registered_actor(
     return actor
 
 
-def _make_order_filled(instrument_id: InstrumentId) -> OrderFilled:
+def _make_order_filled(
+    instrument_id: InstrumentId,
+    order_type: OrderType = OrderType.LIMIT,
+    side: OrderSide = OrderSide.BUY,
+) -> OrderFilled:
     return OrderFilled(
         TraderId("SAM-001"),
         StrategyId("ORB-001"),
@@ -62,8 +67,8 @@ def _make_order_filled(instrument_id: InstrumentId) -> OrderFilled:
         AccountId("FUTU-001"),
         TradeId("T-001"),
         PositionId("P-001"),
-        OrderSide.BUY,
-        OrderType.LIMIT,
+        side,
+        order_type,
         Quantity.from_str("100"),
         Price.from_str("150.50"),
         Currency.from_str("USD"),
@@ -209,6 +214,77 @@ class TestTradeJournalActor:
                 await asyncio.sleep(0.01)
                 assert registered_actor._pool is None
                 mock_pool.close.assert_awaited_once()
+
+        asyncio.run(_test())
+
+    def test_fill_with_slippage_limit_order(
+        self, registered_actor: TradeJournalActor
+    ) -> None:
+        async def _test() -> None:
+            mock_conn = AsyncMock()
+            mock_pool = MagicMock()
+            mock_pool.acquire.return_value.__aenter__ = AsyncMock(
+                return_value=mock_conn
+            )
+            mock_pool.acquire.return_value.__aexit__ = AsyncMock(return_value=False)
+
+            with patch(
+                "asyncpg.create_pool",
+                new_callable=AsyncMock,
+                return_value=mock_pool,
+            ):
+                registered_actor.on_start()
+                await asyncio.sleep(0.01)
+
+                # Seed cache with a LIMIT order at 150.00
+                limit_order = TestExecStubs.limit_order(
+                    price=Price.from_str("150.00"),
+                    client_order_id=ClientOrderId("O-001"),
+                )
+                registered_actor.cache.add_order(limit_order, None, None)
+
+                # Fill at 150.50 (worse for BUY side)
+                fill = _make_order_filled(InstrumentId.from_str("TSLA.NASDAQ"))
+                registered_actor.on_order_filled(fill)
+                await asyncio.sleep(0.05)
+
+                calls = mock_conn.execute.call_args_list
+                # Second call is _write_fill
+                _sql, *params = calls[1][0]
+                assert params[11] == 0.5  # slippage = 150.50 - 150.00
+
+        asyncio.run(_test())
+
+    def test_fill_without_slippage_market_order(
+        self, registered_actor: TradeJournalActor
+    ) -> None:
+        async def _test() -> None:
+            mock_conn = AsyncMock()
+            mock_pool = MagicMock()
+            mock_pool.acquire.return_value.__aenter__ = AsyncMock(
+                return_value=mock_conn
+            )
+            mock_pool.acquire.return_value.__aexit__ = AsyncMock(return_value=False)
+
+            with patch(
+                "asyncpg.create_pool",
+                new_callable=AsyncMock,
+                return_value=mock_pool,
+            ):
+                registered_actor.on_start()
+                await asyncio.sleep(0.01)
+
+                # MARKET order — no expected price reference
+                fill = _make_order_filled(
+                    InstrumentId.from_str("TSLA.NASDAQ"),
+                    order_type=OrderType.MARKET,
+                )
+                registered_actor.on_order_filled(fill)
+                await asyncio.sleep(0.05)
+
+                calls = mock_conn.execute.call_args_list
+                _sql, *params = calls[1][0]
+                assert params[11] is None  # slippage is None
 
         asyncio.run(_test())
 

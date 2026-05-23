@@ -8,6 +8,7 @@ from typing import Any
 
 from nautilus_trader.common.actor import Actor
 from nautilus_trader.common.config import ActorConfig
+from nautilus_trader.model.enums import OrderSide
 from nautilus_trader.model.events import OrderFilled
 from nautilus_trader.model.identifiers import InstrumentId
 
@@ -243,11 +244,42 @@ class TradeJournalActor(Actor):
         ts_event = self._ns_to_datetime(event.ts_event)
         ts_init = self._ns_to_datetime(event.ts_init)
 
+        # Compute slippage against expected price (limit price or signal price)
+        expected_price = None
+
+        # 1. Try order limit price from cache (LIMIT / STOP_LIMIT orders)
+        if self.cache is not None:
+            try:
+                cached_order = self.cache.order(event.client_order_id)
+                if cached_order is not None:
+                    order_type_val = (
+                        cached_order.order_type.name
+                        if hasattr(cached_order.order_type, "name")
+                        else str(cached_order.order_type)
+                    )
+                    if order_type_val in ("LIMIT", "STOP_LIMIT"):
+                        if hasattr(cached_order, "price") and cached_order.price:
+                            expected_price = cached_order.price.as_double()
+            except Exception:  # noqa: S110, BLE001
+                pass  # Fall through to signal price fallback
+
+        # 2. Fallback: signal price from strategy config if available
+        # (Placeholder for future strategy-level signal price propagation)
+
+        slippage = None
+        if expected_price is not None:
+            fill_px = event.last_px.as_double()
+            if event.order_side == OrderSide.BUY:
+                slippage = fill_px - expected_price  # + = unfavorable
+            else:
+                slippage = expected_price - fill_px  # + = unfavorable
+
         sql = """
             INSERT INTO fills (
                 trade_id, client_order_id, venue_order_id, strategy_id, instrument_id,
-                venue, side, qty, price, commission, currency, ts_event, ts_init
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+                venue, side, qty, price, commission, currency, slippage,
+                ts_event, ts_init
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
             ON CONFLICT (trade_id) DO NOTHING
         """
 
@@ -265,6 +297,7 @@ class TradeJournalActor(Actor):
                 event.last_px.as_double(),
                 event.commission.as_double(),
                 event.currency.code,
+                slippage,
                 ts_event,
                 ts_init,
             )

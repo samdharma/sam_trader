@@ -8,6 +8,9 @@
 --   - slippage column on fills (execution quality tracking)
 --   - performance_stats table (Nautilus PortfolioAnalyzer results)
 
+-- Idempotent migration for existing databases
+ALTER TABLE fills ADD COLUMN IF NOT EXISTS slippage NUMERIC(24, 8);
+
 CREATE TABLE IF NOT EXISTS orders (
     id              SERIAL PRIMARY KEY,
     client_order_id VARCHAR(64)  NOT NULL UNIQUE,

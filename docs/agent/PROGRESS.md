@@ -757,3 +757,17 @@
 - **Files Changed**: `src/sam_trader/config.py`, `src/sam_trader/main.py`, `tests/unit/test_config.py`, `tests/unit/test_main.py`, `.env.example`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 15/15 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ready for next Phase 8 ticket.
+
+## Iteration 87
+- **Task**: P8: Slippage tracking in TradeJournalActor
+- **Task ID**: sam_trader-9z3.9.9
+- **Status**: COMPLETE
+- **Decisions**: 
+  1. Added idempotent `ALTER TABLE fills ADD COLUMN IF NOT EXISTS slippage NUMERIC(24, 8);` to `docker/postgres/init/01_schema.sql` for existing databases.
+  2. Updated `TradeJournalActor._write_fill()` to compute slippage = fill_price - expected_price with priority: (1) cached order limit price for LIMIT/STOP_LIMIT orders, (2) signal price placeholder for future strategy-level propagation, (3) NULL.
+  3. Signed convention: positive = unfavorable (paid more on buy, received less on sell), negative = favorable (price improvement).
+  4. Added `slippage` to the INSERT SQL and execute parameters. Existing queries unaffected; backward-compatible — existing fills get NULL slippage.
+  5. Added two unit tests: `test_fill_with_slippage_limit_order` (BUY limit at 150.00, fill at 150.50 → slippage +0.50) and `test_fill_without_slippage_market_order` (MARKET order → slippage NULL).
+- **Files Changed**: `docker/postgres/init/01_schema.sql`, `src/sam_trader/actors/trade_journal.py`, `tests/unit/actors/test_trade_journal.py`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 14/14 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for next Phase 8 ticket.
