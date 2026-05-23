@@ -525,3 +525,15 @@
 - **Files Changed**: `src/sam_trader/actors/bar_resubscription.py` (new), `src/sam_trader/actors/__init__.py`, `tests/unit/actors/test_bar_resubscription.py` (new)
 - **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 21/21 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ready for next P6 ticket (sam_trader-9z3.7.5: Redis state wiring, or sam_trader-9z3.7.7: RejectionMonitorActor).
+
+## Iteration 69
+- **Task**: P6: State persistence — Redis CacheConfig wiring
+- **Task ID**: sam_trader-9z3.7.5
+- **Status**: COMPLETE
+- **Decisions**: 
+  1. Verified existing CacheConfig wiring in `build_trading_node()` was already correct: `DatabaseConfig` (type=redis) with host/port/password from env vars, wired into `CacheConfig`, passed to `TradingNodeConfig` with `load_state`/`save_state` from env vars.
+  2. Added `try/finally: node.dispose()` to `main()` to match standard Nautilus `live/__main__.py` pattern. This ensures `stop_async()` has time to complete `trader.save()` before the process exits, fulfilling "state save on graceful shutdown".
+  3. Created `tests/unit/test_main_cache_config.py` with 6 tests using a `_FakeNode` mock to avoid real Redis connections during test execution (TradingNode constructor instantiates `CacheDatabaseAdapter` which connects to Redis eagerly).
+- **Files Changed**: `src/sam_trader/main.py`, `tests/unit/test_main_cache_config.py`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 6/6 new tests passed, 17/17 all test_main*.py passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for next P6 ticket (sam_trader-9z3.7.7: RejectionMonitorActor, or sam_trader-9z3.7.8: RealizedPnLTrackerActor, or sam_trader-9z3.7.9: [EXIT] Verify actors).

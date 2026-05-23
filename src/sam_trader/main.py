@@ -264,7 +264,10 @@ def main() -> None:
     """Main entry point for SAM Trader."""
     node = build_trading_node()
     node.build()
-    node.run()
+    try:
+        node.run()
+    finally:
+        node.dispose()
 
 
 if __name__ == "__main__":
