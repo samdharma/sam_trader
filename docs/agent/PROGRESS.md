@@ -698,3 +698,16 @@
 - **Files Changed**: `src/sam_trader/services/cli.py` (added `performance` command + `_performance_query` async helper), `tests/unit/services/test_cli.py` (added `TestPerformanceCommand` with 3 tests)
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 31/31 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ready for next Phase 8 ticket.
+
+## Iteration 83
+- **Task**: P8: Cron scheduler — verify backup + add deployment windows
+- **Task ID**: sam_trader-9z3.9.3
+- **Status**: COMPLETE
+- **Decisions**:
+  1. Added performance analysis cron entry to `src/sam_trader/services/crontab`: `0 2 * * *` daily HKT. Log rotation remains at 03:00 HKT.
+  2. Created `src/sam_trader/services/performance_analyzer.py` stub module with `main()` entry point and argparse support for `--lookback-days`. Logs that full implementation is deferred to ticket 9z3.9.11.
+  3. Created `tests/unit/services/test_cron.py` with 6 tests: `test_crontab_has_all_entries` (verifies all 5 cron jobs), `test_runs_as_user_sam`, `test_env_cron_sourced`, `test_timezone_set_to_hkt`, `test_logs_redirected`, `test_performance_analyzer_schedule`.
+  4. Verified Dockerfile.services already has: `.env_cron` generation with `DEPLOY|PIPELINE` in grep pattern, `chmod 644`, `chown root:root` for crontab installation.
+- **Files Changed**: `src/sam_trader/services/crontab`, `src/sam_trader/services/performance_analyzer.py` (new), `tests/unit/services/test_cron.py` (new)
+- **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 6/6 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for next Phase 8 ticket.
