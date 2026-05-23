@@ -786,3 +786,19 @@
 - **Files Changed**: `docker/postgres/init/01_schema.sql`, `src/sam_trader/actors/trade_journal.py`, `tests/unit/actors/test_trade_journal.py`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 14/14 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ready for next Phase 8 ticket.
+
+## Iteration 89
+- **Task**: P8: PerformanceAnalyzer — Nautilus PortfolioAnalyzer integration
+- **Task ID**: sam_trader-9z3.9.11
+- **Status**: COMPLETE
+- **Decisions**:
+  1. Implemented `PerformanceAnalyzer` class in `src/sam_trader/services/performance_analyzer.py` that queries PG fills, computes realized PnL via pure-Python FIFO lot matching per instrument, and feeds daily returns to Nautilus `PortfolioAnalyzer`.
+  2. Registered all 18 built-in Nautilus statistic classes (`CAGR`, `SharpeRatio`, `SortinoRatio`, `MaxDrawdown`, `CalmarRatio`, `WinRate`, `ProfitFactor`, `Expectancy`, `ReturnsVolatility`, `RiskReturnRatio`, `AvgWinner`, `AvgLoser`, `MaxWinner`, `MaxLoser`, `MinWinner`, `MinLoser`, `LongRatio`, `ReturnsAverage`).
+  3. Returns-based stats computed via `PortfolioAnalyzer.add_return()` + `get_performance_stats_returns()`. PnL-based stats computed via individual `calculate_from_realized_pnls()` calls. ZERO custom math for statistics.
+  4. Discovered `PortfolioAnalyzer.calculate_statistics(account, positions)` requires Cython `Account`/`Position` objects and is effectively unusable for batch analytics from PG fills. Bypassed by using `add_return` and direct statistic class methods — still 100% Nautilus native stats.
+  5. Stores results in `performance_stats` PG table with `ON CONFLICT` upsert. Computes per-strategy stats AND aggregate `_PORTFOLIO` stats.
+  6. Graceful degradation: returns `{}` and logs warning when PG unavailable, no fills exist, or no strategies found.
+  7. Added 14 unit tests covering portfolio analyzer integration, stats persistence, empty fills, PG unavailability, FIFO trade matching (buy/sell, partial fills, invalid sides), and main entry point.
+- **Files Changed**: `src/sam_trader/services/performance_analyzer.py` (rewritten), `tests/unit/services/test_performance_analyzer.py` (new)
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 14/14 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for next Phase 8 ticket (sam_trader-9z3.9.8: sam performance CLI, or sam_trader-9z3.9.6: [EXIT] Verify).
