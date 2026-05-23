@@ -158,11 +158,11 @@ Phase 6 ────────────────────────
                                                                 sam_trader-9z3.7.9 ──► ═══ PHASE 6 GATE ═══
 
 Phase 7 ──────────────────────────────────────────────────────────────────
-  sam_trader-9z3.8.1 ──► sam_trader-9z3.8.4 ──► sam_trader-9z3.8.2 ──┐
-  sam_trader-9z3.8.1 ──► sam_trader-9z3.8.4 ──► sam_trader-9z3.8.3 ──┤
-  sam_trader-9z3.8.1 ──► sam_trader-9z3.8.5 ──────────────────────────┤
-                                                                        ▼
-                                                                sam_trader-9z3.8.6 ──► ═══ PHASE 7 GATE ═══
+  sam_trader-9z3.8.1 ──► sam_trader-9z3.8.5 ──────────────────────────────┐
+  sam_trader-9z3.8.2 ──┬──► sam_trader-9z3.8.4 ───────────────────────────┤
+  sam_trader-9z3.8.3 ──┘                                                   │
+                                                                            ▼
+                                                                    sam_trader-9z3.8.6 ──► ═══ PHASE 7 GATE ═══
 
 Phase 8 ──────────────────────────────────────────────────────────────────
   sam_trader-9z3.9.1 ──► sam_trader-9z3.9.2 ──► sam_trader-9z3.9.3 ──► sam_trader-9z3.9.5 ──┐
@@ -316,16 +316,16 @@ Phase 11 ───────────────────────�
 ### Phase 6: Actors & State Management
 
 > **Goal:** TradeJournalActor, HealthMonitorActor, BarResubscriptionActor, RejectionMonitorActor, RealizedPnLTrackerActor. PostgreSQL schema with venue column. Redis state persistence.
-> **Build order:** 7.1 (schema) is the single gateway — all actors depend on it. 7.2→7.8 form a chain (journal→realized pnl). 7.3/7.4/7.5 are parallel after schema. 7.7 has no actor deps (only P5 exit). All converge to EXIT.
+> **Build order:** 7.1 (schema) is the single gateway — all actors depend on it. 7.2→7.8 form a chain (journal→realized pnl). 7.3/7.4/7.5 are parallel after schema. 7.7 has no internal deps (truly independent). All converge to EXIT. No cross-phase dependencies — Phase 6 is self-contained.
 
 | # | Ticket ID | Title | Type | AC Highlights |
 |---|-----------|-------|------|---------------|
-| 6.1 | `sam_trader-9z3.7.1` | PostgreSQL schema: fills, orders, positions with venue column | task | `docker/postgres/init/01_schema.sql`. `venue` and `trd_market` columns. Depends on P5 exit (`9z3.6.4`). Blocks all other P6 tickets. |
+| 6.1 | `sam_trader-9z3.7.1` | PostgreSQL schema: fills, orders, positions with venue column | task | `docker/postgres/init/01_schema.sql`. `venue` and `trd_market` columns. No cross-phase dependencies. Blocks all other P6 tickets. |
 | 6.2 | `sam_trader-9z3.7.2` | TradeJournalActor: multi-venue fill journaling | task | Subclass Actor. Listen `OrderFilled` → write to PostgreSQL via asyncpg. Tag fills with venue. Depends on schema (`9z3.7.1`). Blocks RealizedPnL (`9z3.7.8`). |
 | 6.3 | `sam_trader-9z3.7.3` | HealthMonitorActor: heartbeat + multi-venue metrics | task | Periodic heartbeat (30s). Report orders, positions, venue connection status. Depends on schema (`9z3.7.1`). Blocks EXIT. |
 | 6.4 | `sam_trader-9z3.7.4` | BarResubscriptionActor: bar recovery on reconnect | task | Monitor bar subscriptions. Re-subscribe on disconnect/reconnect. Depends on schema (`9z3.7.1`). Blocks EXIT. |
 | 6.5 | `sam_trader-9z3.7.5` | State persistence: Redis CacheConfig wiring | task | Wire `CacheConfig` in `main.py`. Save on shutdown, load on startup. Depends on schema (`9z3.7.1`). Blocks EXIT. |
-| 6.6 | `sam_trader-9z3.7.7` | RejectionMonitorActor: per-instrument rejection circuit breaker | task | Subscribe `OrderRejected`. Track consecutive rejections per (instrument, strategy, reason). Emit `StrategyHaltRequest` at threshold (3). 15-min cooldown. Addresses v2 189-rejection no-self-halt issue. Depends on P5 exit (`9z3.6.4`). Blocks EXIT. |
+| 6.6 | `sam_trader-9z3.7.7` | RejectionMonitorActor: per-instrument rejection circuit breaker | task | Subscribe `OrderRejected`. Track consecutive rejections per (instrument, strategy, reason). Emit `StrategyHaltRequest` at threshold (3). 15-min cooldown. Addresses v2 189-rejection no-self-halt issue. No internal deps. Blocks EXIT. |
 | 6.7 | `sam_trader-9z3.7.8` | RealizedPnLTrackerActor: per-strategy realized P&L | task | Subscribe `OrderFilled`. FIFO matching per strategy. Persist to Redis (`sam:pnl:{strategy_id}:{date}`). Pure realized — no unrealized. Resets at 00:00 UTC. Addresses v2 ambiguous max_daily_loss. Depends on TradeJournal (`9z3.7.2`). Blocks EXIT. |
 | 6.8 | `sam_trader-9z3.7.9` | [EXIT] Actors run, fills journaled, state persisted | exit | Integration test: fill appears in PG with venue tag. HealthMonitor heartbeat. State restored from Redis. Bar subscriptions restored on reconnect. RejectionMonitor halts on streaks. RealizedPnL computed. Depends on 7.3/7.4/7.5/7.7/7.8. Blocks P7 BundleLoader (`9z3.8.1`). |
 
@@ -334,14 +334,14 @@ Phase 11 ───────────────────────�
 ### Phase 7: Strategy Library & Bundle System
 
 > **Goal:** OrbStrategy, MomentumStrategy, strategy template. Multi-venue bundle loader. Bundle validation.
-> **Build order:** 8.1 (loader) → 8.4 (template) → 8.2 (orb) + 8.3 (momentum). 8.5 (validation) is parallel after loader. All converge to EXIT.
+> **Build order:** 8.1 (loader), 8.2 (orb), 8.3 (momentum) are independent roots. 8.4 (template) extracted after strategies. 8.5 (validation) follows loader. All converge to EXIT. No cross-phase dependencies.
 
 | # | Ticket ID | Title | Type | AC Highlights |
 |---|-----------|-------|------|---------------|
-| 7.1 | `sam_trader-9z3.8.1` | BundleLoader: multi-venue YAML → ImportableStrategyConfig | task | Port from v2. Validate `venue: FUTU` and `venue: IB`. Merge bracket+risk into strategy config. Depends on P6 exit (`9z3.7.9`). Blocks template and validation. |
-| 7.2 | `sam_trader-9z3.8.4` | Strategy template: copy-paste template for new strategies | task | Port `_template.py` from v2. Document all hooks. Venue-aware `post_only=False` patterns for IB. Depends on loader (`9z3.8.1`). Blocks Orb and Momentum. |
-| 7.3 | `sam_trader-9z3.8.2` | OrbStrategy: port from v2 with venue-aware config | task | Port `orb.py` from v2. Configurable entry order type (MARKET/LIMIT/STOP_MARKET). `tp_post_only=False` for IB. ATR range filter, bracket orders. Depends on template (`9z3.8.4`). Blocks EXIT. |
-| 7.4 | `sam_trader-9z3.8.3` | MomentumStrategy: port from v2 with venue-aware config | task | Port `momentum.py` from v2. `allowed_directions` filter (LONG/SHORT). Configurable entry order type. `tp_post_only=False` for IB. Depends on template (`9z3.8.4`). Blocks EXIT. |
+| 7.1 | `sam_trader-9z3.8.1` | BundleLoader: multi-venue YAML → ImportableStrategyConfig | task | Port from v2. Validate `venue: FUTU` and `venue: IB`. Merge bracket+risk into strategy config. No cross-phase deps. Blocks validation. |
+| 7.2 | `sam_trader-9z3.8.2` | OrbStrategy: port from v2 with venue-aware config | task | Port `orb.py` from v2. Configurable entry order type (MARKET/LIMIT/STOP_MARKET). `tp_post_only=False` for IB. ATR range filter, bracket orders. No internal deps. Blocks template and EXIT. |
+| 7.3 | `sam_trader-9z3.8.3` | MomentumStrategy: port from v2 with venue-aware config | task | Port `momentum.py` from v2. `allowed_directions` filter (LONG/SHORT). Configurable entry order type. `tp_post_only=False` for IB. No internal deps. Blocks template and EXIT. |
+| 7.4 | `sam_trader-9z3.8.4` | Strategy template: extracted from Orb + Momentum | task | Copy-paste starter. All hooks documented. Venue-aware `post_only=False` patterns. Depends on orb (`9z3.8.2`) + momentum (`9z3.8.3`). |
 | 7.5 | `sam_trader-9z3.8.5` | Bundle validation: schema check + backtest gate | task | Schema validation. Strategy class existence check. Backtest gate before deployment. `sam validate-bundles` CLI. Depends on loader (`9z3.8.1`). Blocks EXIT. |
 | 7.6 | `sam_trader-9z3.8.6` | [EXIT] Verify: strategy lifecycle with Futu data | exit | Integration test: OrbStrategy bundle loaded. Bar data from Futu. Breakout → bracket order → fill journaled to PG. State persists across restart. Depends on Orb/Momentum/Validation. Blocks P8 Dockerfile (`9z3.9.1`). |
 

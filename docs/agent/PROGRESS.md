@@ -376,3 +376,20 @@
 - **Files Changed**: `tests/unit/test_main_ib_provider.py` (new)
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 3/3 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ready for sam_trader-9z3.6.3 (Enhance IB adapter for v3).
+
+
+## Iteration 56
+- **Task**: P5: Enhance IBKR adapter for v3 patterns
+- **Task ID**: sam_trader-9z3.6.3
+- **Status**: COMPLETE
+- **Decisions**: 
+  1. Created `adapters/ib/constants.py` with `IB_VENUE = Venue("IB")` and `IB_SMART_EXCHANGE = "SMART"` for consistency with Futu adapter pattern.
+  2. Updated `bundle_loader.py` to default IB bundle `exchange` to `"SMART"` when not explicitly provided. This prevents v2 code-10311 warnings from direct NASDAQ routing fees.
+  3. Updated `main.py` to filter loaded bundles by enabled venue. FUTU bundles are skipped when `futu_enabled=False`; IB bundles are skipped when `ib_enabled=False`. This prevents strategies from trying to subscribe through non-existent clients.
+  4. Fixed pre-existing `bundle_id` msgspec validation issue in `EchoStrategyConfig` by adding `bundle_id` and `exchange` fields. This was uncovered because `bundle_id` injection (added in 9z3.6.8) broke integration tests that instantiate real strategies through TradingNode.
+  5. Created `tests/unit/adapters/ib/test_constants.py` for IB venue constants.
+  6. Added `test_dual_venue_no_cross_contamination` to `tests/unit/test_main.py` verifying: both venue configs present and clean, Futu bundles get `futu_code` (not `exchange`), IB bundles get `exchange=SMART` (not `futu_code`), and venue filtering works when one venue is disabled.
+  7. Added bundle loader tests for SMART default and explicit exchange preservation.
+- **Files Changed**: `src/sam_trader/adapters/ib/constants.py` (new), `src/sam_trader/bundle_loader.py`, `src/sam_trader/main.py`, `src/sam_trader/strategies/test_echo.py`, `tests/unit/adapters/ib/test_constants.py` (new), `tests/unit/test_bundle_loader.py`, `tests/unit/test_main.py`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 21/21 tests passed, black/isort/flake8/mypy all green; integration test test_futu_node.py also passes)
+- **Blockers / Notes**: None. Ready for sam_trader-9z3.6.7 (IBKR post_only incompatibility bug fix).

@@ -240,3 +240,42 @@ bundles:
         assert configs[0].config["trd_market"] == "US"
         assert configs[0].config["trd_env"] == "SIMULATE"
         assert configs[0].config["max_position"] == 100
+
+    def test_ib_smart_exchange_default(self, tmp_path: pathlib.Path) -> None:
+        """IB bundles default exchange to SMART to avoid direct-routing fees."""
+        yaml_content = """
+bundles:
+  - id: "nvda-momentum-ib"
+    enabled: true
+    venue: IB
+    strategy:
+      path: sam_trader.strategies.momentum:MomentumStrategy
+      config:
+        instrument_id: "NVDA.NASDAQ"
+"""
+        path = tmp_path / "bundles.yaml"
+        path.write_text(yaml_content)
+
+        configs = load_bundles(str(path))
+        assert len(configs) == 1
+        assert configs[0].config["exchange"] == "SMART"
+
+    def test_ib_explicit_exchange_preserved(self, tmp_path: pathlib.Path) -> None:
+        """An explicitly provided exchange in an IB bundle is preserved."""
+        yaml_content = """
+bundles:
+  - id: "nvda-direct-ib"
+    enabled: true
+    venue: IB
+    strategy:
+      path: sam_trader.strategies.momentum:MomentumStrategy
+      config:
+        instrument_id: "NVDA.NASDAQ"
+        exchange: "NASDAQ"
+"""
+        path = tmp_path / "bundles.yaml"
+        path.write_text(yaml_content)
+
+        configs = load_bundles(str(path))
+        assert len(configs) == 1
+        assert configs[0].config["exchange"] == "NASDAQ"

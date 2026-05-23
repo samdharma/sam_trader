@@ -119,12 +119,12 @@ def load_bundles(path: str) -> list[ImportableStrategyConfig]:
 
 | Ticket | Title | Scope | Assessment |
 |--------|-------|-------|------------|
-| `sam_trader-9z3.8.1` | BundleLoader | Multi-venue YAML → `ImportableStrategyConfig` | ✅ Medium |
-| `sam_trader-9z3.8.2` | OrbStrategy | Port from v2, venue-aware, **configurable entry order type** | ✅ Medium |
-| `sam_trader-9z3.8.3` | MomentumStrategy | Port from v2, venue-aware, **direction filter + entry order type** | ✅ Medium |
-| `sam_trader-9z3.8.4` | Strategy template | `_template.py` copy-paste starter | ✅ Small |
-| `sam_trader-9z3.8.5` | Bundle validation | Schema + backtest gate | ✅ Medium |
-| `sam_trader-9z3.8.6` | [EXIT] Verify strategy lifecycle | Integration test: full strategy → order → fill | ✅ Medium |
+| `sam_trader-9z3.8.1` | BundleLoader | Multi-venue YAML → `ImportableStrategyConfig` (independent root) | ✅ Medium |
+| `sam_trader-9z3.8.2` | OrbStrategy | Port from v2, venue-aware, **configurable entry order type** (independent root) | ✅ Medium |
+| `sam_trader-9z3.8.3` | MomentumStrategy | Port from v2, venue-aware, **direction filter + entry order type** (independent root) | ✅ Medium |
+| `sam_trader-9z3.8.4` | Strategy template | Extracted from Orb + Momentum after both ported (depends on 8.2, 8.3) | ✅ Small |
+| `sam_trader-9z3.8.5` | Bundle validation | Schema + backtest gate (depends on loader 8.1) | ✅ Medium |
+| `sam_trader-9z3.8.6` | [EXIT] Verify strategy lifecycle | Integration test: full strategy → order → fill (depends on 8.2, 8.3, 8.5) | ✅ Medium |
 
 **No decomposition needed for Phase 7.** All tickets are within healthy step budgets.
 

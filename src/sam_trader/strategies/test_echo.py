@@ -11,12 +11,18 @@ from nautilus_trader.trading.strategy import Strategy, StrategyConfig
 
 
 class EchoStrategyConfig(StrategyConfig, frozen=True):  # type: ignore[call-arg]
-    """Configuration for ``EchoStrategy`` instances."""
+    """Configuration for ``EchoStrategy`` instances.
+
+    Includes fields injected by the bundle loader so the strategy can be
+    instantiated without msgspec validation errors.
+    """
 
     instrument_id: str
     bar_type: str
     futu_code: str = ""
     venue: str = ""
+    bundle_id: str = "unknown"
+    exchange: str = ""
 
 
 class EchoStrategy(Strategy):

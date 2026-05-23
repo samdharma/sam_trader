@@ -117,6 +117,11 @@ def _load_bundle(bundle: dict[str, Any]) -> ImportableStrategyConfig:
                     f"Invalid instrument_id for Futu: {instrument_id}"
                 ) from exc
 
+    # IB-specific: default exchange to SMART to prevent direct-routing fees
+    # (v2 post-mortem: 52 code-10311 warnings from direct NASDAQ routing)
+    if venue == "IB":
+        config.setdefault("exchange", "SMART")
+
     # Ensure venue is available to the strategy for routing decisions
     config.setdefault("venue", venue)
 

@@ -183,7 +183,27 @@ def build_trading_node() -> TradingNode:
 
     strategies: list = []
     try:
-        strategies = load_bundles(cfg.bundles_path)
+        all_bundles = load_bundles(cfg.bundles_path)
+        # Filter bundles by enabled venue to prevent cross-venue contamination.
+        # A bundle for a disabled venue would try to subscribe through a
+        # non-existent client and raise runtime errors.
+        skipped: list[str] = []
+        for bundle in all_bundles:
+            venue = bundle.config.get("venue")
+            if venue == "FUTU" and not cfg.futu_enabled:
+                skipped.append(bundle.config.get("bundle_id", "unknown"))
+                continue
+            if venue == "IB" and not cfg.ib_enabled:
+                skipped.append(bundle.config.get("bundle_id", "unknown"))
+                continue
+            strategies.append(bundle)
+
+        if skipped:
+            logger.info(
+                "Skipped %d bundle(s) for disabled venue(s): %s",
+                len(skipped),
+                skipped,
+            )
         logger.info(
             "Loaded %d strategy bundle(s) from %s",
             len(strategies),
