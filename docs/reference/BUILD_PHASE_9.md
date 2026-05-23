@@ -49,7 +49,7 @@
 | ~~`sam_trader-9z3.10.3`~~ | ~~Risk manager~~ | Monte Carlo + pre-trade checks + heat monitor | ⚠️ **CLOSED** — superseded by `10.7`, `10.8`, `10.9` |
 | `sam_trader-9z3.10.4` | Market regime detection | HMM classifier + adaptation | ✅ Medium |
 | ~~`sam_trader-9z3.10.5`~~ | ~~Pipeline orchestrator~~ | Sequential executor + bundle creator + report | ⚠️ **CLOSED** — superseded by `10.10`, `10.11`, `10.12` |
-| `sam_trader-9z3.10.6` | [EXIT] Verify pipeline | End-to-end integration test | ✅ Medium |
+| `sam_trader-9z3.10.13` | [EXIT] Verify pipeline | End-to-end integration test (renumbered from 10.6 for sequence alignment) | ✅ Medium |
 | `sam_trader-9z3.10.7` | Monte Carlo position sizer | Position size simulation (sub of 10.3) | ✅ Small |
 | `sam_trader-9z3.10.8` | Pre-trade risk checks | Max exposure, daily loss, margin (sub of 10.3) | ✅ Small |
 | `sam_trader-9z3.10.9` | Portfolio heat monitor | Real-time heat tracking (sub of 10.3) | ✅ Small |

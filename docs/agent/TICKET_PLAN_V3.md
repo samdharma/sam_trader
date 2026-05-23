@@ -174,7 +174,7 @@ Phase 9 ────────────────────────
   sam_trader-9z3.10.1 ──► sam_trader-9z3.10.2 ──► sam_trader-9z3.10.7 ──► sam_trader-9z3.10.8 ──► sam_trader-9z3.10.9 ──┐
   sam_trader-9z3.10.4 ───────────────────────────────────────────────────────────────────────────────────────────────────┤
                                                                                                                          ▼
-                                                                                                   sam_trader-9z3.10.10 ──► sam_trader-9z3.10.11 ──► sam_trader-9z3.10.12 ──► sam_trader-9z3.10.6
+                                                                                                   sam_trader-9z3.10.10 ──► sam_trader-9z3.10.11 ──► sam_trader-9z3.10.12 ──► sam_trader-9z3.10.13
                                                                                                                                                                                                           │
                                                                                                                                                                                                           ▼
                                                                                                                                                                                                 ═══ PHASE 9 GATE ═══
@@ -367,22 +367,22 @@ Phase 11 ───────────────────────�
 
 > **Goal:** Gap scanner → AI analysis → risk manager → bundle generator → readiness report. Full autonomous pre-market pipeline.
 > **Parent tickets `9z3.10.3` (Risk Manager) and `9z3.10.5` (Pipeline Orchestrator) are closed-superseded.** Work distributed to sub-tickets 10.7–10.12.
-> **Build order:** Two parallel tracks converge at executor — Track A: scan → AI → MC sizer → pre-trade → heat → executor. Track B: regime → executor. Then: executor → bundle-gen → report → EXIT.
+> **Build order:** Two parallel tracks converge at executor — Track A: scan → AI → MC sizer → pre-trade → heat → executor. Track B: regime → executor. Then: executor → bundle-gen → report → EXIT. No cross-phase dependencies.
 
 | # | Ticket ID | Title | Type | AC Highlights |
 |---|-----------|-------|------|---------------|
-| 9.1 | `sam_trader-9z3.10.1` | Gap scanner: pre-market gaps, filter rules, HK+US markets | task | Scan Futu data for gap candidates. Configurable thresholds, blacklist, trend-down filter. Output: ranked candidate list. Depends on P8 exit (`9z3.9.6`). Blocks AI scoring. |
+| 9.1 | `sam_trader-9z3.10.1` | Gap scanner: pre-market gaps, filter rules, HK+US markets | task | Scan Futu data for gap candidates. Configurable thresholds, blacklist, trend-down filter. Output: ranked candidate list. No deps. Blocks AI scoring. |
 | 9.2 | `sam_trader-9z3.10.2` | AI scoring engine: candidate evaluation, recommendation grading | task | Score candidates via LLM. Grades: STRONG_BUY, BUY, HOLD, SKIP. Rule-based fast path. Depends on gap scanner (`9z3.10.1`). Blocks MC sizer. |
 | 9.3 | `sam_trader-9z3.10.7` | Monte Carlo position sizer | task | Monte Carlo simulation (default 10,000). VaR-based risk limit. Depends on AI scoring (`9z3.10.2`). Blocks pre-trade checks. |
 | 9.4 | `sam_trader-9z3.10.8` | Pre-trade risk checks | task | Max exposure per venue. Daily loss limit. Margin check. Reject if any fails. Depends on MC sizer (`9z3.10.7`). Blocks heat monitor. |
 | 9.5 | `sam_trader-9z3.10.9` | Portfolio heat monitor | task | Real-time heat tracking. Heat threshold warnings. Depends on pre-trade (`9z3.10.8`). Blocks executor. |
-| 9.6 | `sam_trader-9z3.10.4` | Market regime detection: HMM-based classification | task | HMM classifier (trending/ranging/volatile). Regime-aware parameter adaptation. Depends on P8 exit (`9z3.9.6`). Blocks executor. |
+| 9.6 | `sam_trader-9z3.10.4` | Market regime detection: HMM-based classification | task | HMM classifier (trending/ranging/volatile). Regime-aware parameter adaptation. No deps. Blocks executor. |
 | 9.7 | `sam_trader-9z3.10.10` | Pipeline sequential executor | task | Run scan→AI→risk→regime in sequence. Pass candidates between stages. Fail-fast error handling. Depends on heat monitor (`9z3.10.9`) + regime (`9z3.10.4`). Blocks bundle-gen. |
 | 9.8 | `sam_trader-9z3.10.11` | Bundle YAML generator | task | Convert approved candidates to bundle YAML. Validate against schema. Write to `config/bundles.daily.yaml`. Depends on executor (`9z3.10.10`). Blocks report. |
 | 9.9 | `sam_trader-9z3.10.12` | Readiness report | task | Daily report generation. Console table + optional webhook. Includes candidates, risks, recommendations. Depends on bundle-gen (`9z3.10.11`). Blocks EXIT. |
-| 9.10 | `sam_trader-9z3.10.6` | [EXIT] Pipeline runs end-to-end, produces valid bundles | exit | Integration test: pipeline on pre-market data. ≥1 candidate, risk checks pass, bundle YAML valid, report saved. `sam pipeline run` completes. Depends on report (`9z3.10.12`). Blocks P10 safety + DB. |
+| 9.10 | `sam_trader-9z3.10.13` | [EXIT] Pipeline runs end-to-end, produces valid bundles | exit | Integration test: pipeline on pre-market data. ≥1 candidate, risk checks pass, bundle YAML valid, report saved. `sam pipeline run` completes. Depends on report (`9z3.10.12`). Blocks P10 safety + DB. |
 
-> **Note:** Original parent tickets `9z3.10.3` (Risk Manager) and `9z3.10.5` (Pipeline Orchestrator) are **closed-superseded**. Their scope is covered by sub-tickets 10.7–10.9 and 10.10–10.12 respectively, plus the EXIT gate integration test.
+> **Note:** Original parent tickets `9z3.10.3` (Risk Manager) and `9z3.10.5` (Pipeline Orchestrator) are **closed-superseded**. Their scope is covered by sub-tickets 10.7–10.9 and 10.10–10.12 respectively, plus the EXIT gate integration test. Original EXIT `9z3.10.6` closed — renumbered to `9z3.10.13` for sequence alignment (EXIT must have highest number).
 
 ---
 
@@ -390,11 +390,12 @@ Phase 11 ───────────────────────�
 
 > **Goal:** Kill switch, circuit breakers, FastAPI backend, dashboard UI.
 > **Circuit breaker expanded to 5 triggers** (was 3): adds REJECTION_STREAK (via RejectionMonitorActor) and REALIZED_LOSS_LIMIT (via RealizedPnLTrackerActor).
+> **Build order:** 11.1 (safety) and 11.2 (DB) are independent roots. Both block API. API → dashboard → EXIT. No cross-phase dependencies.
 
 | # | Ticket ID | Title | Type | AC Highlights |
 |---|-----------|-------|------|---------------|
-| 10.1 | `sam_trader-9z3.11.1` | Safety controls: kill switch, circuit breakers, emergency halt | task | 5 circuit breaker triggers: DAILY_PNL, MARGIN_LIMIT, CONNECTIVITY_LOSS, REJECTION_STREAK (from 9z3.7.7), REALIZED_LOSS_LIMIT (from 9z3.7.8). Kill switch cancels all order + stops trading. CLI: `sam kill`, `sam halt`. Depends on P9 exit (`9z3.10.6`). Blocks API. |
-| 10.2 | `sam_trader-9z3.11.2` | Dashboard database: portfolio snapshots, scan history, alert log | task | New PG tables: `portfolio_snapshots`, `pipeline_runs`, `alert_log`. Populated by sam-services cron. Depends on P9 exit (`9z3.10.6`). Blocks API. |
+| 10.1 | `sam_trader-9z3.11.1` | Safety controls: kill switch, circuit breakers, emergency halt | task | 5 circuit breaker triggers: DAILY_PNL, MARGIN_LIMIT, CONNECTIVITY_LOSS, REJECTION_STREAK (from 9z3.7.7), REALIZED_LOSS_LIMIT (from 9z3.7.8). Kill switch cancels all orders + stops trading. CLI: `sam kill`, `sam halt`. No deps. Blocks API. |
+| 10.2 | `sam_trader-9z3.11.2` | Dashboard database: portfolio snapshots, scan history, alert log | task | New PG tables: `portfolio_snapshots`, `pipeline_runs`, `alert_log`. Populated by sam-services cron. No deps. Blocks API. |
 | 10.3 | `sam_trader-9z3.11.3` | FastAPI backend: health, positions, fills, scan results endpoints | task | `GET /health`, `/api/positions`, `/api/fills`, `/api/scans/latest`, `/api/alerts`. CORS for localhost. Depends on safety (`9z3.11.1`) + DB (`9z3.11.2`). Blocks dashboard. |
 | 10.4 | `sam_trader-9z3.11.4` | Static HTML dashboard: portfolio, fills, health, scans | task | Single-page auto-refreshing HTML. Portfolio table, fills table, health indicators, alert feed. No external CDN. Depends on API (`9z3.11.3`). Blocks EXIT. |
 | 10.5 | `sam_trader-9z3.11.5` | [EXIT] Verify: dashboard shows live data, safety controls work | exit | Integration: dashboard loads, positions populated, fills populated. Kill switch → all orders cancelled. Circuit breaker trips at threshold. Depends on dashboard (`9z3.11.4`). Blocks P11 deploy (`9z3.12.1`). |
@@ -404,13 +405,14 @@ Phase 11 ───────────────────────�
 ### Phase 11: Deploy Script & E2E Validation
 
 > **Goal:** Single-script deploy. First-run wizard. All profiles work. Full E2E gate passes.
+> **Build order:** Linear chain — deploy.sh → wizard → docs → E2E. No cross-phase dependencies. Final phase, EXIT has no downstream blocks.
 
 | # | Ticket ID | Title | Type | AC Highlights |
 |---|-----------|-------|------|---------------|
-| 11.1 | `sam_trader-9z3.12.1` | deploy.sh: single-script deploy with profiles | task | Portable bash. Profiles: `--with-futu`, `--with-ib`, `--with-services`. Git pull/clone. Sequential start with health gating. Under 300 lines. Depends on P10 exit (`9z3.11.5`). Blocks wizard. |
+| 11.1 | `sam_trader-9z3.12.1` | deploy.sh: single-script deploy with profiles | task | Portable bash. Profiles: `--with-futu`, `--with-ib`, `--with-services`. Git pull/clone. Sequential start with health gating. Under 300 lines. No deps. Blocks wizard. |
 | 11.2 | `sam_trader-9z3.12.2` | First-run wizard: interactive .env generation | task | Interactive prompts for trader ID, env, Futu + IB credentials. Write `.env` from template. Validate inputs. Mask passwords. Depends on deploy.sh (`9z3.12.1`). Blocks docs. |
 | 11.3 | `sam_trader-9z3.12.3` | User documentation: deploy guide, bundle guide, operator guide | task | `DEPLOY_GUIDE.md`, `BUNDLE_GUIDE.md`, `OPERATOR_GUIDE.md`. Prerequisites, daily ops, troubleshooting, incident response. Depends on wizard (`9z3.12.2`). Blocks E2E. |
-| 11.4 | `sam_trader-9z3.12.4` | [GATE] Full E2E validation: fresh deploy, Futu live, 1-hour soak | exit | Fresh macOS: `git clone` + `./deploy.sh --with-futu`. Full stack healthy. QuoteTick arrives. Order → fill → journal. Dashboard shows data. 1-hour soak test. `./deploy.sh --stop` cleans up. Depends on docs (`9z3.12.3`). |
+| 11.4 | `sam_trader-9z3.12.4` | [GATE] Full E2E validation: fresh deploy, Futu live, 1-hour soak | exit | Fresh macOS: `git clone` + `./deploy.sh --with-futu`. Full stack healthy. QuoteTick arrives. Order → fill → journal. Dashboard shows data. 1-hour soak test. `./deploy.sh --stop` cleans up. Depends on docs (`9z3.12.3`). Terminal gate — no blocks. |
 
 ---
 
@@ -445,10 +447,10 @@ Phase 0 ───► Phase 1 ───► Phase 2 ───► Phase 3 ───
 | Phase 3 | 6 | Futu Execution (decomposed from 3) |
 | Phase 4 | 6 | Futu Integration |
 | Phase 5 | 8 | IBKR Re-integration (decomposed from 1; 2 bug fixes) |
-| Phase 6 | 8 | Actors + State (2 gap-remediation actors added) |
+| Phase 6 | 9 | Actors + State (2 gap-remediation actors; EXIT renumbered 7.6→7.9) |
 | Phase 7 | 6 | Strategies + Bundles |
 | Phase 8 | 6 | Services Container |
-| Phase 9 | 12 | Pre-Market Pipeline (2 parent closed-superseded; 10 active) |
+| Phase 9 | 13 | Pre-Market Pipeline (2 parent closed-superseded; 1 EXIT renumbered 10.6→10.13) |
 | Phase 10 | 5 | Safety + Dashboard |
 | Phase 11 | 4 | Deploy + E2E |
 | **Total** | **88** | |
