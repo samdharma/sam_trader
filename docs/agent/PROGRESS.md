@@ -510,3 +510,18 @@
 - **Files Changed**: `src/sam_trader/actors/health_monitor.py` (new), `src/sam_trader/actors/__init__.py`, `tests/unit/actors/test_health_monitor.py` (new)
 - **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 16/16 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ready for next P6 ticket (sam_trader-9z3.7.4: BarResubscriptionActor, or sam_trader-9z3.7.5: Redis state wiring, or sam_trader-9z3.7.7: RejectionMonitorActor).
+
+## Iteration 68
+- **Task**: P6: BarResubscriptionActor — bar recovery on reconnect
+- **Task ID**: sam_trader-9z3.7.4
+- **Status**: COMPLETE
+- **Decisions**: 
+  1. Ported BarResubscriptionActor from v2 with v3 multi-venue enhancements.
+  2. Added auto-discovery of bar_types from strategy configs when `bar_types=None` — iterates `trader.strategies()` and collects unique `bar_type` values.
+  3. Added periodic staleness check (`_on_staleness_check`) every 60s during market hours; forces re-subscription if no bar received for >300s. This addresses the "disconnect/reconnect" acceptance criterion.
+  4. Retained proven market-open re-subscription from v2 (checks at 09:30 ET if zero bars received).
+  5. Actor is venue-agnostic via `BarType`, so both Futu and IB bar types are handled naturally.
+  6. Used Cython-safe patterns: no config reassignment on actor instances; mocked `_force_resubscription` for timer-trigger tests.
+- **Files Changed**: `src/sam_trader/actors/bar_resubscription.py` (new), `src/sam_trader/actors/__init__.py`, `tests/unit/actors/test_bar_resubscription.py` (new)
+- **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 21/21 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for next P6 ticket (sam_trader-9z3.7.5: Redis state wiring, or sam_trader-9z3.7.7: RejectionMonitorActor).
