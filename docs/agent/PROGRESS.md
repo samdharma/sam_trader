@@ -581,3 +581,19 @@
 - **Files Changed**: `.beads/issues.jsonl`, `.beads/interactions.jsonl`, `docs/agent/PROGRESS.md`
 - **Validation Result**: PASS (26/26 orb tests + 8/8 common tests passed)
 - **Blockers / Notes**: None. Ready for next Phase 7 ticket.
+
+## Iteration 75
+- **Task**: P7: MomentumStrategy — port from v2 with venue-aware config
+- **Task ID**: sam_trader-9z3.8.3
+- **Status**: COMPLETE
+- **Decisions**: 
+  1. Ported MomentumStrategy from v2, following v3 OrbStrategy patterns: flat config fields (no nested BracketConfig/RiskConfig), instrument_id/bar_type as str parsed in on_start, venue-aware via config.venue string.
+  2. Added configurable entry_order_type (MARKET/LIMIT/STOP_MARKET) per BUILD_PHASE_7 gap remediation.
+  3. Added allowed_directions as tuple[str, ...] (default ("LONG", "SHORT")) per BUILD_PHASE_7 gap remediation — msgspec Struct rejects mutable list defaults.
+  4. Session time guards default to empty strings (disabled) to match OrbStrategy pattern; parsed via _parse_time helper.
+  5. Venue-aware routing uses explicit `if self.config.venue == "IB": bracket_kwargs.setdefault("tp_post_only", False)` before calling `self.order_factory.bracket()`, matching OrbStrategy pattern. Note: `make_bracket` from common.py checks instrument_id.venue (exchange) not config.venue (broker), so explicit config check is required.
+  6. Removed RejectionCircuitBreaker and buying power checks (system-level actors handle this in v3).
+  7. State persistence via pickle in on_save/on_load.
+- **Files Changed**: `src/sam_trader/strategies/momentum.py` (new), `tests/unit/strategies/test_momentum.py` (new)
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 26/26 momentum tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for next Phase 7 ticket (sam_trader-9z3.8.4: Strategy template, or sam_trader-9z3.8.5: Bundle validation).
