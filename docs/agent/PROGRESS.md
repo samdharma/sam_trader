@@ -572,3 +572,12 @@
 - **Files Changed**: `.beads/issues.jsonl`, `.beads/interactions.jsonl`, `docs/agent/PROGRESS.md`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 26/26 orb tests + 8/8 common tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ready for next Phase 7 ticket (sam_trader-9z3.8.3: MomentumStrategy, or sam_trader-9z3.8.4: Strategy template, or sam_trader-9z3.8.5: Bundle validation).
+
+## Iteration 74
+- **Task**: P7: OrbStrategy — port from v2 with venue-aware config
+- **Task ID**: sam_trader-9z3.8.2
+- **Status**: COMPLETE
+- **Decisions**: Confirmed existing implementation already satisfies all acceptance criteria from prior iteration. Ticket had remained `in_progress` due to incomplete beads state update. Closed ticket properly after re-running all 34 strategy tests (26 orb + 8 common) which all pass.
+- **Files Changed**: `.beads/issues.jsonl`, `.beads/interactions.jsonl`, `docs/agent/PROGRESS.md`
+- **Validation Result**: PASS (26/26 orb tests + 8/8 common tests passed)
+- **Blockers / Notes**: None. Ready for next Phase 7 ticket.
