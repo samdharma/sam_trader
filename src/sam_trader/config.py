@@ -32,7 +32,6 @@ class SamTraderConfig:
     futu_trd_env: str
     futu_trd_market: str
     futu_unlock_pwd_md5: str
-    futu_account_id: str
 
     # Actors
     actor_bar_resub_enabled: bool
@@ -93,7 +92,6 @@ class SamTraderConfig:
             futu_trd_env=os.environ.get("FUTU_TRD_ENV", "SIMULATE"),
             futu_trd_market=os.environ.get("FUTU_TRD_MARKET", "US"),
             futu_unlock_pwd_md5=os.environ.get("FUTU_UNLOCK_PWD_MD5", ""),
-            futu_account_id=os.environ.get("FUTU_ACCOUNT_ID", ""),
             actor_bar_resub_enabled=os.environ.get(
                 "ACTOR_BAR_RESUB_ENABLED", ""
             ).lower()

@@ -31,7 +31,6 @@ class TestSamTraderConfig:
             "FUTU_TRD_ENV",
             "FUTU_TRD_MARKET",
             "FUTU_UNLOCK_PWD_MD5",
-            "FUTU_ACCOUNT_ID",
             "ACTOR_BAR_RESUB_ENABLED",
             "ACTOR_JOURNAL_ENABLED",
             "ACTOR_HEALTH_ENABLED",
@@ -68,7 +67,6 @@ class TestSamTraderConfig:
         assert cfg.futu_trd_env == "SIMULATE"
         assert cfg.futu_trd_market == "US"
         assert cfg.futu_unlock_pwd_md5 == ""
-        assert cfg.futu_account_id == ""
         assert cfg.actor_bar_resub_enabled is False
         assert cfg.actor_journal_enabled is False
         assert cfg.actor_health_enabled is False
@@ -103,7 +101,6 @@ class TestSamTraderConfig:
         monkeypatch.setenv("FUTU_TRD_ENV", "REAL")
         monkeypatch.setenv("FUTU_TRD_MARKET", "HK")
         monkeypatch.setenv("FUTU_UNLOCK_PWD_MD5", "abc123")
-        monkeypatch.setenv("FUTU_ACCOUNT_ID", "12345678")
         monkeypatch.setenv("ACTOR_BAR_RESUB_ENABLED", "true")
         monkeypatch.setenv("ACTOR_JOURNAL_ENABLED", "true")
         monkeypatch.setenv("ACTOR_HEALTH_ENABLED", "true")
@@ -138,7 +135,6 @@ class TestSamTraderConfig:
         assert cfg.futu_trd_env == "REAL"
         assert cfg.futu_trd_market == "HK"
         assert cfg.futu_unlock_pwd_md5 == "abc123"
-        assert cfg.futu_account_id == "12345678"
         assert cfg.actor_bar_resub_enabled is True
         assert cfg.actor_journal_enabled is True
         assert cfg.actor_health_enabled is True
@@ -174,7 +170,6 @@ class TestSamTraderConfig:
             futu_trd_env="SIMULATE",
             futu_trd_market="US",
             futu_unlock_pwd_md5="",
-            futu_account_id="",
             actor_bar_resub_enabled=False,
             actor_journal_enabled=False,
             actor_health_enabled=False,
@@ -197,7 +192,6 @@ class TestSamTraderConfig:
         assert cfg.futu_trd_env == "SIMULATE"
         assert cfg.futu_trd_market == "US"
         assert cfg.futu_unlock_pwd_md5 == ""
-        assert cfg.futu_account_id == ""
 
     def test_frozen_dataclass(self) -> None:
         """Test that the dataclass is frozen (immutable)."""
@@ -219,7 +213,6 @@ class TestSamTraderConfig:
             futu_trd_env="SIMULATE",
             futu_trd_market="US",
             futu_unlock_pwd_md5="",
-            futu_account_id="",
             actor_bar_resub_enabled=False,
             actor_journal_enabled=False,
             actor_health_enabled=False,
