@@ -81,14 +81,14 @@ All containers use a standardized **3-layer health check** (see `docker/HEALTHCH
 ```
 EPIC (type: epic, labels: epic, meta-grouping, <phase-tag>) - not to be closed
 └── FEATURE (type: feature, labels: <phase-tag>, meta-grouping) - not to be closed
-    ├── WORK tickets (type: task|bug|test|docs, labels: <phase-tag> ONLY). Each ticket should me atomic and small. number sequence according to build sequence  - to be closed after implementation
+    ├── WORK tickets (type: task|bug|test|docs, labels: <phase-tag> ONLY). Each ticket should be atomic and small. Number sequence according to build sequence (ticket N depends on ticket N-1 or has no deps) — to be closed after implementation
     │   - Use `bug` for regressions/defects; `task` for new work
     │   - Must have description with acceptance criteria
     │   - Must reference spec file or build phase doc
     │   - Dependencies set explicitly via `bd dep add`
-    └── EXIT ticket (type: task, labels: <phase-tag>)
+    └── EXIT ticket (type: task, labels: exit, <phase-tag>)
         - Last ticket before feature is complete
-        - regression test and wired (e2e) for the whole feature
+        - Regression test and wired (e2e) for the whole feature
         - Blocks the NEXT phase's first work ticket(s)
 ```
 
@@ -102,10 +102,12 @@ EPIC (type: epic, labels: epic, meta-grouping, <phase-tag>) - not to be closed
 
 ### Dependency Rules
 1. **FEATURE parents are pure containers** — they MUST NOT carry blocking dependencies (including on previous phase EXIT tickets).
-2. **Phase gating** — a phase's first work ticket(s) depend on the previous phase's EXIT ticket.
+2. **Phase gating** — a phase's first work ticket(s) depend on the previous phase's EXIT ticket ONLY. No cross-phase skip links (e.g., a phase-11 ticket must NOT directly depend on a phase-7 ticket).
 3. **EXIT tickets** depend only on their own phase's work tickets.
-4. **Work tickets** MUST have exactly one label (`<phase-tag>`).
+4. **Work tickets** MUST have exactly one label (`<phase-tag>`). EXIT tickets are the exception: `exit, <phase-tag>`.
 5. **Phase labels** use `phase-<N>`. Non-numeric suffixes break Ralph's build-doc lookup.
+6. **No redundant transitive dependencies** — if A depends on B and B depends on C, A must NOT also directly depend on C. Keep the graph flat within each phase.
+7. **Ralph deterministic selection** — the Ralph loop skips `epic` and `feature` tickets, then sorts ready work tickets by feature number ascending, then task number ascending. Lower numbers are always built first.
 
 <!-- BEGIN RALPH LOOP INTEGRATION v:1 -->
 ## Ralph Wiggum Loop System
@@ -128,7 +130,7 @@ bash scripts/ralph/ralph_validate.sh --tier=targeted
 bash scripts/ralph/ralph_health.sh --verbose
 ```
 
-**Preflight guardrails:** `config/ralph_preflight.sh` gates ticket selection. It must output exactly `READY` to stdout; anything else skips the ticket.
+**Preflight guardrails:** `scripts/ralph/ralph_preflight.sh` gates ticket selection (sourcing project-specific overrides from `config/ralph_preflight.sh`). It must output exactly `READY` to stdout; anything else skips the ticket.
 <!-- END RALPH LOOP INTEGRATION -->
 
 <!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:7510c1e2 -->
