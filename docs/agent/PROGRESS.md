@@ -545,3 +545,12 @@
 - **Files Changed**: `src/sam_trader/main.py`, `tests/unit/test_main_cache_config.py`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 6/6 new tests passed, 17/17 all test_main*.py passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ready for next P6 ticket (sam_trader-9z3.7.7: RejectionMonitorActor, or sam_trader-9z3.7.8: RealizedPnLTrackerActor, or sam_trader-9z3.7.9: [EXIT] Verify actors).
+
+## Iteration 71
+- **Task**: P6: RealizedPnLTrackerActor — per-strategy realized P&L
+- **Task ID**: sam_trader-9z3.7.8
+- **Status**: COMPLETE
+- **Decisions**: Created `RealizedPnLTrackerActor` that listens to `OrderFilled` events, computes realized P&L per strategy using FIFO lot matching per `(strategy_id, instrument_id)`, and persists the running total to Redis (`sam:pnl:{strategy_id}:{date}`). Provides `get_realized_pnl(strategy_id)` queryable API for Phase 10 circuit breakers and dashboards. State resets at 00:00 UTC via date-rollover detection on fill timestamps. Does NOT track unrealized P&L, eliminating the v2 ambiguous max_daily_loss behavior. Added `redis>=5.0` to pyproject.toml dependencies for async Redis client (`redis.asyncio`).
+- **Files Changed**: `src/sam_trader/actors/realized_pnl.py` (new), `src/sam_trader/actors/__init__.py`, `tests/unit/actors/test_realized_pnl.py` (new), `pyproject.toml`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 17/17 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for next P6 ticket (sam_trader-9z3.7.9: [EXIT] Verify actors) or other remaining Phase 6 work.
