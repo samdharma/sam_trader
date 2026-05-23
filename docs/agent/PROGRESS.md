@@ -441,3 +441,12 @@
 - **Files Changed**: `.env.example`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; no affected tests, lint skipped)
 - **Blockers / Notes**: None. Phase 5 cleanup complete.
+
+## Iteration 61
+- **Task**: P5: Remove dead ib_trading_mode field from SamTraderConfig
+- **Task ID**: sam_trader-9z3.6.12
+- **Status**: COMPLETE
+- **Decisions**: Removed unused `ib_trading_mode` from `SamTraderConfig` dataclass and `from_env()`. Added clarifying comment to `.env.example` explaining that `IB_TRADING_MODE` is consumed by the IB Gateway Docker container, not by sam-trader Python code.
+- **Files Changed**: `src/sam_trader/config.py`, `tests/unit/test_config.py`, `.env.example`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 4/4 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Phase 5 cleanup complete.

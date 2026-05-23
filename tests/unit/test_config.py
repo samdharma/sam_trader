@@ -25,7 +25,6 @@ class TestSamTraderConfig:
             "IB_SYMBOLS",
             "IB_READ_ONLY_API",
             "IB_MARKET_DATA_TYPE",
-            "IB_TRADING_MODE",
             "FUTU_ENABLED",
             "FUTU_OPEND_HOST",
             "FUTU_OPEND_PORT",
@@ -63,7 +62,6 @@ class TestSamTraderConfig:
         assert cfg.ib_symbols == []
         assert cfg.ib_read_only_api is False
         assert cfg.ib_market_data_type == "REALTIME"
-        assert cfg.ib_trading_mode == "paper"
         assert cfg.futu_enabled is False
         assert cfg.futu_opend_host == "sam-futu-opend"
         assert cfg.futu_opend_port == 11111
@@ -99,7 +97,6 @@ class TestSamTraderConfig:
         monkeypatch.setenv("IB_SYMBOLS", "AAPL.NASDAQ, TSLA.NASDAQ")
         monkeypatch.setenv("IB_READ_ONLY_API", "1")
         monkeypatch.setenv("IB_MARKET_DATA_TYPE", "DELAYED")
-        monkeypatch.setenv("IB_TRADING_MODE", "live")
         monkeypatch.setenv("FUTU_ENABLED", "yes")
         monkeypatch.setenv("FUTU_OPEND_HOST", "custom-futu")
         monkeypatch.setenv("FUTU_OPEND_PORT", "22222")
@@ -135,7 +132,6 @@ class TestSamTraderConfig:
         assert cfg.ib_symbols == ["AAPL.NASDAQ", "TSLA.NASDAQ"]
         assert cfg.ib_read_only_api is True
         assert cfg.ib_market_data_type == "DELAYED"
-        assert cfg.ib_trading_mode == "live"
         assert cfg.futu_enabled is True
         assert cfg.futu_opend_host == "custom-futu"
         assert cfg.futu_opend_port == 22222
@@ -172,7 +168,6 @@ class TestSamTraderConfig:
             ib_symbols=[],
             ib_read_only_api=False,
             ib_market_data_type="REALTIME",
-            ib_trading_mode="paper",
             futu_enabled=True,
             futu_opend_host="sam-futu-opend",
             futu_opend_port=11111,
@@ -218,7 +213,6 @@ class TestSamTraderConfig:
             ib_symbols=[],
             ib_read_only_api=False,
             ib_market_data_type="REALTIME",
-            ib_trading_mode="paper",
             futu_enabled=False,
             futu_opend_host="sam-futu-opend",
             futu_opend_port=11111,

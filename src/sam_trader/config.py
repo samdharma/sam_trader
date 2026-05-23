@@ -24,7 +24,6 @@ class SamTraderConfig:
     ib_symbols: list[str]
     ib_read_only_api: bool
     ib_market_data_type: str
-    ib_trading_mode: str
 
     # Futu
     futu_enabled: bool
@@ -87,7 +86,6 @@ class SamTraderConfig:
             ib_market_data_type=os.environ.get(
                 "IB_MARKET_DATA_TYPE", "REALTIME"
             ).upper(),
-            ib_trading_mode=os.environ.get("IB_TRADING_MODE", "paper"),
             futu_enabled=os.environ.get("FUTU_ENABLED", "").lower()
             in ("1", "true", "yes"),
             futu_opend_host=os.environ.get("FUTU_OPEND_HOST", "sam-futu-opend"),
