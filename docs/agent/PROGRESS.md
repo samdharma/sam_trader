@@ -727,3 +727,18 @@
 - **Files Changed**: `src/sam_trader/services/quote.py` (new), `src/sam_trader/services/cli.py`, `tests/unit/services/test_quote.py` (new), `tests/unit/services/test_cli.py`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 39/39 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ready for next Phase 8 ticket (sam_trader-9z3.9.5: Deployment capabilities, or sam_trader-9z3.9.7: LiveRiskEngine, or sam_trader-9z3.9.9: Slippage tracking, or sam_trader-9z3.9.10: PositionSnapshotActor, or sam_trader-9z3.9.11: PerformanceAnalyzer).
+
+## Iteration 85
+- **Task**: P8: Deployment capabilities — stack lifecycle, hot-fix, rollback
+- **Task ID**: sam_trader-9z3.9.5
+- **Status**: COMPLETE
+- **Decisions**:
+  1. Created `deploy.sh` in project root with ONLY setup, profiles (`--with-futu`, `--with-ib`, `--with-services`), and compose lifecycle (`start`, `stop`, `restart`). Removed ops commands are delegated to the `sam` CLI inside sam-services.
+  2. `deploy.sh` includes health gating (`wait_for_healthy`) for sequential startup: postgres → redis → brokers → trader → services.
+  3. `deploy.sh restart` publishes `sam:restart_request graceful` to Redis before `docker compose restart sam-trader`, preserving Redis actor/strategy state.
+  4. Enhanced `sam hotfix` CLI command to touch `/opt/sam_trader/.hotfix_trigger` inside the container after copying the module, enabling file-watch reload without full restart.
+  5. `sam rollback <tag>` already implemented: git fetch → checkout tag → rebuild → graceful restart.
+  6. Added `tests/integration/test_deploy_decouple.py` with 12 integration tests covering: deploy.sh structure (executable, no ops flags, correct profiles, lifecycle actions, compose file path, health wait), bash syntax validation, sequential start order, graceful restart via Redis, `sam status` output, `sam hotfix` behavior, and `sam rollback` behavior.
+- **Files Changed**: `deploy.sh` (new), `src/sam_trader/services/cli.py` (hotfix trigger), `tests/integration/test_deploy_decouple.py` (new), `tests/unit/services/test_cli.py` (updated hotfix test for trigger)
+- **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 45/45 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for next Phase 8 ticket.

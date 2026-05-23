@@ -159,13 +159,24 @@ def hotfix(ctx: click.Context, module_path: str) -> None:
     dest = f"{SAM_TRADER_CONTAINER}:/opt/sam_trader/{module_path}"
     _run([DOCKER_BINARY, "cp", str(src), dest])
 
+    # Touch hotfix trigger file inside container to signal reload watcher
+    _run(
+        [
+            DOCKER_BINARY,
+            "exec",
+            SAM_TRADER_CONTAINER,
+            "touch",
+            "/opt/sam_trader/.hotfix_trigger",
+        ]
+    )
+
     result = {
         "command": "hotfix",
         "source": str(src),
         "destination": dest,
         "status": "copied",
+        "trigger": "/opt/sam_trader/.hotfix_trigger",
     }
-    # Note: actual reload requires sam-trader to watch files or receive signal
     _out(ctx, result)
 
 

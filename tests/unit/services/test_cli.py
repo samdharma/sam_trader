@@ -278,8 +278,9 @@ class TestHotfixCommand:
         captured = capsys.readouterr()
         assert rc == 0
         assert "copied" in captured.out
-        args = mock_run.call_args[0][0]
-        assert "cp" in args
+        calls = [c[0][0] for c in mock_run.call_args_list]
+        assert any("cp" in c for c in calls)
+        assert any("touch" in c for c in calls)
 
     def test_hotfix_missing_file(self, capsys: Any) -> None:
         rc = main(["hotfix", "/nonexistent/path.py"])
