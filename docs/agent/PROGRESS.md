@@ -414,3 +414,12 @@
 - **Files Changed**: `tests/integration/test_dual_venue.py` (new)
 - **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 1/1 integration test passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: Phase 5 exit gate complete. Ready for Phase 6 (Actors & State Management).
+
+## Iteration 59
+- **Task**: P5: Remove dead permission checking infrastructure
+- **Task ID**: sam_trader-9z3.6.9
+- **Status**: COMPLETE
+- **Decisions**: Removed dead IB permission checking code that had no hook point after switching to standard Nautilus `InteractiveBrokersExecutionClient`. Deleted `permissions.py`, `exec_client.py`, `factories.py` from `src/sam_trader/adapters/ib/` and their corresponding test files. `src/sam_trader/adapters/ib/` now contains only `__init__.py` and `constants.py` as required by acceptance criteria. Permission-check functionality will be re-implemented in Phase 6 as a standard Nautilus Actor.
+- **Files Changed**: `src/sam_trader/adapters/ib/permissions.py` (deleted), `src/sam_trader/adapters/ib/exec_client.py` (deleted), `src/sam_trader/adapters/ib/factories.py` (deleted), `tests/unit/adapters/ib/test_permissions.py` (deleted), `tests/unit/adapters/ib/test_exec_client.py` (deleted)
+- **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 2/2 remaining IB tests passed, unit suite 292 passed, 1 skipped; pre-existing failures unrelated)
+- **Blockers / Notes**: None. Ready for next phase-5 or phase-6 ticket.
