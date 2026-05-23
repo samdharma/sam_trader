@@ -468,3 +468,12 @@
 - **Files Changed**: `tests/integration/test_dual_venue.py`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 4/4 integration tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Phase 5 integration test complete.
+
+## Iteration 64
+- **Task**: P1: Remove dead futu_account_id field from SamTraderConfig
+- **Task ID**: sam_trader-9z3.2.1
+- **Status**: COMPLETE
+- **Decisions**: Removed unused `futu_account_id` field and its env var wiring from `SamTraderConfig`. Confirmed Futu OpenD container handles account login independently; Nautilus client does not need it. Updated `docker/docker-compose.yml` to remove dead `FUTU_ACCOUNT_ID` env var from `sam-trader` service while keeping it in `sam-futu-opend`.
+- **Files Changed**: `src/sam_trader/config.py`, `tests/unit/test_config.py`, `docker/docker-compose.yml`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 4/4 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for next phase-1 ticket.
