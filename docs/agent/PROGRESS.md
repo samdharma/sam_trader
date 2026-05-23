@@ -802,3 +802,12 @@
 - **Files Changed**: `src/sam_trader/services/performance_analyzer.py` (rewritten), `tests/unit/services/test_performance_analyzer.py` (new)
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 14/14 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ready for next Phase 8 ticket (sam_trader-9z3.9.8: sam performance CLI, or sam_trader-9z3.9.6: [EXIT] Verify).
+
+## Iteration 90
+- **Task**: P8: sam performance CLI — Nautilus-powered performance stats
+- **Task ID**: sam_trader-9z3.9.8
+- **Status**: COMPLETE
+- **Decisions**: Enhanced the existing `sam performance` CLI command to meet all acceptance criteria. Added `_format_performance_table()` helper that produces human-readable aligned columns (Metric / Value) for default output, while `--json` continues to emit structured JSON. Updated the empty-state message to exactly match AC: "No performance data available. Run nightly analysis first." Renamed tests to required names: `test_performance_command_table`, `test_performance_command_json`, `test_performance_no_data`.
+- **Files Changed**: `src/sam_trader/services/cli.py`, `tests/unit/services/test_cli.py`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 31/31 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for Phase 8 EXIT ticket (sam_trader-9z3.9.6) or other remaining Phase 8 work.

@@ -408,7 +408,7 @@ class TestPipelineCommand:
 
 class TestPerformanceCommand:
     @patch("sam_trader.services.cli.asyncpg.connect")
-    def test_performance_with_data(self, mock_connect: Any, capsys: Any) -> None:
+    def test_performance_command_table(self, mock_connect: Any, capsys: Any) -> None:
         from unittest.mock import AsyncMock
 
         mock_conn = AsyncMock()
@@ -431,9 +431,13 @@ class TestPerformanceCommand:
         assert rc == 0
         assert "SharpeRatio" in captured.out
         assert "tsla-orb-futu" in captured.out
+        # Verify aligned table formatting
+        assert "Metric" in captured.out
+        assert "Value" in captured.out
+        assert "Strategy:" in captured.out
 
     @patch("sam_trader.services.cli.asyncpg.connect")
-    def test_performance_json(self, mock_connect: Any, capsys: Any) -> None:
+    def test_performance_command_json(self, mock_connect: Any, capsys: Any) -> None:
         from unittest.mock import AsyncMock
 
         mock_conn = AsyncMock()
@@ -458,7 +462,7 @@ class TestPerformanceCommand:
         assert "tsla-orb-futu" in data["stats"]
 
     @patch("sam_trader.services.cli.asyncpg.connect")
-    def test_performance_empty(self, mock_connect: Any, capsys: Any) -> None:
+    def test_performance_no_data(self, mock_connect: Any, capsys: Any) -> None:
         from unittest.mock import AsyncMock
 
         mock_conn = AsyncMock()
@@ -468,7 +472,8 @@ class TestPerformanceCommand:
         rc = main(["performance"])
         captured = capsys.readouterr()
         assert rc == 0
-        assert "No performance stats" in captured.out
+        assert "No performance data available" in captured.out
+        assert "Run nightly analysis first" in captured.out
 
 
 class TestJsonGlobalFlag:

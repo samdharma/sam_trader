@@ -563,11 +563,46 @@ def performance(ctx: click.Context, strategy: str | None, days: int) -> None:
     """Display performance stats from Nautilus PortfolioAnalyzer results."""
     try:
         result = asyncio.run(_performance_query(strategy, days, ctx.obj.get("json")))
-        _out(ctx, result)
+        if ctx.obj.get("json"):
+            _out(ctx, result)
+        else:
+            click.echo(_format_performance_table(result))
     except click.ClickException:
         raise
     except Exception as exc:
         raise click.ClickException(f"Performance query failed: {exc}")
+
+
+def _format_performance_table(data: dict[str, Any]) -> str:
+    """Format performance stats as human-readable aligned columns."""
+    lines: list[str] = []
+    days = data.get("days", 30)
+    lines.append(f"Performance Summary (last {days} days)")
+    lines.append("=" * 56)
+
+    stats = data.get("stats", {})
+    if not stats:
+        note: str = data.get(
+            "note",
+            "No performance data available. Run nightly analysis first.",
+        )
+        return note
+
+    for strategy_id, strategy_stats in stats.items():
+        lines.append(f"\nStrategy: {strategy_id}")
+        lines.append("-" * 56)
+        lines.append(f"{'Metric':<30} {'Value':>12}")
+        lines.append("-" * 56)
+        for name, value in sorted(strategy_stats.items()):
+            if value is None:
+                val_str = "N/A"
+            elif isinstance(value, float):
+                val_str = f"{value:>12.4f}"
+            else:
+                val_str = str(value)
+            lines.append(f"{name:<30} {val_str}")
+
+    return "\n".join(lines)
 
 
 async def _performance_query(
@@ -599,7 +634,7 @@ async def _performance_query(
                 "days": days,
                 "strategy": strategy,
                 "stats": {},
-                "note": "No performance stats found. Run PerformanceAnalyzer first.",
+                "note": "No performance data available. Run nightly analysis first.",
             }
 
         grouped: dict[str, dict[str, float | None]] = {}
