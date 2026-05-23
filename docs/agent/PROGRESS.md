@@ -477,3 +477,12 @@
 - **Files Changed**: `src/sam_trader/config.py`, `tests/unit/test_config.py`, `docker/docker-compose.yml`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 4/4 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ready for next phase-1 ticket.
+
+## Iteration 65
+- **Task**: P6: PostgreSQL schema — fills, orders, positions with venue column
+- **Task ID**: sam_trader-9z3.7.1
+- **Status**: COMPLETE
+- **Decisions**: Updated `docker/postgres/init/01_schema.sql` with full v2 port + v3 multi-venue enhancements. fills: added `venue_order_id`, `currency`, `ts_init`; tightened `venue` to `VARCHAR(10) NOT NULL` and `trd_market` to `VARCHAR(10)`. orders: restored full v2 order_type enum (`MARKET_TO_LIMIT` through `TRAILING_STOP_LIMIT`), added `venue VARCHAR(10) NOT NULL`. positions: added `venue VARCHAR(10) NOT NULL`, updated UNIQUE constraint to `(strategy_id, instrument_id, venue)` for multi-venue isolation. Added venue/strategy indexes on all tables. Removed stale `tests/paper_trading/` directory. Expanded `tests/unit/test_postgres_schema.py` from 4 to 13 tests covering all AC.
+- **Files Changed**: `docker/postgres/init/01_schema.sql`, `tests/unit/test_postgres_schema.py`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 13/13 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Phase 6 schema ticket complete. Ready for next P6 ticket (sam_trader-9z3.7.2: TradeJournalActor).
