@@ -8,6 +8,10 @@ from sam_trader.actors.health_monitor import (
     HealthMonitorActor,
     HealthMonitorActorConfig,
 )
+from sam_trader.actors.realized_pnl import (
+    RealizedPnLTrackerActor,
+    RealizedPnLTrackerActorConfig,
+)
 from sam_trader.actors.rejection_monitor import (
     RejectionMonitorActor,
     RejectionMonitorActorConfig,
@@ -20,6 +24,8 @@ __all__ = [
     "BarResubscriptionActorConfig",
     "HealthMonitorActor",
     "HealthMonitorActorConfig",
+    "RealizedPnLTrackerActor",
+    "RealizedPnLTrackerActorConfig",
     "RejectionMonitorActor",
     "RejectionMonitorActorConfig",
     "StrategyHaltRequest",

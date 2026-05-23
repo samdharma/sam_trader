@@ -30,6 +30,7 @@ dependencies = [
     "futu-api",
     "nautilus-ibapi==10.45.1",
     "holidays",
+    "redis>=5.0",
 ]
 
 [project.optional-dependencies]
