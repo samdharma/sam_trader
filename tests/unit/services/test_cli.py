@@ -167,26 +167,41 @@ class TestRestartCommand:
 
 
 class TestQuoteCommand:
-    @patch("sam_trader.services.cli.subprocess.run")
-    def test_quote_from_redis_cache(self, mock_subproc: Any, capsys: Any) -> None:
-        mock_subproc.return_value = MagicMock(
-            returncode=0, stdout='{"bid": 150.0, "ask": 150.5}'
-        )
+    @patch("sam_trader.services.quote._try_cache")
+    def test_quote_from_redis_cache(self, mock_cache: Any, capsys: Any) -> None:
+        mock_cache.return_value = {
+            "bid": 150.0,
+            "ask": 150.5,
+            "last": 150.25,
+            "source": "redis_cache",
+        }
         rc = main(["quote", "AAPL.NASDAQ"])
         captured = capsys.readouterr()
         assert rc == 0
         assert "redis_cache" in captured.out
         assert "AAPL.NASDAQ" in captured.out
+        assert "150.00" in captured.out or "150.50" in captured.out
 
-    @patch("sam_trader.services.cli.subprocess.run")
-    def test_quote_fallback_when_redis_miss(
-        self, mock_subproc: Any, capsys: Any
+    @patch("sam_trader.services.quote._try_cache")
+    @patch("sam_trader.services.quote._try_futu_broker")
+    def test_quote_fallback_to_broker(
+        self, mock_broker: Any, mock_cache: Any, capsys: Any
     ) -> None:
-        mock_subproc.return_value = MagicMock(returncode=0, stdout="")
+        mock_cache.return_value = None
+        mock_broker.return_value = {
+            "symbol": "TSLA.NASDAQ",
+            "bid": 250.0,
+            "ask": 250.5,
+            "last": 250.25,
+            "source": "futu_broker",
+            "timestamp": "2026-05-23T12:00:00+00:00",
+        }
         rc = main(["quote", "TSLA.NASDAQ"])
         captured = capsys.readouterr()
         assert rc == 0
-        assert "not_implemented" in captured.out or "broker" in captured.out
+        assert "futu_broker" in captured.out
+        assert "TSLA.NASDAQ" in captured.out
+        assert "250.00" in captured.out or "250.50" in captured.out
 
 
 class TestDeployCommand:

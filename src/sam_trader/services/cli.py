@@ -38,6 +38,7 @@ from sam_trader.services.backup import backup as run_backup
 from sam_trader.services.backup import restore as run_restore
 from sam_trader.services.deploy_window import check_window as check_deploy_window
 from sam_trader.services.pipeline import run_pipeline
+from sam_trader.services.quote import format_quote, get_quote
 from sam_trader.services.rotate_logs import rotate_logs
 
 logger = logging.getLogger(__name__)
@@ -536,44 +537,11 @@ def pipeline(ctx: click.Context) -> None:
 @click.pass_context
 def quote(ctx: click.Context, symbol: str) -> None:
     """Real-time quote from cache or broker."""
-    # Attempt Redis cache first
-    redis_key = f"sam:quote:{symbol}"
-    try:
-        redis_cmd = ["redis-cli", "-h", REDIS_HOST, "-p", REDIS_PORT, "GET", redis_key]
-        if REDIS_PASSWORD:
-            redis_cmd = [
-                "redis-cli",
-                "-h",
-                REDIS_HOST,
-                "-p",
-                REDIS_PORT,
-                "-a",
-                REDIS_PASSWORD,
-                "GET",
-                redis_key,
-            ]
-        r = subprocess.run(redis_cmd, capture_output=True, text=True, check=False)
-        if r.returncode == 0 and r.stdout.strip():
-            result = {
-                "command": "quote",
-                "symbol": symbol,
-                "source": "redis_cache",
-                "data": r.stdout.strip(),
-            }
-            _out(ctx, result)
-            return
-    except Exception as exc:
-        logger.warning("Redis quote lookup failed: %s", exc)
-
-    # Fallback: placeholder for broker quote (ticket 9z3.9.4)
-    result = {
-        "command": "quote",
-        "symbol": symbol,
-        "source": "broker",
-        "status": "not_implemented",
-        "note": "Broker quote fetcher deferred to ticket 9z3.9.4",
-    }
-    _out(ctx, result)
+    result = get_quote(symbol)
+    if ctx.obj.get("json"):
+        _out(ctx, result)
+    else:
+        click.echo(format_quote(result))
 
 
 @cli.command()
