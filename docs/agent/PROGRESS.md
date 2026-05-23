@@ -621,3 +621,18 @@
 - **Files Changed**: `src/sam_trader/bundle_validation.py` (new), `src/sam_trader/services/cli.py` (new), `tests/unit/test_bundle_validation.py` (new), `tests/unit/services/test_cli.py` (new), `pyproject.toml`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 40/40 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ready for next Phase 7 ticket (sam_trader-9z3.8.6: [EXIT] Verify strategy lifecycle) or other remaining work.
+
+## Iteration 78
+- **Task**: [EXIT] P7: Verify strategy lifecycle with Futu data
+- **Task ID**: sam_trader-9z3.8.6
+- **Status**: COMPLETE
+- **Decisions**: 
+  1. Created `tests/integration/test_strategy_lifecycle.py` with 4 integration tests covering all Phase 7 exit criteria.
+  2. `test_orb_bundle_loads_for_futu` verifies OrbStrategy bundle loads for TSLA.NASDAQ with venue=FUTU, futu_code=US.TSLA, and bracket/risk params merged.
+  3. `test_strategy_detects_breakout_and_submits_bracket` uses BacktestEngine to feed 3 bars (2 range-establishment + 1 breakout) and verifies bracket order submission with MARKET entry, STOP_MARKET SL, and LIMIT TP. Entry fill confirmed via order events.
+  4. `test_fills_journaled_to_postgresql` mocks asyncpg and verifies TradeJournalActor receives OrderFilled, executes upsert_order + write_fill SQL, and tags venue as "NASDAQ" from instrument_id.
+  5. `test_state_persists_across_restart` verifies on_save/on_load roundtrip: range state (_range_high, _range_low, _bars_seen, _range_established) survives strategy restart.
+  6. Used Cython-safe property access: `o.side` (not `order_side`), `o.status_string()` (not `status.name`), `type(e).__name__` for event type checking.
+- **Files Changed**: `tests/integration/test_strategy_lifecycle.py` (new)
+- **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 4/4 integration tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: Phase 7 exit gate complete. Ready for Phase 8 (sam-services Container). Note: Actors are implemented but NOT yet wired into main.py — Phase 6 EXIT (sam_trader-9z3.7.9) was never completed per PROGRESS.md.
