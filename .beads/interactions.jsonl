@@ -72,3 +72,4 @@
 {"id":"int-3f34d981","kind":"field_change","created_at":"2026-05-23T01:42:12.549343Z","actor":"sam.dharma","issue_id":"sam_trader-9z3.7.6","extra":{"field":"status","new_value":"closed","old_value":"open","reason":"Renumbered: EXIT moved from 7.6 to 7.9 for sequence alignment"}}
 {"id":"int-9fab04a5","kind":"field_change","created_at":"2026-05-23T01:45:06.391221Z","actor":"sam.dharma","issue_id":"sam_trader-9z3.6.6","extra":{"field":"status","new_value":"closed","old_value":"in_progress"}}
 {"id":"int-b864357a","kind":"field_change","created_at":"2026-05-23T01:59:20.596598Z","actor":"sam.dharma","issue_id":"sam_trader-9z3.6.3","extra":{"field":"status","new_value":"closed","old_value":"in_progress"}}
+{"id":"int-1f01659f","kind":"field_change","created_at":"2026-05-23T02:07:02.206416Z","actor":"sam.dharma","issue_id":"sam_trader-9z3.6.7","extra":{"field":"status","new_value":"closed","old_value":"in_progress"}}
