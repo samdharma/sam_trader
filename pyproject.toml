@@ -45,6 +45,9 @@ dev = [
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[project.scripts]
+sam-validate-bundles = "sam_trader.services.cli:main"
+
 [tool.setuptools.package-data]
 sam_trader = ["py.typed"]
 

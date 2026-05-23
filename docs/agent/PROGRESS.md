@@ -606,3 +606,18 @@
 - **Files Changed**: `src/sam_trader/strategies/_template.py` (new), `tests/unit/strategies/test_template.py` (new), `docs/agent/PROGRESS.md`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 17/17 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ready for next Phase 7 ticket (sam_trader-9z3.8.5: Bundle validation, or sam_trader-9z3.8.6: [EXIT] Verify strategy lifecycle).
+
+## Iteration 77
+- **Task**: P7: Bundle validation — schema check + backtest gate
+- **Task ID**: sam_trader-9z3.8.5
+- **Status**: COMPLETE
+- **Decisions**: 
+  1. Created `bundle_validation.py` with three-layer validation: schema check (required fields, types, venue), strategy class existence check (importlib + Strategy subclass verification), and backtest gate (minimal smoke test via BacktestEngine).
+  2. Backtest gate runs in a `spawn` subprocess to avoid NautilusTrader v1.227.0 global logger state conflict when multiple BacktestEngines are created in the same process.
+  3. CLI implemented with `argparse` (no external dependency) as `sam-validate-bundles` console script entry point. Full `sam` CLI suite with `click` is deferred to Phase 8.
+  4. Added `pyproject.toml` console script entry point `sam-validate-bundles`.
+  5. Schema validation checks: `id`, `venue`, `strategy.path`, `strategy.config` (with `instrument_id` and `bar_type` required), `enabled` boolean, `bracket`/`risk` dict types.
+  6. `validate_bundles()` validates ALL bundles including disabled ones (schema only for disabled; schema + strategy + backtest for enabled).
+- **Files Changed**: `src/sam_trader/bundle_validation.py` (new), `src/sam_trader/services/cli.py` (new), `tests/unit/test_bundle_validation.py` (new), `tests/unit/services/test_cli.py` (new), `pyproject.toml`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 40/40 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for next Phase 7 ticket (sam_trader-9z3.8.6: [EXIT] Verify strategy lifecycle) or other remaining work.
