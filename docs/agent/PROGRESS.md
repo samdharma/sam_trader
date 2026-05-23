@@ -358,3 +358,12 @@
 - **Files Changed**: `tests/unit/test_docker_compose.py` (new)
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 1/1 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ready for sam_trader-9z3.6.5 (IBKR factory registration in main.py).
+
+## Iteration 54
+- **Task**: P5: IBKR factory registration in main.py
+- **Task ID**: sam_trader-9z3.6.5
+- **Status**: COMPLETE
+- **Decisions**: Fixed main.py to register standard Nautilus `InteractiveBrokersLiveExecClientFactory` instead of the custom `SamInteractiveBrokersLiveExecClientFactory`. The custom factory (and its permission-checking exec client) was implemented prematurely in ticket 9z3.6.8 before the factory registration ticket. By aligning with the acceptance criteria, main.py now registers the standard Nautilus data and exec factories conditionally on `ib_enabled` with lazy imports. Removed the `set_bundle_permission_requirements` call and its import since it is only consumed by the custom factory. Created `tests/unit/test_main_ib_factories.py` with three tests: `test_ib_factories_registered` (verifies both standard factories registered when enabled), `test_ib_factories_disabled` (verifies no factories when disabled), and `test_ib_exec_factory_not_registered_when_read_only` (verifies exec factory omitted in read-only mode).
+- **Files Changed**: `src/sam_trader/main.py`, `tests/unit/test_main_ib_factories.py` (new)
+- **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 3/3 new tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for sam_trader-9z3.6.6 (IBKR instrument provider wiring).
