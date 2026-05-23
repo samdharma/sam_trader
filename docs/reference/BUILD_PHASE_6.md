@@ -170,7 +170,7 @@ def get_realized_pnl(strategy_id: str) -> Decimal:
 | `sam_trader-9z3.7.5` | Redis state wiring | `CacheConfig` in `main.py` | ✅ Small |
 | `sam_trader-9z3.7.7` | RejectionMonitorActor | Per-instrument rejection circuit breaker | ✅ Medium |
 | `sam_trader-9z3.7.8` | RealizedPnLTrackerActor | Per-strategy realized P&L to Redis | ✅ Medium |
-| `sam_trader-9z3.7.6` | [EXIT] Verify actors | Integration test: fill → PG, state → Redis | ✅ Medium |
+| `sam_trader-9z3.7.9` | [EXIT] Verify actors | Integration test: fill → PG, state → Redis, rejection → halt, realized P&L computed | ✅ Medium |
 
 **No decomposition needed for Phase 6.** All tickets are well-scoped.
 

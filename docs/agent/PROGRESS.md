@@ -367,3 +367,12 @@
 - **Files Changed**: `src/sam_trader/main.py`, `tests/unit/test_main_ib_factories.py` (new)
 - **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 3/3 new tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ready for sam_trader-9z3.6.6 (IBKR instrument provider wiring).
+
+## Iteration 55
+- **Task**: P5: IBKR instrument provider wiring
+- **Task ID**: sam_trader-9z3.6.6
+- **Status**: COMPLETE
+- **Decisions**: Verified that `InteractiveBrokersInstrumentProvider` is already wired in `build_trading_node()` via `InteractiveBrokersInstrumentProviderConfig` passed to both IB data and exec client configs. The standard Nautilus IB factory creates the actual provider instance during `node.build()` via `get_cached_interactive_brokers_instrument_provider()`. No code changes to `main.py` were required. Created `tests/unit/test_main_ib_provider.py` with three tests: `test_ib_provider_registered` (verifies data and exec configs have `InteractiveBrokersInstrumentProviderConfig` with `IB_SIMPLIFIED` symbology and correct `load_ids`), `test_ib_provider_disabled` (verifies no IB configs when disabled), and `test_dual_venue_no_conflict` (verifies Futu and IB configs coexist without interference — Futu uses default `InstrumentProviderConfig`, IB uses `InteractiveBrokersInstrumentProviderConfig`).
+- **Files Changed**: `tests/unit/test_main_ib_provider.py` (new)
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 3/3 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for sam_trader-9z3.6.3 (Enhance IB adapter for v3).
