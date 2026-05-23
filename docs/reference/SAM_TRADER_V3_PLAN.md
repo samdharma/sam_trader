@@ -391,8 +391,9 @@ sam_trader/
 > **Depends on:** Phase 6
 
 ### Phase 8: sam-services Container
-> **Goal:** Operations container with CLI, cron, health checks, backup. Decoupled from sam-trader.
-> **Depends on:** Phase 4 (needs Futu data for health checks)
+> **Goal:** Operations container with CLI, cron, health checks, backup, quote fetcher, **performance analysis** (Nautilus-native PortfolioAnalyzer), and **production safeguards** (LiveRiskEngine, PositionSnapshot, Slippage). Decoupled from sam-trader.
+> **Revised 2026-05-23:** Expanded from 6 to 11 tickets with 5 Nautilus-native integrations per gap analysis.
+> **Depends on:** Phase 7 (needs journal actors, bundle system, strategies for full integration test)
 
 ### Phase 9: Pre-Market Pipeline
 > **Goal:** Gap scanner → AI analysis → risk manager → bundle generator → readiness report.

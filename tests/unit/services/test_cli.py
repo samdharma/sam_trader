@@ -390,6 +390,71 @@ class TestPipelineCommand:
         assert "triggered" in captured.out or "placeholder" in captured.out
 
 
+class TestPerformanceCommand:
+    @patch("sam_trader.services.cli.asyncpg.connect")
+    def test_performance_with_data(self, mock_connect: Any, capsys: Any) -> None:
+        from unittest.mock import AsyncMock
+
+        mock_conn = AsyncMock()
+        mock_conn.fetch.return_value = [
+            {
+                "strategy_id": "tsla-orb-futu",
+                "stat_name": "SharpeRatio",
+                "stat_value": 1.23,
+            },
+            {
+                "strategy_id": "tsla-orb-futu",
+                "stat_name": "WinRate",
+                "stat_value": 0.55,
+            },
+        ]
+        mock_connect.return_value = mock_conn
+
+        rc = main(["performance"])
+        captured = capsys.readouterr()
+        assert rc == 0
+        assert "SharpeRatio" in captured.out
+        assert "tsla-orb-futu" in captured.out
+
+    @patch("sam_trader.services.cli.asyncpg.connect")
+    def test_performance_json(self, mock_connect: Any, capsys: Any) -> None:
+        from unittest.mock import AsyncMock
+
+        mock_conn = AsyncMock()
+        mock_conn.fetch.return_value = [
+            {
+                "strategy_id": "tsla-orb-futu",
+                "stat_name": "SharpeRatio",
+                "stat_value": 1.23,
+            },
+        ]
+        mock_connect.return_value = mock_conn
+
+        rc = main(
+            ["--json", "performance", "--strategy", "tsla-orb-futu", "--days", "7"]
+        )
+        captured = capsys.readouterr()
+        assert rc == 0
+        data = json.loads(captured.out)
+        assert data["command"] == "performance"
+        assert data["days"] == 7
+        assert data["strategy"] == "tsla-orb-futu"
+        assert "tsla-orb-futu" in data["stats"]
+
+    @patch("sam_trader.services.cli.asyncpg.connect")
+    def test_performance_empty(self, mock_connect: Any, capsys: Any) -> None:
+        from unittest.mock import AsyncMock
+
+        mock_conn = AsyncMock()
+        mock_conn.fetch.return_value = []
+        mock_connect.return_value = mock_conn
+
+        rc = main(["performance"])
+        captured = capsys.readouterr()
+        assert rc == 0
+        assert "No performance stats" in captured.out
+
+
 class TestJsonGlobalFlag:
     @patch("sam_trader.services.cli._run")
     def test_json_flag_on_status(self, mock_run: Any, capsys: Any) -> None:

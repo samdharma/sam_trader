@@ -1,9 +1,12 @@
 -- SAM Trader V3 — PostgreSQL initialization
--- Creates tables for trade journal, orders, and positions.
+-- Creates tables for trade journal, orders, positions, and performance analysis.
 -- Ported from v2 with additions:
 --   - venue column on orders and positions
 --   - venue_order_id, currency, ts_init on fills
 --   - trd_market on fills for Futu market code
+-- Phase 8 additions:
+--   - slippage column on fills (execution quality tracking)
+--   - performance_stats table (Nautilus PortfolioAnalyzer results)
 
 CREATE TABLE IF NOT EXISTS orders (
     id              SERIAL PRIMARY KEY,
@@ -39,6 +42,7 @@ CREATE TABLE IF NOT EXISTS fills (
     price           NUMERIC(24, 8) NOT NULL,
     commission      NUMERIC(24, 8) DEFAULT 0.0,
     currency        VARCHAR(3)   NOT NULL,
+    slippage        NUMERIC(24, 8),
     ts_event        TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
     ts_init         TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
@@ -65,3 +69,21 @@ CREATE TABLE IF NOT EXISTS positions (
 CREATE INDEX IF NOT EXISTS idx_positions_instrument ON positions(instrument_id);
 CREATE INDEX IF NOT EXISTS idx_positions_venue ON positions(venue);
 CREATE INDEX IF NOT EXISTS idx_positions_strategy ON positions(strategy_id);
+
+-- ---------------------------------------------------------------------------
+-- Performance analysis (Phase 8: Nautilus PortfolioAnalyzer integration)
+-- Populated nightly by sam-services cron (02:00 HKT)
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS performance_stats (
+    id              SERIAL PRIMARY KEY,
+    date            DATE NOT NULL,
+    strategy_id     VARCHAR(128) NOT NULL,
+    stat_name       VARCHAR(64) NOT NULL,
+    stat_value      NUMERIC(24, 8),
+    computed_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (date, strategy_id, stat_name)
+);
+
+CREATE INDEX IF NOT EXISTS idx_perf_stats_date ON performance_stats(date);
+CREATE INDEX IF NOT EXISTS idx_perf_stats_strategy ON performance_stats(strategy_id);

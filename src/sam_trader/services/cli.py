@@ -8,6 +8,7 @@ Usage (inside sam-services container):
     sam logs [sam-trader]
     sam restart
     sam quote TSLA.NASDAQ
+    sam performance [--strategy <id>] [--days 30]
     sam deploy [--tag v1.2.3]
     sam hotfix src/sam_trader/strategies/orb.py
     sam update
@@ -19,6 +20,7 @@ Usage (inside sam-services container):
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -27,6 +29,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import asyncpg
 import click
 
 from sam_trader.bundle_validation import validate_bundles
@@ -571,6 +574,70 @@ def quote(ctx: click.Context, symbol: str) -> None:
         "note": "Broker quote fetcher deferred to ticket 9z3.9.4",
     }
     _out(ctx, result)
+
+
+@cli.command()
+@click.option("--strategy", default=None, help="Filter by strategy ID.")
+@click.option("--days", default=30, type=int, help="Lookback days (default 30).")
+@click.pass_context
+def performance(ctx: click.Context, strategy: str | None, days: int) -> None:
+    """Display performance stats from Nautilus PortfolioAnalyzer results."""
+    try:
+        result = asyncio.run(_performance_query(strategy, days, ctx.obj.get("json")))
+        _out(ctx, result)
+    except click.ClickException:
+        raise
+    except Exception as exc:
+        raise click.ClickException(f"Performance query failed: {exc}")
+
+
+async def _performance_query(
+    strategy: str | None, days: int, output_json: bool
+) -> dict[str, Any]:
+    """Query performance_stats PG table and return formatted result."""
+    dsn = (
+        f"postgresql://{POSTGRES_USER}:{POSTGRES_PASSWORD}"
+        f"@{POSTGRES_HOST}:{POSTGRES_PORT}/{POSTGRES_DB}"
+    )
+    conn = await asyncpg.connect(dsn)
+    try:
+        sql = """
+            SELECT strategy_id, stat_name, stat_value
+            FROM performance_stats
+            WHERE date >= CURRENT_DATE - $1
+        """
+        params: list[Any] = [days]
+        if strategy:
+            sql += " AND strategy_id = $2"
+            params.append(strategy)
+        sql += " ORDER BY strategy_id, stat_name"
+
+        rows = await conn.fetch(sql, *params)
+
+        if not rows:
+            return {
+                "command": "performance",
+                "days": days,
+                "strategy": strategy,
+                "stats": {},
+                "note": "No performance stats found. Run PerformanceAnalyzer first.",
+            }
+
+        grouped: dict[str, dict[str, float | None]] = {}
+        for row in rows:
+            sid = row["strategy_id"]
+            name = row["stat_name"]
+            value = float(row["stat_value"]) if row["stat_value"] is not None else None
+            grouped.setdefault(sid, {})[name] = value
+
+        return {
+            "command": "performance",
+            "days": days,
+            "strategy": strategy,
+            "stats": grouped,
+        }
+    finally:
+        await conn.close()
 
 
 # ---------------------------------------------------------------------------

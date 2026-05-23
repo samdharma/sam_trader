@@ -1,7 +1,7 @@
 # SAM Trader V3 — Ticket Plan & Dependency Hierarchy
 
-> **Status:** Planning  
-> **Date:** 2026-05-20  
+> **Status:** Active  
+> **Date:** 2026-05-23 (Phase 8 revised)  
 > **Source:** `docs/reference/SAM_TRADER_V3_PLAN.md` §6  
 > **Repo:** `github.com/samdharma/sam_trader`
 
@@ -164,11 +164,15 @@ Phase 7 ────────────────────────
                                                                             ▼
                                                                     sam_trader-9z3.8.6 ──► ═══ PHASE 7 GATE ═══
 
-Phase 8 ──────────────────────────────────────────────────────────────────
-  sam_trader-9z3.9.1 ──► sam_trader-9z3.9.2 ──► sam_trader-9z3.9.3 ──► sam_trader-9z3.9.5 ──┐
-  sam_trader-9z3.9.1 ──► sam_trader-9z3.9.4 ────────────────────────────────────────────────┤
-                                                                                              ▼
-                                                                                    sam_trader-9z3.9.6 ──► ═══ PHASE 8 GATE ═══
+Phase 8 ───────────────────────────────────────────────────────────────────────────────────────────────────
+  sam_trader-9z3.9.1 ──► sam_trader-9z3.9.2 ──► sam_trader-9z3.9.3 ──► sam_trader-9z3.9.5 ──────────────┐
+  sam_trader-9z3.9.1 ──► sam_trader-9z3.9.4 ──────────────────────────────────────────────────────────┤
+  sam_trader-9z3.9.1 ──► sam_trader-9z3.9.7 (LiveRiskEngine) ─────────────────────────────────────────┤
+  sam_trader-9z3.9.1 ──► sam_trader-9z3.9.9 (Slippage) ───────────────────────────────────────────────┤
+  sam_trader-9z3.9.1 ──► sam_trader-9z3.9.10 (PositionSnapshot) ─────────────────────────────────────┤
+  sam_trader-9z3.9.1 ──► sam_trader-9z3.9.11 (PerformanceAnalyzer) ──► sam_trader-9z3.9.8 (perf CLI) ┤
+                                                                                                      ▼
+                                                                                            sam_trader-9z3.9.6 ──► ═══ PHASE 8 GATE ═══
 
 Phase 9 ──────────────────────────────────────────────────────────────────
   sam_trader-9z3.10.1 ──► sam_trader-9z3.10.2 ──► sam_trader-9z3.10.7 ──► sam_trader-9z3.10.8 ──► sam_trader-9z3.10.9 ──┐
@@ -349,17 +353,24 @@ Phase 11 ───────────────────────�
 
 ### Phase 8: sam-services Container
 
-> **Goal:** Operations container with CLI, cron, health checks, backup, quote fetcher. Decoupled from sam-trader.
-> **Build order:** 9.1 (Dockerfile) is the single root. Two parallel tracks: CLI→Cron→Decouple and Quote. All converge to EXIT. No cross-phase dependencies.
+> **Goal:** Operations container with CLI, cron, health checks, backup, quote fetcher, **performance analysis** (Nautilus-native PortfolioAnalyzer), and **production safeguards** (LiveRiskEngine, PositionSnapshot, Slippage). Decoupled from sam-trader.
+> **Build order:** 9.1 (Dockerfile) is the single root. Five parallel tracks: (1) CLI→Cron→Deploy, (2) Quote, (3) LiveRiskEngine, (4) Slippage, (5) PositionSnapshot, (6) PerformanceAnalyzer→sam perf CLI. All converge to EXIT. No cross-phase dependencies.
+> **Nautilus-native principle:** Performance stats via `PortfolioAnalyzer`, risk via `LiveRiskEngine`. Zero custom math/risk logic.
+> **Revised 2026-05-23:** Expanded from 6 to 11 tickets. Added 5 Nautilus-native integrations per gap analysis.
 
 | # | Ticket ID | Title | Type | AC Highlights |
 |---|-----------|-------|------|---------------|
-| 8.1 | `sam_trader-9z3.9.1` | Dockerfile.services: lightweight Python 3.12 for operations | task | `python:3.12-slim`. Install fastapi, uvicorn, httpx, asyncpg, cron, pyyaml. Mount Docker socket (ro), config/, logs/, backups/. Port 8080. No deps. Blocks CLI and Quote. |
-| 8.2 | `sam_trader-9z3.9.2` | sam CLI tool: status, health, backup, restore, logs, restart | task | Python CLI (click). `sam status`, `sam health`, `sam backup`, `sam restore`, `sam logs`, `sam restart`. Depends on Dockerfile. Blocks Cron. |
-| 8.3 | `sam_trader-9z3.9.3` | Cron scheduler: daily backup, log rotation, pipeline schedules | task | Cron daemon in sam-services. Daily backup 16:30 ET, log rotation 03:00 HKT. Configurable via env vars. Depends on CLI. Blocks Decouple. |
-| 8.4 | `sam_trader-9z3.9.4` | Quote fetcher: extend for Futu cache support | task | Port `quote.py` from v2. `sam quote TSLA.NASDAQ` → bid/ask/last from Redis cache. Fallback to broker query. Depends on Dockerfile. Blocks EXIT. |
-| 8.5 | `sam_trader-9z3.9.5` | Deploy decoupling: move ops commands from deploy.sh to sam-services | task | Remove from deploy.sh: --status, --health, --backup, --restore, --quote, --logs. Keep: setup, profiles, git pull, compose lifecycle. Depends on Cron. Blocks EXIT. |
-| 8.6 | `sam_trader-9z3.9.6` | [EXIT] Verify sam-services: starts, CLI works, cron runs, decoupled | exit | `docker compose --profile services up -d`. `sam status/health/backup` all work. Cron daemon running. Restart sam-services → sam-trader unaffected. Depends on Quote + Decouple. Blocks P9 gapscan + regime. |
+| 8.1 | `sam_trader-9z3.9.1` | Dockerfile.services: lightweight Python 3.12 for operations | task ✅ | `python:3.12-slim`. Docker CLI, buildx, cron, PG client, Redis tools. Non-root user `sam`. 3-layer health check. Port 8080. No deps. Blocks CLI, Quote, and all new tickets. **COMPLETE.** |
+| 8.2 | `sam_trader-9z3.9.2` | sam CLI tool: 12 deploy + ops commands | task ○ | Python CLI (argparse). `sam status/health/backup/restore/logs/restart/quote/performance/deploy/hotfix/rollback/version/update`. Structured output (JSON/table). Depends on Dockerfile. Blocks Cron and sam perf CLI. **Reopened — commands not yet implemented.** |
+| 8.3 | `sam_trader-9z3.9.3` | Cron scheduler: backup, log rotation, deploy window, pipeline, perf analysis | task ○ | Crontab entries: backup 06:00 HKT weekdays, log rotation 03:00 HKT, deploy window check, pipeline slot 08:00 HKT, **performance analysis 02:00 HKT (NEW)**. Env vars via .env_cron. Depends on CLI. Blocks Deploy. |
+| 8.4 | `sam_trader-9z3.9.4` | Quote fetcher: extend for Futu cache support | task ○ | Port `quote.py` from v2. `sam quote TSLA.NASDAQ` → bid/ask/last from Redis cache. Fallback to broker query. Depends on Dockerfile. Blocks EXIT. |
+| 8.5 | `sam_trader-9z3.9.5` | Deployment capabilities: deploy.sh decouple + hotfix/rollback | task ○ | Remove ops from deploy.sh. Keep setup, profiles, compose lifecycle. Stack hotfix + rollback via CLI. Depends on Cron. Blocks EXIT. |
+| **8.7** | **`sam_trader-9z3.9.7`** | **LiveRiskEngine: Nautilus native pre-trade risk filtering** | task ○ | **New env vars:** RISK_MAX_ORDER_SUBMIT_RATE, RISK_MAX_ORDER_MODIFY_RATE, RISK_MAX_NOTIONAL_PER_ORDER (JSON), RISK_BYPASS. Wire `LiveRiskEngineConfig` into `main.py` → `TradingNodeConfig`. **ZERO custom risk logic.** Depends on Dockerfile. Blocks EXIT. |
+| **8.10** | **`sam_trader-9z3.9.10`** | **PositionSnapshotActor: periodic PG positions writes** | task ○ | **New actor:** `PositionSnapshotActor(Actor)`. Polls `self.cache.positions()` every 60s. Upserts into existing PG `positions` table. Wired in `main.py` with `ACTOR_POSITION_SNAPSHOT_ENABLED` env var. Depends on Dockerfile. Blocks EXIT. |
+| **8.11** | **`sam_trader-9z3.9.11`** | **PerformanceAnalyzer: Nautilus PortfolioAnalyzer integration** | task ○ | **New PG table:** `performance_stats`. Query fills → convert to Nautilus Trade objects → feed to `PortfolioAnalyzer` → `calculate_statistics()` → store all 17 Rust-backed stats. Nightly cron. **ZERO custom math.** Depends on Dockerfile. Blocks sam perf CLI. |
+| **8.9** | **`sam_trader-9z3.9.9`** | **Slippage tracking: column + TradeJournalActor update** | task ○ | Add `slippage NUMERIC(24,8)` to fills table. Compute slippage = fill_price - expected_price. Signed value (+ = unfavorable). Depends on Dockerfile. Blocks EXIT. |
+| **8.8** | **`sam_trader-9z3.9.8`** | **sam performance CLI: Nautilus-powered performance stats display** | task ○ | `sam performance [--strategy <id>] [--days 30] [--json]`. Reads `performance_stats` PG table. Displays: Sharpe, Sortino, CAGR, MaxDrawdown, WinRate, ProfitFactor, etc. Depends on CLI (`9z3.9.2`) + PerformanceAnalyzer (`9z3.9.11`). Blocks EXIT. |
+| 8.6 | `sam_trader-9z3.9.6` | [EXIT] Verify: all Phase 8 components, Nautilus integrations, perf stats | exit | Expanded: `docker compose --profile services up -d`. `sam status/health/backup/performance` work. PerformanceAnalyzer writes stats. PositionSnapshotActor upserts positions. LiveRiskEngine enforces rate limits. Slippage tracked in fills. Restart sam-services → sam-trader unaffected. Depends on tickets 3,4,5,7,8,9,10. Blocks P9 gapscan + regime. |
 
 ---
 
@@ -449,11 +460,11 @@ Phase 0 ───► Phase 1 ───► Phase 2 ───► Phase 3 ───
 | Phase 5 | 8 | IBKR Re-integration (decomposed from 1; 2 bug fixes) |
 | Phase 6 | 9 | Actors + State (2 gap-remediation actors; EXIT renumbered 7.6→7.9) |
 | Phase 7 | 6 | Strategies + Bundles |
-| Phase 8 | 6 | Services Container |
+| Phase 8 | 11 | Services Container (revised: +5 Nautilus-native integrations) |
 | Phase 9 | 13 | Pre-Market Pipeline (2 parent closed-superseded; 1 EXIT renumbered 10.6→10.13) |
 | Phase 10 | 5 | Safety + Dashboard |
 | Phase 11 | 4 | Deploy + E2E |
-| **Total** | **88** | |
+| **Total** | **93** | (revised Phase 8: 6→11 tickets) |
 
 ---
 

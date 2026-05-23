@@ -684,3 +684,17 @@
 - **Files Changed**: `src/sam_trader/services/crontab`, `src/sam_trader/services/rotate_logs.py` (new), `src/sam_trader/services/deploy_window.py` (new), `src/sam_trader/services/pipeline.py` (new), `src/sam_trader/services/cli.py`, `docker/Dockerfile.services`, `.env.example`, `tests/unit/test_crontab.py` (new), `tests/unit/services/test_rotate_logs.py` (new), `tests/unit/services/test_deploy_window.py` (new), `tests/unit/services/test_pipeline.py` (new), `tests/unit/services/test_cli.py`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 54/54 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ready for next Phase 8 ticket (sam_trader-9z3.9.4: Quote fetcher, or sam_trader-9z3.9.5: Deploy decoupling).
+
+## Iteration 82
+- **Task**: P8: sam CLI tool — deploy, hotfix, rollback + ops commands (expanded scope: add `performance` command)
+- **Task ID**: sam_trader-9z3.9.2
+- **Status**: COMPLETE
+- **Decisions**: 
+  1. Added `sam performance [--strategy <id>] [--days 30]` command to CLI. Queries PostgreSQL `performance_stats` table directly via `asyncpg` using `asyncio.run()` inside the synchronous click command.
+  2. Structured output: grouped by `strategy_id`, each containing key-value stats (e.g., SharpeRatio, WinRate). Supports `--json` global flag.
+  3. Graceful empty-state handling: returns informative message when no stats exist (PerformanceAnalyzer ticket 9z3.9.11 not yet implemented).
+  4. Added 3 unit tests for `performance` command: with data, JSON output with filters, and empty result.
+  5. All 13 original CLI commands were already implemented in prior iterations; this iteration focused on the expanded-scope `performance` command per BUILD_PHASE_8.md §10.
+- **Files Changed**: `src/sam_trader/services/cli.py` (added `performance` command + `_performance_query` async helper), `tests/unit/services/test_cli.py` (added `TestPerformanceCommand` with 3 tests)
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 31/31 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for next Phase 8 ticket.
