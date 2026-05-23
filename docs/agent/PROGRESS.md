@@ -495,3 +495,18 @@
 - **Files Changed**: `src/sam_trader/actors/trade_journal.py` (new), `src/sam_trader/actors/__init__.py`, `tests/unit/actors/test_trade_journal.py` (new)
 - **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 12/12 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ready for next P6 ticket (sam_trader-9z3.7.3: HealthMonitorActor).
+
+
+## Iteration 67
+- **Task**: P6: HealthMonitorActor — heartbeat + multi-venue metrics
+- **Task ID**: sam_trader-9z3.7.3
+- **Status**: COMPLETE
+- **Decisions**: 
+  1. Ported HealthMonitorActor from v2 with v3 multi-venue enhancements. Added `futu_enabled` and `ib_enabled` config flags for venue-aware reporting.
+  2. Heartbeat reports total orders/positions via `cache.orders_total_count()` and `cache.positions_total_count()`, plus per-venue breakdowns using `venue=Venue("FUTU")` / `Venue("IB")` filters.
+  3. Venue connection status derived from `cache.account_for_venue(venue=...)`: if an account exists for the venue, connection status is UP; otherwise DOWN.
+  4. Bar staleness tracking retained from v2 with US market hours awareness (09:30–16:00 ET, weekdays only).
+  5. Used Cython-safe test patterns: avoided patching Cython Logger attributes (`log.info` is read-only); tested message formatting via `_build_heartbeat_msg` directly and side effects via clock timer state.
+- **Files Changed**: `src/sam_trader/actors/health_monitor.py` (new), `src/sam_trader/actors/__init__.py`, `tests/unit/actors/test_health_monitor.py` (new)
+- **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 16/16 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for next P6 ticket (sam_trader-9z3.7.4: BarResubscriptionActor, or sam_trader-9z3.7.5: Redis state wiring, or sam_trader-9z3.7.7: RejectionMonitorActor).
