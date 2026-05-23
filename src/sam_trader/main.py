@@ -6,7 +6,11 @@ import json
 import logging
 
 from nautilus_trader.cache.config import CacheConfig
-from nautilus_trader.common.config import DatabaseConfig, LoggingConfig
+from nautilus_trader.common.config import (
+    DatabaseConfig,
+    ImportableActorConfig,
+    LoggingConfig,
+)
 from nautilus_trader.config import RoutingConfig
 from nautilus_trader.live.config import LiveRiskEngineConfig, TradingNodeConfig
 from nautilus_trader.live.node import TradingNode
@@ -247,6 +251,27 @@ def build_trading_node() -> TradingNode:
         max_notional_per_order=notional_limits,
     )
 
+    actors: list[ImportableActorConfig] = []
+    if cfg.actor_position_snapshot_enabled:
+        actors.append(
+            ImportableActorConfig(
+                actor_path=(
+                    "sam_trader.actors.position_snapshot:PositionSnapshotActor"
+                ),
+                config_path=(
+                    "sam_trader.actors.position_snapshot:PositionSnapshotActorConfig"
+                ),
+                config={
+                    "postgres_host": cfg.postgres_host,
+                    "postgres_port": cfg.postgres_port,
+                    "postgres_db": cfg.postgres_db,
+                    "postgres_user": cfg.postgres_user,
+                    "postgres_password": cfg.postgres_password,
+                },
+            )
+        )
+        logger.info("PositionSnapshotActor registered")
+
     node_config = TradingNodeConfig(
         trader_id=_make_trader_id(cfg.trader_id),
         logging=LoggingConfig(log_level=cfg.log_level.upper()),
@@ -256,6 +281,7 @@ def build_trading_node() -> TradingNode:
         data_clients=data_clients,
         exec_clients=exec_clients,
         risk_engine=risk_config,
+        actors=actors,
         strategies=strategies,
     )
 

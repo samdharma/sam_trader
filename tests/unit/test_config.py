@@ -34,6 +34,7 @@ class TestSamTraderConfig:
             "ACTOR_BAR_RESUB_ENABLED",
             "ACTOR_JOURNAL_ENABLED",
             "ACTOR_HEALTH_ENABLED",
+            "ACTOR_POSITION_SNAPSHOT_ENABLED",
             "STATE_SAVE_ENABLED",
             "STATE_LOAD_ENABLED",
             "BUNDLES_PATH",
@@ -74,6 +75,7 @@ class TestSamTraderConfig:
         assert cfg.actor_bar_resub_enabled is False
         assert cfg.actor_journal_enabled is False
         assert cfg.actor_health_enabled is False
+        assert cfg.actor_position_snapshot_enabled is False
         assert cfg.state_save_enabled is False
         assert cfg.state_load_enabled is False
         assert cfg.bundles_path == "config/bundles.yaml"
@@ -112,6 +114,7 @@ class TestSamTraderConfig:
         monkeypatch.setenv("ACTOR_BAR_RESUB_ENABLED", "true")
         monkeypatch.setenv("ACTOR_JOURNAL_ENABLED", "true")
         monkeypatch.setenv("ACTOR_HEALTH_ENABLED", "true")
+        monkeypatch.setenv("ACTOR_POSITION_SNAPSHOT_ENABLED", "true")
         monkeypatch.setenv("STATE_SAVE_ENABLED", "true")
         monkeypatch.setenv("STATE_LOAD_ENABLED", "true")
         monkeypatch.setenv("BUNDLES_PATH", "custom/bundles.yaml")
@@ -150,6 +153,7 @@ class TestSamTraderConfig:
         assert cfg.actor_bar_resub_enabled is True
         assert cfg.actor_journal_enabled is True
         assert cfg.actor_health_enabled is True
+        assert cfg.actor_position_snapshot_enabled is True
         assert cfg.state_save_enabled is True
         assert cfg.state_load_enabled is True
         assert cfg.bundles_path == "custom/bundles.yaml"
@@ -189,6 +193,7 @@ class TestSamTraderConfig:
             actor_bar_resub_enabled=False,
             actor_journal_enabled=False,
             actor_health_enabled=False,
+            actor_position_snapshot_enabled=False,
             state_save_enabled=False,
             state_load_enabled=False,
             bundles_path="config/bundles.yaml",
@@ -236,6 +241,7 @@ class TestSamTraderConfig:
             actor_bar_resub_enabled=False,
             actor_journal_enabled=False,
             actor_health_enabled=False,
+            actor_position_snapshot_enabled=False,
             state_save_enabled=False,
             state_load_enabled=False,
             bundles_path="config/bundles.yaml",

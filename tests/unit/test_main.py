@@ -354,6 +354,124 @@ bundles:
             asyncio.set_event_loop(None)
 
 
+class TestPositionSnapshotActorWiring:
+    """Tests for PositionSnapshotActor config wiring in build_trading_node."""
+
+    def test_position_snapshot_actor_registered_when_enabled(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """PositionSnapshotActor is in actors list when env var enabled."""
+        monkeypatch.setenv("IB_ENABLED", "false")
+        monkeypatch.setenv("FUTU_ENABLED", "false")
+        monkeypatch.setenv("BUNDLES_PATH", "config/nonexistent_bundles.yaml")
+        monkeypatch.setenv("STATE_SAVE_ENABLED", "false")
+        monkeypatch.setenv("STATE_LOAD_ENABLED", "false")
+        monkeypatch.setenv("ACTOR_POSITION_SNAPSHOT_ENABLED", "true")
+        monkeypatch.setenv("POSTGRES_HOST", "test-pg-host")
+        monkeypatch.setenv("POSTGRES_PORT", "6543")
+        monkeypatch.setenv("POSTGRES_DB", "test_db")
+        monkeypatch.setenv("POSTGRES_USER", "test_user")
+        monkeypatch.setenv("POSTGRES_PASSWORD", "test_pass")
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            node = build_trading_node()
+
+            actors = node._config.actors
+            assert len(actors) == 1
+            actor_cfg = actors[0]
+            assert (
+                actor_cfg.actor_path
+                == "sam_trader.actors.position_snapshot:PositionSnapshotActor"
+            )
+            assert (
+                actor_cfg.config_path
+                == "sam_trader.actors.position_snapshot:PositionSnapshotActorConfig"
+            )
+            assert actor_cfg.config["postgres_host"] == "test-pg-host"
+            assert actor_cfg.config["postgres_port"] == 6543
+            assert actor_cfg.config["postgres_db"] == "test_db"
+            assert actor_cfg.config["postgres_user"] == "test_user"
+            assert actor_cfg.config["postgres_password"] == "test_pass"
+        finally:
+            loop.close()
+            asyncio.set_event_loop(None)
+
+    def test_position_snapshot_actor_disabled_when_env_false(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """PositionSnapshotActor is NOT in actors list when explicitly disabled."""
+        monkeypatch.setenv("IB_ENABLED", "false")
+        monkeypatch.setenv("FUTU_ENABLED", "false")
+        monkeypatch.setenv("BUNDLES_PATH", "config/nonexistent_bundles.yaml")
+        monkeypatch.setenv("STATE_SAVE_ENABLED", "false")
+        monkeypatch.setenv("STATE_LOAD_ENABLED", "false")
+        monkeypatch.setenv("ACTOR_POSITION_SNAPSHOT_ENABLED", "false")
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            node = build_trading_node()
+
+            actors = node._config.actors
+            assert len(actors) == 0
+        finally:
+            loop.close()
+            asyncio.set_event_loop(None)
+
+    def test_position_snapshot_defaults_to_journal_enabled(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """When ACTOR_POSITION_SNAPSHOT_ENABLED is unset, defaults to
+        ACTOR_JOURNAL_ENABLED."""
+        monkeypatch.setenv("IB_ENABLED", "false")
+        monkeypatch.setenv("FUTU_ENABLED", "false")
+        monkeypatch.setenv("BUNDLES_PATH", "config/nonexistent_bundles.yaml")
+        monkeypatch.setenv("STATE_SAVE_ENABLED", "false")
+        monkeypatch.setenv("STATE_LOAD_ENABLED", "false")
+        monkeypatch.delenv("ACTOR_POSITION_SNAPSHOT_ENABLED", raising=False)
+        monkeypatch.setenv("ACTOR_JOURNAL_ENABLED", "true")
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            node = build_trading_node()
+
+            actors = node._config.actors
+            assert len(actors) == 1
+        finally:
+            loop.close()
+            asyncio.set_event_loop(None)
+
+    def test_position_snapshot_defaults_to_journal_disabled(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """When both env vars are unset, actor is disabled."""
+        monkeypatch.setenv("IB_ENABLED", "false")
+        monkeypatch.setenv("FUTU_ENABLED", "false")
+        monkeypatch.setenv("BUNDLES_PATH", "config/nonexistent_bundles.yaml")
+        monkeypatch.setenv("STATE_SAVE_ENABLED", "false")
+        monkeypatch.setenv("STATE_LOAD_ENABLED", "false")
+        monkeypatch.delenv("ACTOR_POSITION_SNAPSHOT_ENABLED", raising=False)
+        monkeypatch.delenv("ACTOR_JOURNAL_ENABLED", raising=False)
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            node = build_trading_node()
+
+            actors = node._config.actors
+            assert len(actors) == 0
+        finally:
+            loop.close()
+            asyncio.set_event_loop(None)
+
+
 class TestLiveRiskEngineWiring:
     """Tests for LiveRiskEngine config wiring in build_trading_node."""
 

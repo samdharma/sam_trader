@@ -699,6 +699,21 @@
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 31/31 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ready for next Phase 8 ticket.
 
+## Iteration 88
+- **Task**: P8: PositionSnapshotActor — periodic PG positions writes
+- **Task ID**: sam_trader-9z3.9.10
+- **Status**: COMPLETE
+- **Decisions**: 
+  1. Created `PositionSnapshotActor` that polls `self.cache.positions()` every `snapshot_interval_secs` (default 60s) and UPSERTs into the existing PostgreSQL `positions` table.
+  2. Config class `PositionSnapshotActorConfig` reuses POSTGRES_* env vars with same defaults as `TradeJournalActorConfig`, plus `snapshot_interval_secs` and `instrument_ids` filter.
+  3. For `unrealized_pnl`, attempts to compute via `pos.unrealized_pnl(mid_price)` using last `quote_tick` from cache; falls back to 0.0 if no price available. `realized_pnl` uses `pos.realized_pnl.as_double()`, `avg_px` uses `pos.avg_px_open`, and `net_quantity` uses `pos.signed_decimal_qty()`.
+  4. Wired in `main.py` via `ImportableActorConfig` in `TradingNodeConfig.actors` list (standard Nautilus pattern), conditional on `ACTOR_POSITION_SNAPSHOT_ENABLED` env var. Default behavior: enabled when `ACTOR_JOURNAL_ENABLED` is enabled.
+  5. Added `actor_position_snapshot_enabled` to `SamTraderConfig` with the journal-fallback default logic.
+  6. Cython-safe test patterns: used `OmsType.NETTING` for `cache.add_position()`, avoided writing to `actor.config`, used `TestInstrumentProvider.equity()` for Position construction.
+- **Files Changed**: `src/sam_trader/actors/position_snapshot.py` (new), `src/sam_trader/actors/__init__.py`, `src/sam_trader/config.py`, `src/sam_trader/main.py`, `tests/unit/actors/test_position_snapshot.py` (new), `tests/unit/test_config.py`, `tests/unit/test_main.py`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 31/31 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for next Phase 8 ticket (sam_trader-9z3.9.11: PerformanceAnalyzer, or sam_trader-9z3.9.6: [EXIT] Verify).
+
 ## Iteration 83
 - **Task**: P8: Cron scheduler — verify backup + add deployment windows
 - **Task ID**: sam_trader-9z3.9.3
