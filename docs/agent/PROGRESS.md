@@ -811,3 +811,12 @@
 - **Files Changed**: `src/sam_trader/services/cli.py`, `tests/unit/services/test_cli.py`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 31/31 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ready for Phase 8 EXIT ticket (sam_trader-9z3.9.6) or other remaining Phase 8 work.
+
+## Iteration 91
+- **Task**: [EXIT] P8: Verify sam-services — deploy, ops, cron all work
+- **Task ID**: sam_trader-9z3.9.6
+- **Status**: COMPLETE
+- **Decisions**: Created `tests/integration/test_phase8_exit.py` with 6 integration tests covering all Phase 8 exit criteria: (1) `test_performance_analyzer_writes_stats` — verifies PerformanceAnalyzer computes Nautilus-backed stats from PG fills and upserts to `performance_stats` table, (2) `test_position_snapshot_actor_writes` — verifies PositionSnapshotActor snapshots cache positions to PG `positions` table with correct columns, (3) `test_live_risk_engine_rate_limit_configured` — verifies `build_trading_node()` wires `LiveRiskEngineConfig` with default 100/00:00:01 rate limits, (4) `test_slippage_tracking` — verifies TradeJournalActor computes signed slippage (+ = unfavorable) for LIMIT orders and writes to PG fills table, (5) `test_sam_performance_cli` — verifies `sam performance --days 1` queries PG and renders formatted table output, (6) `test_sam_performance_cli_json` — verifies `--json` flag emits structured output. All tests use asyncpg mocking patterns consistent with existing unit tests. No source code changes required — all Phase 8 components were already implemented and validated in prior iterations.
+- **Files Changed**: `tests/integration/test_phase8_exit.py` (new)
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 6/6 integration tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: Phase 8 exit gate complete. All Phase 8 tickets (9z3.9.1 through 9z3.9.11) are closed. Ready for Phase 9 (Pre-Market Pipeline).
