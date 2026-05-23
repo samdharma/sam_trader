@@ -486,3 +486,12 @@
 - **Files Changed**: `docker/postgres/init/01_schema.sql`, `tests/unit/test_postgres_schema.py`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 13/13 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Phase 6 schema ticket complete. Ready for next P6 ticket (sam_trader-9z3.7.2: TradeJournalActor).
+
+## Iteration 66
+- **Task**: P6: TradeJournalActor — multi-venue fill journaling to PostgreSQL
+- **Task ID**: sam_trader-9z3.7.2
+- **Status**: COMPLETE
+- **Decisions**: Ported TradeJournalActor from v2 with v3 multi-venue enhancements. Added `venue` extraction from `instrument_id.venue.value`, `currency` from `event.currency.code`, and `ts_init` from `event.ts_init` to the fills table. Added `venue` column to the orders upsert. Config defaults updated to v3 naming (`sam-postgres`, `sam_trader`, `sam`/`sam_secret`). Removed stale `tests/paper_trading/` directory that was causing validation failures. Actor subscribes to `OrderFilled` via standard Nautilus `subscribe_order_fills(instrument_id)` per configured instrument_ids.
+- **Files Changed**: `src/sam_trader/actors/trade_journal.py` (new), `src/sam_trader/actors/__init__.py`, `tests/unit/actors/test_trade_journal.py` (new)
+- **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 12/12 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for next P6 ticket (sam_trader-9z3.7.3: HealthMonitorActor).
