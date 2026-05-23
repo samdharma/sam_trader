@@ -102,6 +102,82 @@ class TestIBConfigWiring:
             loop.close()
             asyncio.set_event_loop(None)
 
+    def test_ib_invalid_market_data_type_logs_warning_and_fallback(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """Invalid IB_MARKET_DATA_TYPE logs WARNING and falls back to REALTIME."""
+        monkeypatch.setenv("IB_ENABLED", "true")
+        monkeypatch.setenv("IB_GATEWAY_HOST", "test-ib-gateway")
+        monkeypatch.setenv("IB_GATEWAY_PORT", "4001")
+        monkeypatch.setenv("IB_GATEWAY_CLIENT_ID", "42")
+        monkeypatch.setenv("IB_ACCOUNT_ID", "DU12345")
+        monkeypatch.setenv("IB_SYMBOLS", "TSLA.NASDAQ")
+        monkeypatch.setenv("IB_TRADING_MODE", "paper")
+        monkeypatch.setenv("IB_READ_ONLY_API", "false")
+        monkeypatch.setenv("IB_MARKET_DATA_TYPE", "INVALID")
+        monkeypatch.setenv("FUTU_ENABLED", "false")
+        monkeypatch.setenv("BUNDLES_PATH", "config/nonexistent_bundles.yaml")
+        monkeypatch.setenv("STATE_SAVE_ENABLED", "false")
+        monkeypatch.setenv("STATE_LOAD_ENABLED", "false")
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            with caplog.at_level("WARNING", logger="sam_trader.main"):
+                node = build_trading_node()
+
+            assert isinstance(node, TradingNode)
+            data_cfg = node._config.data_clients["IB"]
+            assert data_cfg.market_data_type == 1  # REALTIME fallback
+
+            warning_records = [r for r in caplog.records if r.levelname == "WARNING"]
+            assert any(
+                "IB_MARKET_DATA_TYPE='INVALID' is not a valid MarketDataTypeEnum value"
+                in r.message
+                for r in warning_records
+            )
+        finally:
+            loop.close()
+            asyncio.set_event_loop(None)
+
+    def test_ib_delayed_market_data_type_no_warning(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """Valid DELAYED IB_MARKET_DATA_TYPE uses DELAYED with no WARNING."""
+        monkeypatch.setenv("IB_ENABLED", "true")
+        monkeypatch.setenv("IB_GATEWAY_HOST", "test-ib-gateway")
+        monkeypatch.setenv("IB_GATEWAY_PORT", "4001")
+        monkeypatch.setenv("IB_GATEWAY_CLIENT_ID", "42")
+        monkeypatch.setenv("IB_ACCOUNT_ID", "DU12345")
+        monkeypatch.setenv("IB_SYMBOLS", "TSLA.NASDAQ")
+        monkeypatch.setenv("IB_TRADING_MODE", "paper")
+        monkeypatch.setenv("IB_READ_ONLY_API", "false")
+        monkeypatch.setenv("IB_MARKET_DATA_TYPE", "DELAYED")
+        monkeypatch.setenv("FUTU_ENABLED", "false")
+        monkeypatch.setenv("BUNDLES_PATH", "config/nonexistent_bundles.yaml")
+        monkeypatch.setenv("STATE_SAVE_ENABLED", "false")
+        monkeypatch.setenv("STATE_LOAD_ENABLED", "false")
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            with caplog.at_level("WARNING", logger="sam_trader.main"):
+                node = build_trading_node()
+
+            assert isinstance(node, TradingNode)
+            data_cfg = node._config.data_clients["IB"]
+            assert data_cfg.market_data_type == 3  # DELAYED
+
+            warning_records = [r for r in caplog.records if r.levelname == "WARNING"]
+            assert not any("MarketDataTypeEnum" in r.message for r in warning_records)
+        finally:
+            loop.close()
+            asyncio.set_event_loop(None)
+
     def test_ib_read_only_no_exec_client(
         self,
         monkeypatch: pytest.MonkeyPatch,

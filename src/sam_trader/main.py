@@ -142,11 +142,18 @@ def build_trading_node() -> TradingNode:
                 load_ids=_make_load_ids(cfg.ib_symbols),
             )
 
-            market_data_type = getattr(
-                IBMarketDataTypeEnum,
-                cfg.ib_market_data_type,
-                IBMarketDataTypeEnum.REALTIME,
-            )
+            if hasattr(IBMarketDataTypeEnum, cfg.ib_market_data_type):
+                market_data_type = getattr(
+                    IBMarketDataTypeEnum, cfg.ib_market_data_type
+                )
+            else:
+                logger.warning(
+                    "IB_MARKET_DATA_TYPE=%r is not a valid MarketDataTypeEnum value. "
+                    "Valid: %s. Falling back to REALTIME.",
+                    cfg.ib_market_data_type,
+                    list(IBMarketDataTypeEnum.idx2name.values()),
+                )
+                market_data_type = IBMarketDataTypeEnum.REALTIME
 
             data_clients["IB"] = InteractiveBrokersDataClientConfig(
                 ibg_host=cfg.ib_gateway_host,

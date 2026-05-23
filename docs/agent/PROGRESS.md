@@ -1,4 +1,13 @@
 
+## Iteration 61
+- **Task**: P5: Fix silent fallback on invalid IB_MARKET_DATA_TYPE
+- **Task ID**: sam_trader-9z3.6.11
+- **Status**: COMPLETE
+- **Decisions**: Replaced silent `getattr(..., fallback=REALTIME)` with explicit `hasattr` check that logs a WARNING before falling back to REALTIME. Used `IBMarketDataTypeEnum.idx2name.values()` instead of `[e.name for e in IBMarketDataTypeEnum]` because ibapi's custom Enum class is not iterable. Added two unit tests: (1) invalid value logs WARNING and falls back to REALTIME, (2) valid DELAYED value uses DELAYED with no WARNING.
+- **Files Changed**: `src/sam_trader/main.py`, `tests/unit/test_main_ib_config.py`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 5/5 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Phase 5 complete.
+
 ## Iteration 42
 - **Task**: Document Futu OpenD first-time login and terminal access
 - **Task ID**: sam_trader-9z3.1.19
