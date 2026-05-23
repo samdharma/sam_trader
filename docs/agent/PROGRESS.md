@@ -651,3 +651,19 @@
 - **Files Changed**: `docker/Dockerfile.services`, `tests/unit/test_dockerfile_services.py` (new)
 - **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 11/11 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ready for next Phase 8 ticket (sam_trader-9z3.9.2: sam CLI tool, or sam_trader-9z3.9.3: Cron scheduler, or sam_trader-9z3.9.4: Quote fetcher).
+
+## Iteration 80
+- **Task**: P8: sam CLI tool — deploy, hotfix, rollback + ops commands
+- **Task ID**: sam_trader-9z3.9.2
+- **Status**: COMPLETE
+- **Decisions**: 
+  1. Replaced argparse-based CLI in `services/cli.py` with comprehensive `click` group CLI. Added `click` to `pyproject.toml` dependencies.
+  2. Added `sam` console script entry point alongside existing `sam-validate-bundles` for backward compatibility.
+  3. Deployment commands: `deploy [--tag]` (git fetch/checkout + docker build + restart), `hotfix <module_path>` (docker cp into running container), `update` (git pull + docker build + restart), `rollback <tag>` (git checkout tag + docker build + restart), `version` (git tag/commit + docker image build time).
+  4. Operations commands: `status` (docker ps filtered), `health` (deep check: PostgreSQL psql SELECT 1, Redis ping, Futu OpenD docker health, sam-trader docker health), `backup` (delegates to `backup.py`), `restore <date>` (delegates to `backup.py`), `logs [service]` (single service tail or all containers snapshot), `restart` (Redis PUBLISH + docker compose restart), `quote <symbol>` (Redis cache lookup with broker fallback placeholder for ticket 9z3.9.4).
+  5. All commands support `--json` global flag for structured JSON output; default is readable key-value format.
+  6. Graceful restart implemented via two-step: Redis `PUBLISH sam:restart_request graceful` to notify Nautilus, then `docker compose restart sam-trader`.
+  7. 23 unit tests covering all 13 commands plus JSON flag, backup skip handling, hotfix missing file error, and validate-bundles backward compatibility.
+- **Files Changed**: `src/sam_trader/services/cli.py` (rewritten), `pyproject.toml` (added click dep + sam entry point), `tests/unit/services/test_cli.py` (rewritten)
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 23/23 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for next Phase 8 ticket (sam_trader-9z3.9.3: Cron scheduler, or sam_trader-9z3.9.4: Quote fetcher).

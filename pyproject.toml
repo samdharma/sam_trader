@@ -31,6 +31,7 @@ dependencies = [
     "nautilus-ibapi==10.45.1",
     "holidays",
     "redis>=5.0",
+    "click",
 ]
 
 [project.optional-dependencies]
@@ -46,6 +47,7 @@ dev = [
 where = ["src"]
 
 [project.scripts]
+sam = "sam_trader.services.cli:main"
 sam-validate-bundles = "sam_trader.services.cli:main"
 
 [tool.setuptools.package-data]
