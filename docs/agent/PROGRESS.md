@@ -636,3 +636,18 @@
 - **Files Changed**: `tests/integration/test_strategy_lifecycle.py` (new)
 - **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 4/4 integration tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: Phase 7 exit gate complete. Ready for Phase 8 (sam-services Container). Note: Actors are implemented but NOT yet wired into main.py — Phase 6 EXIT (sam_trader-9z3.7.9) was never completed per PROGRESS.md.
+
+## Iteration 79
+- **Task**: P8: Dockerfile.services — verify existing + add deployment deps
+- **Task ID**: sam_trader-9z3.9.1
+- **Status**: COMPLETE
+- **Decisions**: 
+  1. Added `git` to apt-get install list — verified it is NOT present in `python:3.12-slim` base image via `docker run` test.
+  2. Added Docker Buildx plugin download (`docker-buildx` binary to `/usr/local/lib/docker/cli-plugins/`) for multi-stage builds.
+  3. Added `/opt/sam_trader/config` directory creation alongside existing `logs` and `backups` directories, matching the docker-compose.yml volume mounts.
+  4. Added `EXPOSE 8080` instruction for documentation/metadata.
+  5. Added 3-layer `HEALTHCHECK` per AGENTS.md with standard timing (`interval=30s timeout=10s start-period=60s retries=3`): L1 `pgrep python`, L2 TCP connect to localhost:8080, L3 `curl -sf http://localhost:8080/health` with `|| true` fallback since placeholder HTTP server does not yet serve `/health`.
+  6. Created `tests/unit/test_dockerfile_services.py` with 11 content-validation assertions covering all acceptance criteria.
+- **Files Changed**: `docker/Dockerfile.services`, `tests/unit/test_dockerfile_services.py` (new)
+- **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 11/11 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for next Phase 8 ticket (sam_trader-9z3.9.2: sam CLI tool, or sam_trader-9z3.9.3: Cron scheduler, or sam_trader-9z3.9.4: Quote fetcher).
