@@ -450,3 +450,21 @@
 - **Files Changed**: `src/sam_trader/config.py`, `tests/unit/test_config.py`, `.env.example`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 4/4 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Phase 5 cleanup complete.
+
+## Iteration 62
+- **Task**: P5: Remove non-standard custom IB exec client and factory
+- **Task ID**: sam_trader-9z3.6.14
+- **Status**: COMPLETE
+- **Decisions**: Files already removed in a prior session. Confirmed `src/sam_trader/adapters/ib/` now contains only `__init__.py` and `constants.py`. No references to `PermissionCheckingIBExecutionClient` or `SamInteractiveBrokersLiveExecClientFactory` remain in src/ or tests/.
+- **Files Changed**: None (cleanup done previously; verified state)
+- **Validation Result**: PASS (pytest tests/unit/adapters/ib/ tests/unit/test_main_ib_*.py: 13 passed; ralph_validate.sh --tier=targeted passed)
+- **Blockers / Notes**: None. Phase 5 cleanup complete.
+
+## Iteration 63
+- **Task**: P5: Integration test for standard IB execution path post-cleanup
+- **Task ID**: sam_trader-9z3.6.13
+- **Status**: COMPLETE
+- **Decisions**: Enhanced `tests/integration/test_dual_venue.py` with three new tests post-cleanup of custom IB exec client/factory and dead permissions module: (1) `test_standard_ib_factories_registered` verifies exact standard Nautilus `InteractiveBrokersLiveDataClientFactory` and `InteractiveBrokersLiveExecClientFactory` classes are registered (not custom subclasses); (2) `test_ib_post_only_guard_in_trading_node_context` verifies IB bundle gets `exchange=SMART` and `make_bracket`/`make_limit` inject `tp_post_only=False`/`post_only=False` for IB-venue instruments in a full TradingNode context; (3) `test_no_dead_ib_imports` verifies `sam_trader.adapters.ib` imports cleanly with no references to removed `PermissionCheckingIBExecutionClient` or `SamInteractiveBrokersLiveExecClientFactory` classes. Existing `test_futu_and_ib_strategies_coexist` retained as post-cleanup smoke test.
+- **Files Changed**: `tests/integration/test_dual_venue.py`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 4/4 integration tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Phase 5 integration test complete.

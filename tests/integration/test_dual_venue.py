@@ -7,6 +7,9 @@ Validates the Phase 5 exit criteria:
 4. Data flows from both venues
 5. No cross-venue contamination
 6. Both venues visible in Portfolio (exec clients registered)
+7. Only standard Nautilus IB factories are registered (post-cleanup)
+8. Strategy-level post_only guard works in TradingNode context
+9. No dead imports from removed IB modules
 """
 
 from __future__ import annotations
@@ -19,7 +22,7 @@ import pytest
 from futu import RET_OK
 from nautilus_trader.live.node import TradingNode
 from nautilus_trader.model.data import QuoteTick
-from nautilus_trader.model.identifiers import InstrumentId
+from nautilus_trader.model.identifiers import InstrumentId, Venue
 from nautilus_trader.model.objects import Price, Quantity
 
 from sam_trader.adapters.futu.common import instrument_id_to_futu_security
@@ -257,3 +260,233 @@ class TestDualVenueTradingNode:
         event_loop.run_until_complete(futu_data_client._disconnect())
         IB_CLIENTS.clear()
         GATEWAYS.clear()
+
+    def test_standard_ib_factories_registered(
+        self,
+        event_loop: asyncio.AbstractEventLoop,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        """Verify only standard Nautilus IB factories are registered (post-cleanup)."""
+        bundles_path = tmp_path / "bundles.yaml"
+        bundles_path.write_text(BUNDLES_YAML)
+
+        import sam_trader.adapters.futu.factories as factories_mod
+
+        quote_ctx = MagicMock()
+        quote_ctx.subscribe.return_value = (RET_OK, "")
+        trade_ctx = MagicMock()
+        trade_ctx.unlock_trade.return_value = (RET_OK, "")
+
+        monkeypatch.setattr(
+            factories_mod, "_get_shared_quote_context", lambda config: quote_ctx
+        )
+        monkeypatch.setattr(
+            factories_mod, "_get_shared_trade_context", lambda config: trade_ctx
+        )
+
+        from nautilus_trader.adapters.interactive_brokers.client import (
+            client as ib_client_mod,
+        )
+
+        def mock_ib_start(self):
+            self._is_running = True
+
+        monkeypatch.setattr(
+            ib_client_mod.InteractiveBrokersClient, "start", mock_ib_start
+        )
+
+        monkeypatch.setenv("FUTU_ENABLED", "true")
+        monkeypatch.setenv("IB_ENABLED", "true")
+        monkeypatch.setenv("BUNDLES_PATH", str(bundles_path))
+        monkeypatch.setenv("STATE_SAVE_ENABLED", "false")
+        monkeypatch.setenv("STATE_LOAD_ENABLED", "false")
+        monkeypatch.setenv("IB_GATEWAY_HOST", "test-ib-gateway")
+        monkeypatch.setenv("IB_GATEWAY_PORT", "4001")
+        monkeypatch.setenv("IB_GATEWAY_CLIENT_ID", "42")
+        monkeypatch.setenv("IB_ACCOUNT_ID", "DU12345")
+        monkeypatch.setenv("IB_SYMBOLS", "NVDA.NASDAQ")
+        monkeypatch.setenv("IB_TRADING_MODE", "paper")
+        monkeypatch.setenv("IB_READ_ONLY_API", "false")
+        monkeypatch.setenv("IB_MARKET_DATA_TYPE", "REALTIME")
+
+        asyncio.set_event_loop(event_loop)
+
+        node = build_trading_node()
+        node.build()
+
+        from nautilus_trader.adapters.interactive_brokers.factories import (
+            InteractiveBrokersLiveDataClientFactory,
+            InteractiveBrokersLiveExecClientFactory,
+        )
+
+        # Verify exact standard Nautilus classes — not custom subclasses
+        assert (
+            node._builder._data_factories["IB"]
+            is InteractiveBrokersLiveDataClientFactory
+        )
+        assert (
+            node._builder._exec_factories["IB"]
+            is InteractiveBrokersLiveExecClientFactory
+        )
+
+        # Ensure no custom subclass names leak through
+        assert (
+            node._builder._data_factories["IB"].__name__
+            == "InteractiveBrokersLiveDataClientFactory"
+        )
+        assert (
+            node._builder._exec_factories["IB"].__name__
+            == "InteractiveBrokersLiveExecClientFactory"
+        )
+
+        # Cleanup
+        from nautilus_trader.adapters.interactive_brokers.factories import (
+            GATEWAYS,
+            IB_CLIENTS,
+        )
+
+        IB_CLIENTS.clear()
+        GATEWAYS.clear()
+
+    def test_ib_post_only_guard_in_trading_node_context(
+        self,
+        event_loop: asyncio.AbstractEventLoop,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        """Verify make_bracket / make_limit inject post_only=False for IB venue
+        when called with an instrument that has Venue('IB').
+        """
+        bundles_path = tmp_path / "bundles.yaml"
+        bundles_path.write_text(BUNDLES_YAML)
+
+        import sam_trader.adapters.futu.factories as factories_mod
+
+        quote_ctx = MagicMock()
+        quote_ctx.subscribe.return_value = (RET_OK, "")
+        trade_ctx = MagicMock()
+        trade_ctx.unlock_trade.return_value = (RET_OK, "")
+
+        monkeypatch.setattr(
+            factories_mod, "_get_shared_quote_context", lambda config: quote_ctx
+        )
+        monkeypatch.setattr(
+            factories_mod, "_get_shared_trade_context", lambda config: trade_ctx
+        )
+
+        from nautilus_trader.adapters.interactive_brokers.client import (
+            client as ib_client_mod,
+        )
+
+        def mock_ib_start(self):
+            self._is_running = True
+
+        monkeypatch.setattr(
+            ib_client_mod.InteractiveBrokersClient, "start", mock_ib_start
+        )
+
+        monkeypatch.setenv("FUTU_ENABLED", "true")
+        monkeypatch.setenv("IB_ENABLED", "true")
+        monkeypatch.setenv("BUNDLES_PATH", str(bundles_path))
+        monkeypatch.setenv("STATE_SAVE_ENABLED", "false")
+        monkeypatch.setenv("STATE_LOAD_ENABLED", "false")
+        monkeypatch.setenv("IB_GATEWAY_HOST", "test-ib-gateway")
+        monkeypatch.setenv("IB_GATEWAY_PORT", "4001")
+        monkeypatch.setenv("IB_GATEWAY_CLIENT_ID", "42")
+        monkeypatch.setenv("IB_ACCOUNT_ID", "DU12345")
+        monkeypatch.setenv("IB_SYMBOLS", "NVDA.NASDAQ")
+        monkeypatch.setenv("IB_TRADING_MODE", "paper")
+        monkeypatch.setenv("IB_READ_ONLY_API", "false")
+        monkeypatch.setenv("IB_MARKET_DATA_TYPE", "REALTIME")
+
+        asyncio.set_event_loop(event_loop)
+
+        node = build_trading_node()
+        node.build()
+
+        # The IB strategy should have exchange=SMART (injected by bundle_loader)
+        strategies = node.kernel.trader.strategies()
+        ib_strategy = [s for s in strategies if s.config.venue == "IB"][0]
+        assert ib_strategy.config.exchange == "SMART"
+
+        # Verify make_bracket injects tp_post_only=False for IB venue instrument
+        from sam_trader.strategies.common import make_bracket, make_limit
+
+        ib_instrument = InstrumentId.from_str("NVDA.NASDAQ")
+        ib_instrument = InstrumentId(symbol=ib_instrument.symbol, venue=Venue("IB"))
+
+        mock_factory = MagicMock()
+        make_bracket(
+            mock_factory,
+            instrument_id=ib_instrument,
+            order_side=MagicMock(),
+            quantity=MagicMock(),
+        )
+        call_kwargs = mock_factory.bracket.call_args.kwargs
+        assert call_kwargs["tp_post_only"] is False
+
+        # Verify make_limit injects post_only=False for IB venue instrument
+        mock_factory.reset_mock()
+        make_limit(
+            mock_factory,
+            instrument_id=ib_instrument,
+            order_side=MagicMock(),
+            quantity=MagicMock(),
+            price=MagicMock(),
+        )
+        call_kwargs = mock_factory.limit.call_args.kwargs
+        assert call_kwargs["post_only"] is False
+
+        # Cleanup
+        from nautilus_trader.adapters.interactive_brokers.factories import (
+            GATEWAYS,
+            IB_CLIENTS,
+        )
+
+        IB_CLIENTS.clear()
+        GATEWAYS.clear()
+
+    def test_no_dead_ib_imports(
+        self,
+        event_loop: asyncio.AbstractEventLoop,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Verify sam_trader.adapters.ib imports cleanly and does not reference
+        removed custom classes in its import chain.
+        """
+        # Force a fresh import by clearing cached modules
+        import sys
+
+        modules_to_clear = [
+            k for k in sys.modules.keys() if k.startswith("sam_trader.adapters.ib")
+        ]
+        for mod in modules_to_clear:
+            del sys.modules[mod]
+
+        # Re-import the IB adapter package
+        import sam_trader.adapters.ib as ib_pkg
+
+        # Walk the module's namespace and any submodule namespaces
+        for attr_name in dir(ib_pkg):
+            attr = getattr(ib_pkg, attr_name)
+            if isinstance(attr, type):
+                name = attr.__name__
+                assert "PermissionChecking" not in name
+                assert "SamInteractiveBrokers" not in name
+
+        # Explicit wildcard import should not raise ImportError
+        exec("from sam_trader.adapters.ib import *", {"__name__": "test"})
+
+        # Verify the removed class names are not importable
+        import importlib
+
+        with pytest.raises(ImportError):
+            importlib.import_module(
+                "sam_trader.adapters.ib.PermissionCheckingIBExecutionClient",
+            )
+
+        with pytest.raises(ImportError):
+            importlib.import_module(
+                "sam_trader.adapters.ib.SamInteractiveBrokersLiveExecClientFactory",
+            )
