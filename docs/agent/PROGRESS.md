@@ -711,3 +711,19 @@
 - **Files Changed**: `src/sam_trader/services/crontab`, `src/sam_trader/services/performance_analyzer.py` (new), `tests/unit/services/test_cron.py` (new)
 - **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 6/6 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ready for next Phase 8 ticket.
+
+
+## Iteration 84
+- **Task**: P8: Quote fetcher — extend for Futu cache support
+- **Task ID**: sam_trader-9z3.9.4
+- **Status**: COMPLETE
+- **Decisions**: 
+  1. Created `src/sam_trader/services/quote.py` porting v2 quote fetcher patterns with v3 simplifications. Fast path reads from Redis (`sam:quote:{symbol}` and alternative symbology keys). Fallback queries Futu OpenD via `OpenQuoteContext.get_market_snapshot` for bid/ask/last prices.
+  2. Supports both Nautilus symbology (`TSLA.NASDAQ`) and Futu symbology (`US.TSLA`) via `_to_futu_code` helper with venue-aware conversion.
+  3. Output format: `format_quote()` produces a human-readable box table; CLI `--json` flag returns structured JSON via existing `_out()` helper.
+  4. Graceful error handling: when cache misses and broker is unreachable, returns `{"error": "Quote unavailable — cache miss and broker unreachable"}` with `bid`/`ask`/`last` set to `None`.
+  5. Updated `services/cli.py` `quote` command to use `get_quote()` and `format_quote()` instead of raw `redis-cli` subprocess + placeholder fallback.
+  6. Added 8 unit tests covering cache hit, cache miss, broker fallback, both-fail graceful error, format rendering, and symbology conversion.
+- **Files Changed**: `src/sam_trader/services/quote.py` (new), `src/sam_trader/services/cli.py`, `tests/unit/services/test_quote.py` (new), `tests/unit/services/test_cli.py`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 39/39 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for next Phase 8 ticket (sam_trader-9z3.9.5: Deployment capabilities, or sam_trader-9z3.9.7: LiveRiskEngine, or sam_trader-9z3.9.9: Slippage tracking, or sam_trader-9z3.9.10: PositionSnapshotActor, or sam_trader-9z3.9.11: PerformanceAnalyzer).
