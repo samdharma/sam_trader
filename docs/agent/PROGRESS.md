@@ -597,3 +597,12 @@
 - **Files Changed**: `src/sam_trader/strategies/momentum.py` (new), `tests/unit/strategies/test_momentum.py` (new)
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 26/26 momentum tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ready for next Phase 7 ticket (sam_trader-9z3.8.4: Strategy template, or sam_trader-9z3.8.5: Bundle validation).
+
+## Iteration 76
+- **Task**: P7: Strategy template — copy-paste template for new strategies
+- **Task ID**: sam_trader-9z3.8.4
+- **Status**: COMPLETE
+- **Decisions**: Created `src/sam_trader/strategies/_template.py` as a comprehensive copy-paste starter for new strategies. Adapted from v2 with v3 patterns: flat config fields (no nested BracketConfig/RiskConfig), `instrument_id`/`bar_type` as strings parsed in `on_start`, `StrategyConfig, frozen=True` with `# type: ignore[call-arg]`, venue-aware routing using both `make_bracket` from `common.py` (recommended) and direct `order_factory.bracket()` with `config.venue == "IB"` guard (alternative), configurable `entry_order_type` (MARKET/LIMIT/STOP_MARKET), all lifecycle hooks documented (`on_start`, `on_bar`, `on_order_filled`, `on_stop`, `on_reset`, `on_save`, `on_load`, `on_dispose`), state persistence via pickle, risk helpers (`_position_allowed`, `_max_daily_loss_exceeded`), and fill tracking. Bundle loader injected fields (`venue`, `bundle_id`, `exchange`, `futu_code`) included. Created 17 unit tests covering config defaults, lifecycle, venue-aware orders, risk helpers, on_bar behaviour, and state save/load roundtrip. Avoided Cython read-only attribute traps by not mocking `order_factory.bracket` directly.
+- **Files Changed**: `src/sam_trader/strategies/_template.py` (new), `tests/unit/strategies/test_template.py` (new), `docs/agent/PROGRESS.md`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 17/17 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for next Phase 7 ticket (sam_trader-9z3.8.5: Bundle validation, or sam_trader-9z3.8.6: [EXIT] Verify strategy lifecycle).
