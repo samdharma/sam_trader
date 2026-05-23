@@ -7,6 +7,7 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
+from nautilus_trader.model.orders import LimitOrder
 
 from sam_trader.adapters.ib.exec_client import PermissionCheckingIBExecutionClient
 from sam_trader.adapters.ib.permissions import (
@@ -158,3 +159,44 @@ class TestReconnectBehavior:
         # be in the disabled set after the check.
         assert "old-disabled" not in DISABLED_BUNDLE_IDS
         mock_self._log.critical.assert_not_called()
+
+
+class TestPostOnlyWarning:
+    def test_warns_on_post_only_limit_order(self) -> None:
+        """A LimitOrder with is_post_only=True triggers a WARNING log."""
+        mock_self = _make_mock_instance()
+        mock_order = MagicMock()
+        mock_order.__class__ = LimitOrder
+        mock_order.is_post_only = True
+        mock_order.client_order_id = "O-001"
+        mock_order.instrument_id = "AAPL.NASDAQ"
+
+        PermissionCheckingIBExecutionClient._warn_if_post_only(mock_self, mock_order)
+
+        mock_self._log.warning.assert_called_once()
+        args = mock_self._log.warning.call_args[0]
+        assert "post_only=True" in args[0]
+        assert args[1] == "O-001"
+        assert args[2] == "AAPL.NASDAQ"
+
+    def test_silent_on_non_post_only_limit_order(self) -> None:
+        """A LimitOrder with is_post_only=False does not trigger a warning."""
+        mock_self = _make_mock_instance()
+        mock_order = MagicMock()
+        mock_order.__class__ = LimitOrder
+        mock_order.is_post_only = False
+
+        PermissionCheckingIBExecutionClient._warn_if_post_only(mock_self, mock_order)
+
+        mock_self._log.warning.assert_not_called()
+
+    def test_silent_on_non_limit_order(self) -> None:
+        """MarketOrder (or any non-LimitOrder) never triggers the warning."""
+        mock_self = _make_mock_instance()
+        mock_order = MagicMock()
+        # MarketOrder may not even have is_post_only, but if it does we ignore it
+        del mock_order.is_post_only
+
+        PermissionCheckingIBExecutionClient._warn_if_post_only(mock_self, mock_order)
+
+        mock_self._log.warning.assert_not_called()

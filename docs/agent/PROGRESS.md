@@ -393,3 +393,15 @@
 - **Files Changed**: `src/sam_trader/adapters/ib/constants.py` (new), `src/sam_trader/bundle_loader.py`, `src/sam_trader/main.py`, `src/sam_trader/strategies/test_echo.py`, `tests/unit/adapters/ib/test_constants.py` (new), `tests/unit/test_bundle_loader.py`, `tests/unit/test_main.py`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 21/21 tests passed, black/isort/flake8/mypy all green; integration test test_futu_node.py also passes)
 - **Blockers / Notes**: None. Ready for sam_trader-9z3.6.7 (IBKR post_only incompatibility bug fix).
+
+## Iteration 57
+- **Task**: IBKR post_only incompatibility — bracket orders rejected (v2 operational bug)
+- **Task ID**: sam_trader-9z3.6.7
+- **Status**: COMPLETE
+- **Decisions**: 
+  1. Created `src/sam_trader/strategies/common.py` with venue-aware order helpers `make_bracket()` and `make_limit()`. For IB venue, these automatically inject `tp_post_only=False` and `post_only=False` respectively, preventing the 100% bracket order rejection that occurred in v2. Uses `setdefault()` so strategies can still override explicitly if needed.
+  2. Enhanced `PermissionCheckingIBExecutionClient` with `submit_order()` and `submit_order_list()` overrides that call `_warn_if_post_only()`. Any `LimitOrder` with `is_post_only=True` submitted to the IB adapter now emits a WARNING log with the order ID, instrument, and a pointer to `sam_trader.strategies.common`. This acts as a runtime safety net for strategies that bypass the helpers.
+  3. v3 strategy files (orb, momentum, template) do not yet exist — they are Phase 7 tickets (9z3.8.2, 9z3.8.3, 9z3.8.4). The infrastructure is now in place so those strategies can simply import `make_bracket` / `make_limit` from `strategies.common` instead of scattering venue conditionals.
+- **Files Changed**: `src/sam_trader/strategies/common.py` (new), `src/sam_trader/adapters/ib/exec_client.py`, `tests/unit/strategies/test_common.py` (new), `tests/unit/adapters/ib/test_exec_client.py`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 17/17 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for next phase-5 ticket (sam_trader-9z3.6.4 EXIT: Dual-venue TradingNode).

@@ -350,15 +350,16 @@ Phase 11 ───────────────────────�
 ### Phase 8: sam-services Container
 
 > **Goal:** Operations container with CLI, cron, health checks, backup, quote fetcher. Decoupled from sam-trader.
+> **Build order:** 9.1 (Dockerfile) is the single root. Two parallel tracks: CLI→Cron→Decouple and Quote. All converge to EXIT. No cross-phase dependencies.
 
-| # | Ticket ID | Title | Type | Port | AC Highlights |
-|---|-----------|-------|------|------|---------------|
-| 8.1 | `sam-p8-dockerfile` | Dockerfile.services: lightweight Python 3.12 image for operations | task | new | `python:3.12-slim`. Install: fastapi, uvicorn, httpx, asyncpg, cron, pyyaml. Mount: Docker socket (ro), config/, logs/, backups/. Port 8080. |
-| 8.2 | `sam-p8-cli` | sam CLI tool: status, health, backup, restore, logs | task | new | Python CLI (click or argparse). `sam status` → docker ps + health. `sam health` → deep health check. `sam backup` → pg_dump + config backup. `sam restore` → restore from backup. `sam logs [service]` → docker logs. `sam restart` → graceful restart via Redis state. |
-| 8.3 | `sam-p8-cron` | Cron scheduler: daily backup, log rotation, future pipeline schedules | task | new | Cron daemon inside sam-services. Crontab: daily backup at 16:30 ET, log rotation at 03:00 HKT. Configurable via env vars. Crontab file mounted or templated. |
-| 8.4 | `sam-p8-quote` | Quote fetcher: extend quote.py for Futu cache support | task | port+enhance | Port `quote.py` from v2. Add Futu quote cache query. `sam quote TSLA.NASDAQ` → bid/ask/last from Redis cache (populated by FutuLiveDataClient). Support both venues. |
-| 8.5 | `sam-p8-deploy-decouple` | Deploy decoupling: move operational commands from deploy.sh to sam-services | task | refactor | Identify operational commands in deploy.sh that should live in sam-services. Move: --status, --health, --backup, --restore, --quote, --logs. Keep in deploy.sh: setup, profiles, git pull, docker compose lifecycle. |
-| 8.6 | `sam-p8-verify` | Verify: sam-services starts, CLI works, cron runs | exit | — | `docker compose --profile services up -d`. `sam status` works. `sam health` reports all containers. `sam backup` creates backup. Cron daemon running. Restart sam-services → sam-trader unaffected. |
+| # | Ticket ID | Title | Type | AC Highlights |
+|---|-----------|-------|------|---------------|
+| 8.1 | `sam_trader-9z3.9.1` | Dockerfile.services: lightweight Python 3.12 for operations | task | `python:3.12-slim`. Install fastapi, uvicorn, httpx, asyncpg, cron, pyyaml. Mount Docker socket (ro), config/, logs/, backups/. Port 8080. No deps. Blocks CLI and Quote. |
+| 8.2 | `sam_trader-9z3.9.2` | sam CLI tool: status, health, backup, restore, logs, restart | task | Python CLI (click). `sam status`, `sam health`, `sam backup`, `sam restore`, `sam logs`, `sam restart`. Depends on Dockerfile. Blocks Cron. |
+| 8.3 | `sam_trader-9z3.9.3` | Cron scheduler: daily backup, log rotation, pipeline schedules | task | Cron daemon in sam-services. Daily backup 16:30 ET, log rotation 03:00 HKT. Configurable via env vars. Depends on CLI. Blocks Decouple. |
+| 8.4 | `sam_trader-9z3.9.4` | Quote fetcher: extend for Futu cache support | task | Port `quote.py` from v2. `sam quote TSLA.NASDAQ` → bid/ask/last from Redis cache. Fallback to broker query. Depends on Dockerfile. Blocks EXIT. |
+| 8.5 | `sam_trader-9z3.9.5` | Deploy decoupling: move ops commands from deploy.sh to sam-services | task | Remove from deploy.sh: --status, --health, --backup, --restore, --quote, --logs. Keep: setup, profiles, git pull, compose lifecycle. Depends on Cron. Blocks EXIT. |
+| 8.6 | `sam_trader-9z3.9.6` | [EXIT] Verify sam-services: starts, CLI works, cron runs, decoupled | exit | `docker compose --profile services up -d`. `sam status/health/backup` all work. Cron daemon running. Restart sam-services → sam-trader unaffected. Depends on Quote + Decouple. Blocks P9 gapscan + regime. |
 
 ---
 
