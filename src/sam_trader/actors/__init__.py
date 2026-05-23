@@ -8,6 +8,11 @@ from sam_trader.actors.health_monitor import (
     HealthMonitorActor,
     HealthMonitorActorConfig,
 )
+from sam_trader.actors.rejection_monitor import (
+    RejectionMonitorActor,
+    RejectionMonitorActorConfig,
+    StrategyHaltRequest,
+)
 from sam_trader.actors.trade_journal import TradeJournalActor, TradeJournalActorConfig
 
 __all__ = [
@@ -15,6 +20,9 @@ __all__ = [
     "BarResubscriptionActorConfig",
     "HealthMonitorActor",
     "HealthMonitorActorConfig",
+    "RejectionMonitorActor",
+    "RejectionMonitorActorConfig",
+    "StrategyHaltRequest",
     "TradeJournalActor",
     "TradeJournalActorConfig",
 ]

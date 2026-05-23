@@ -1,3 +1,11 @@
+## Iteration 70
+- **Task**: P6: RejectionMonitorActor — per-instrument rejection circuit breaker
+- **Task ID**: sam_trader-9z3.7.7
+- **Status**: COMPLETE
+- **Decisions**: Created `RejectionMonitorActor` that subscribes to `events.order.*` on the Nautilus msgbus and filters for `OrderRejected` events. Tracks consecutive rejections per `(instrument_id, strategy_id, reason)` tuple. Emits `StrategyHaltRequest` dataclass on the message bus after `max_consecutive` (default 3) identical rejections. Implements a 15-minute cooldown (`cooldown_seconds=900`) that resets the counter, allowing periodic retry. Added `_now()` helper method to enable testability since Cython `LiveClock.utc_now` is read-only. Created `StrategyHaltRequest` as a frozen dataclass for type-safe consumption by strategies and Phase 10 circuit breakers.
+- **Files Changed**: `src/sam_trader/actors/rejection_monitor.py` (new), `src/sam_trader/actors/__init__.py`, `tests/unit/actors/test_rejection_monitor.py` (new)
+- **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 11/11 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for next P6 ticket (sam_trader-9z3.7.8: RealizedPnLTrackerActor, or sam_trader-9z3.7.9: [EXIT] Verify actors).
 
 ## Iteration 61
 - **Task**: P5: Fix silent fallback on invalid IB_MARKET_DATA_TYPE
