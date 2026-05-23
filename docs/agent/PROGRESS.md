@@ -405,3 +405,12 @@
 - **Files Changed**: `src/sam_trader/strategies/common.py` (new), `src/sam_trader/adapters/ib/exec_client.py`, `tests/unit/strategies/test_common.py` (new), `tests/unit/adapters/ib/test_exec_client.py`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 17/17 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ready for next phase-5 ticket (sam_trader-9z3.6.4 EXIT: Dual-venue TradingNode).
+
+## Iteration 58
+- **Task**: [EXIT] P5: Dual-venue TradingNode (Futu + IB)
+- **Task ID**: sam_trader-9z3.6.4
+- **Status**: COMPLETE
+- **Decisions**: Created `tests/integration/test_dual_venue.py` with `test_futu_and_ib_strategies_coexist` validating all Phase 5 exit criteria. Mocked Futu SDK contexts via monkeypatched factory helpers (same pattern as test_futu_node.py). Mocked IB client `start()` to prevent real TCP connection attempts to IB Gateway, allowing real `InteractiveBrokersDataClient` and `InteractiveBrokersExecutionClient` instantiation and registration. Verified: (1) both FUTU and IB factories registered in node config and builder, (2) both Futu and IB bundles loaded as strategies, (3) both strategies instantiated with correct instrument IDs, (4) data flows from both venues — Futu via mocked push loop and IB via `_handle_data`, (5) no cross-venue contamination — Futu bundle has `futu_code` without `exchange`, IB bundle has `exchange=SMART` without `futu_code`, (6) both venues visible in Portfolio via registered exec clients in exec engine.
+- **Files Changed**: `tests/integration/test_dual_venue.py` (new)
+- **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 1/1 integration test passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: Phase 5 exit gate complete. Ready for Phase 6 (Actors & State Management).
