@@ -423,3 +423,12 @@
 - **Files Changed**: `src/sam_trader/adapters/ib/permissions.py` (deleted), `src/sam_trader/adapters/ib/exec_client.py` (deleted), `src/sam_trader/adapters/ib/factories.py` (deleted), `tests/unit/adapters/ib/test_permissions.py` (deleted), `tests/unit/adapters/ib/test_exec_client.py` (deleted)
 - **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 2/2 remaining IB tests passed, unit suite 292 passed, 1 skipped; pre-existing failures unrelated)
 - **Blockers / Notes**: None. Ready for next phase-5 or phase-6 ticket.
+
+## Iteration 60
+- **Task**: P5: Fix .env.example WAIT_FOR broker defaults mismatch
+- **Task ID**: sam_trader-9z3.6.10
+- **Status**: COMPLETE
+- **Decisions**: Changed `.env.example` lines 34-35 from `WAIT_FOR_IB_GATEWAY=0` and `WAIT_FOR_FUTU_OPEND=0` to `=1`. This aligns `.env.example` with `docker/docker-compose.yml` defaults (`:-1`) and ensures operators copying `.env.example` → `.env` get the safe default of waiting for broker gateways before Nautilus client startup.
+- **Files Changed**: `.env.example`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; no affected tests, lint skipped)
+- **Blockers / Notes**: None. Phase 5 cleanup complete.
