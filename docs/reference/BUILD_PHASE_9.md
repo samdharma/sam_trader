@@ -46,28 +46,28 @@
 |--------|-------|-------|------------|
 | `sam-p9-gapscan` | Gap scanner | Pre-market gap scan, filter rules | ✅ Medium |
 | `sam-p9-ai` | AI scoring engine | LLM candidate evaluation | ✅ Medium |
-| `sam-p9-risk` | Risk manager | Monte Carlo + pre-trade checks + heat monitor | ⚠️ **LARGE** — 3 major components |
+| `sam-p9-risk` | Risk manager | Monte Carlo + pre-trade checks + heat monitor | ⚠️ **CLOSED** — superseded by `10.7`, `10.8`, `10.9` |
 | `sam-p9-regime` | Market regime detection | HMM classifier + adaptation | ✅ Medium |
-| `sam-p9-orch` | Pipeline orchestrator | Sequential executor + bundle creator + report | ⚠️ **LARGE** — 4 sub-components |
+| `sam-p9-orch` | Pipeline orchestrator | Sequential executor + bundle creator + report | ⚠️ **CLOSED** — superseded by `10.10`, `10.11`, `10.12` |
 | `sam-p9-verify` | Verify pipeline | End-to-end integration test | ✅ Medium |
 
-### 2.1 Decomposition: `sam-p9-risk`
+### 2.1 Decomposition: `sam-p9-risk` → `sam_trader-9z3.10.7`, `10.8`, `10.9`
 
-Decompose into:
+> **Status:** Parent ticket `sam_trader-9z3.10.3` is **closed**. Work distributed to sub-tickets below.
 
-| New Ticket | Title | Scope | Depends On |
-|------------|-------|-------|------------|
-| `sam_trader-9z3.10.7` | Monte Carlo position sizer | Position size simulation | `sam-p9-gapscan` |
+| Ticket | Title | Scope | Depends On |
+|--------|-------|-------|------------|
+| `sam_trader-9z3.10.7` | Monte Carlo position sizer | Position size simulation | `sam-p9-ai` (`10.2`) |
 | `sam_trader-9z3.10.8` | Pre-trade risk checks | Max exposure, daily loss, margin checks | `sam_trader-9z3.10.7` |
 | `sam_trader-9z3.10.9` | Portfolio heat monitor | Real-time heat tracking | `sam_trader-9z3.10.8` |
 
-### 2.2 Decomposition: `sam-p9-orch`
+### 2.2 Decomposition: `sam-p9-orch` → `sam_trader-9z3.10.10`, `10.11`, `10.12`
 
-Decompose into:
+> **Status:** Parent ticket `sam_trader-9z3.10.5` is **closed**. Work distributed to sub-tickets below.
 
-| New Ticket | Title | Scope | Depends On |
-|------------|-------|-------|------------|
-| `sam_trader-9z3.10.10` | Pipeline sequential executor | Run scan → AI → risk → regime in order | `sam_trader-9z3.10.9`, `sam-p9-regime` |
+| Ticket | Title | Scope | Depends On |
+|--------|-------|-------|------------|
+| `sam_trader-9z3.10.10` | Pipeline sequential executor | Run scan → AI → risk → regime in order | `sam_trader-9z3.10.9`, `sam-p9-regime` (`10.4`) |
 | `sam_trader-9z3.10.11` | Bundle YAML generator | Convert candidates to valid bundle YAML | `sam_trader-9z3.10.10` |
 | `sam_trader-9z3.10.12` | Readiness report | Console + webhook notification | `sam_trader-9z3.10.11` |
 
@@ -114,4 +114,4 @@ def monte_carlo_size(
 
 ---
 
-*Last updated: 2026-05-21*
+*Last updated: 2026-05-23 — parent tickets 10.3 and 10.5 closed as superseded by sub-tickets*

@@ -165,10 +165,12 @@ Phase 8 ────────────────────────
                               sam-p8-verify ──► ═══ PHASE 8 GATE ═══
 
 Phase 9 ──────────────────────────────────────────────────────────────────
-  sam-p9-gapscan ──► sam-p9-ai ──► sam-p9-risk ──► sam-p9-orch ──► sam-p9-verify
-                                                                            │
-                                                                            ▼
-                                                                  ═══ PHASE 9 GATE ═══
+  sam-p9-gapscan ──► sam-p9-ai ──► sam-p9-risk-1 ──► sam-p9-risk-2 ──► sam-p9-risk-3 ──┐
+                                                                                        ├──► sam-p9-orch-1 ──► sam-p9-orch-2 ──► sam-p9-orch-3 ──► sam-p9-verify
+  sam-p9-regime ────────────────────────────────────────────────────────────────────────┘
+                                                                                        │
+                                                                                        ▼
+                                                                              ═══ PHASE 9 GATE ═══
 
 Phase 10 ─────────────────────────────────────────────────────────────────
   sam-p10-safety ──► sam-p10-api ──► sam-p10-dashboard ──► sam-p10-verify
@@ -356,13 +358,13 @@ Phase 11 ───────────────────────�
 | 9.3b | `sam_trader-9z3.10.8` | Pre-trade risk checks | task | new | Max exposure check per venue. Daily loss limit check. Margin check. Reject trade if any check fails. |
 | 9.3c | `sam_trader-9z3.10.9` | Portfolio heat monitor | task | new | Real-time portfolio heat tracking. Heat threshold warnings. Heat dashboard metric. |
 
-> **Note:** 9.3 was decomposed from a monolithic ticket into 3 sequential sub-tasks.
+> **Note:** The original parent ticket `sam_trader-9z3.10.3` ("Risk manager") was **closed** as superseded by sub-tickets `10.7`, `10.8`, `10.9`. Risk integration work is distributed across the sub-tickets and the EXIT gate.
 | 9.4 | `sam-p9-regime` | Market regime detection: HMM-based classification, regime-aware adaptation | task | new | HMM regime classifier (trending, ranging, volatile). Regime-aware parameter adaptation (e.g., tighter stops in volatile regime). Output: regime label + adapted params. |
 | 9.5a | `sam_trader-9z3.10.10` | Pipeline sequential executor | task | new | Run scan → AI → risk → regime in sequence. Pass candidate list between stages. Error handling: fail fast, log stage errors. |
 | 9.5b | `sam_trader-9z3.10.11` | Bundle YAML generator | task | new | Convert approved candidates to bundle YAML. Validate against schema. Write to `config/bundles.daily.yaml`. |
 | 9.5c | `sam_trader-9z3.10.12` | Readiness report | task | new | Daily readiness report generation. Console output formatted table. Optional webhook notification. Includes candidates, risks, recommendations. |
 
-> **Note:** 9.5 was decomposed from a monolithic ticket into 3 sequential sub-tasks.
+> **Note:** The original parent ticket `sam_trader-9z3.10.5` ("Pipeline orchestrator") was **closed** as superseded by sub-tickets `10.10`, `10.11`, `10.12`. Pipeline integration work is distributed across the sub-tickets and the EXIT gate.
 | 9.6 | `sam-p9-verify` | Verify: pipeline runs end-to-end, produces valid bundles | exit | — | Integration test: run pipeline on pre-market data. Pipeline produces ≥1 candidate. Risk checks pass. Bundle YAML generated and passes validation. Readiness report saved. |
 
 ---
