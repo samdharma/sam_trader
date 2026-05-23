@@ -342,6 +342,54 @@ class TestValidateBundlesCommand:
         assert "not found" in captured.err
 
 
+class TestRotateLogsCommand:
+    @patch("sam_trader.services.cli.rotate_logs")
+    def test_rotate_logs(self, mock_rotate: Any, capsys: Any) -> None:
+        mock_rotate.return_value = (2, 1)
+        rc = main(["rotate-logs"])
+        captured = capsys.readouterr()
+        assert rc == 0
+        assert "2" in captured.out
+        assert "1" in captured.out
+
+    @patch("sam_trader.services.cli.rotate_logs")
+    def test_rotate_logs_json(self, mock_rotate: Any, capsys: Any) -> None:
+        mock_rotate.return_value = (0, 0)
+        rc = main(["--json", "rotate-logs"])
+        captured = capsys.readouterr()
+        assert rc == 0
+        data = json.loads(captured.out)
+        assert data["command"] == "rotate-logs"
+        assert data["rotated"] == 0
+
+
+class TestDeployWindowCommand:
+    @patch("sam_trader.services.cli.check_deploy_window")
+    def test_deploy_window_active(self, mock_check: Any, capsys: Any) -> None:
+        mock_check.return_value = True
+        rc = main(["deploy-window"])
+        captured = capsys.readouterr()
+        assert rc == 0
+        assert "true" in captured.out or "active" in captured.out.lower()
+
+    @patch("sam_trader.services.cli.check_deploy_window")
+    def test_deploy_window_inactive(self, mock_check: Any, capsys: Any) -> None:
+        mock_check.return_value = False
+        rc = main(["deploy-window"])
+        captured = capsys.readouterr()
+        assert rc == 0
+        assert "False" in captured.out or "inactive" in captured.out.lower()
+
+
+class TestPipelineCommand:
+    @patch("sam_trader.services.cli.run_pipeline")
+    def test_pipeline_placeholder(self, mock_run: Any, capsys: Any) -> None:
+        rc = main(["pipeline"])
+        captured = capsys.readouterr()
+        assert rc == 0
+        assert "triggered" in captured.out or "placeholder" in captured.out
+
+
 class TestJsonGlobalFlag:
     @patch("sam_trader.services.cli._run")
     def test_json_flag_on_status(self, mock_run: Any, capsys: Any) -> None:

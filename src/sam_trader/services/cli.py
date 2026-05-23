@@ -33,6 +33,9 @@ from sam_trader.bundle_validation import validate_bundles
 from sam_trader.services.backup import BackupError
 from sam_trader.services.backup import backup as run_backup
 from sam_trader.services.backup import restore as run_restore
+from sam_trader.services.deploy_window import check_window as check_deploy_window
+from sam_trader.services.pipeline import run_pipeline
+from sam_trader.services.rotate_logs import rotate_logs
 
 logger = logging.getLogger(__name__)
 
@@ -482,6 +485,45 @@ def restart(ctx: click.Context) -> None:
         "command": "restart",
         "status": "signal_sent",
         "detail": "sam-trader will save state and restart",
+    }
+    _out(ctx, result)
+
+
+@cli.command("rotate-logs")
+@click.pass_context
+def rotate_logs_cmd(ctx: click.Context) -> None:
+    """Rotate oversized log files and purge old archives."""
+    rotated, deleted = rotate_logs()
+    result = {
+        "command": "rotate-logs",
+        "rotated": rotated,
+        "deleted": deleted,
+    }
+    _out(ctx, result)
+
+
+@cli.command("deploy-window")
+@click.pass_context
+def deploy_window_cmd(ctx: click.Context) -> None:
+    """Check whether the current time is inside the deployment window."""
+    active = check_deploy_window()
+    result = {
+        "command": "deploy-window",
+        "active": active,
+        "window": os.getenv("DEPLOY_WINDOW", "05:00-08:00"),
+    }
+    _out(ctx, result)
+
+
+@cli.command()
+@click.pass_context
+def pipeline(ctx: click.Context) -> None:
+    """Trigger the pre-market pipeline slot (Phase 9 placeholder)."""
+    run_pipeline()
+    result = {
+        "command": "pipeline",
+        "status": "triggered",
+        "note": "Phase 9 placeholder",
     }
     _out(ctx, result)
 

@@ -1,8 +1,29 @@
-# SAM Trader V3 — Backup cron schedule
-# Runs at 06:00 HKT on weekdays (Mon-Fri); skips US/HK trading holidays via script logic.
+# SAM Trader V3 — Operations cron schedule
+# Timezone: Asia/Hong_Kong
 SHELL=/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 TZ=Asia/Hong_Kong
 
-# Source container environment variables written at startup
+# ---------------------------------------------------------------------------
+# Daily backup at 06:00 HKT on weekdays; skips US/HK trading holidays via
+# script logic in backup.py.
+# ---------------------------------------------------------------------------
 0 6 * * 1-5 sam . /opt/sam_trader/.env_cron && cd /opt/sam_trader && /usr/local/bin/python3 -m sam_trader.services.backup backup >> /opt/sam_trader/logs/backup.log 2>&1
+
+# ---------------------------------------------------------------------------
+# Log rotation at 03:00 HKT daily.
+# ---------------------------------------------------------------------------
+0 3 * * * sam . /opt/sam_trader/.env_cron && cd /opt/sam_trader && /usr/local/bin/python3 -m sam_trader.services.rotate_logs >> /opt/sam_trader/logs/rotate.log 2>&1
+
+# ---------------------------------------------------------------------------
+# Deployment window check (configurable via DEPLOY_WINDOW, default 05:00-08:00
+# HKT). Runs every 30 minutes during the likely window so custom values are
+# honoured without rebuilding the crontab.
+# ---------------------------------------------------------------------------
+*/30 4-9 * * * sam . /opt/sam_trader/.env_cron && cd /opt/sam_trader && /usr/local/bin/python3 -m sam_trader.services.deploy_window >> /opt/sam_trader/logs/deploy_window.log 2>&1
+
+# ---------------------------------------------------------------------------
+# Phase 9 pre-market pipeline slot (configurable via PIPELINE_SCHEDULE).
+# Default: 08:00 HKT weekdays (pre-market for HK; evening for US).
+# ---------------------------------------------------------------------------
+0 8 * * 1-5 sam . /opt/sam_trader/.env_cron && cd /opt/sam_trader && /usr/local/bin/python3 -m sam_trader.services.pipeline >> /opt/sam_trader/logs/pipeline.log 2>&1

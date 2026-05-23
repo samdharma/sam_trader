@@ -667,3 +667,20 @@
 - **Files Changed**: `src/sam_trader/services/cli.py` (rewritten), `pyproject.toml` (added click dep + sam entry point), `tests/unit/services/test_cli.py` (rewritten)
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 23/23 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ready for next Phase 8 ticket (sam_trader-9z3.9.3: Cron scheduler, or sam_trader-9z3.9.4: Quote fetcher).
+
+## Iteration 81
+- **Task**: P8: Cron scheduler — verify backup + add deployment windows
+- **Task ID**: sam_trader-9z3.9.3
+- **Status**: COMPLETE
+- **Decisions**: 
+  1. Verified existing backup cron schedule (06:00 HKT weekdays, skips holidays via backup.py logic) in `src/sam_trader/services/crontab`.
+  2. Added log rotation schedule at 03:00 HKT daily via `sam_trader.services.rotate_logs` module. Rotates `.log` files >100MB by gzipping them, purges archives older than 30 days.
+  3. Added deployment window scheduling via `sam_trader.services.deploy_window` module. Reads `DEPLOY_WINDOW` env var (default `05:00-08:00`), supports overnight windows. Cron runs every 30 min during 04:00-09:00 to honor custom windows without rebuilding the container.
+  4. Added Phase 9 pre-market pipeline slot at 08:00 HKT weekdays via `sam_trader.services.pipeline` module. Reads `PIPELINE_SCHEDULE` env var; currently a placeholder logging trigger.
+  5. Fixed Dockerfile.services root/non-root issue: removed `USER sam` before CMD so `cron` daemon can start as root, then drops to `sam` user for the HTTP server via `su - sam -c ...`. Cron jobs still execute as user `sam` because the crontab specifies the user field.
+  6. Updated `.env.example` with `DEPLOY_WINDOW=05:00-08:00`, `PIPELINE_SCHEDULE=08:00`, `LOG_RETENTION_DAYS=30`, `LOG_MAX_SIZE_MB=100`.
+  7. Added CLI commands `rotate-logs`, `deploy-window`, and `pipeline` to `services/cli.py` for manual invocation.
+  8. Updated Dockerfile CMD env-filter regex to include `DEPLOY|PIPELINE|LOG_|TZ` prefixes so new env vars are written to `.env_cron`.
+- **Files Changed**: `src/sam_trader/services/crontab`, `src/sam_trader/services/rotate_logs.py` (new), `src/sam_trader/services/deploy_window.py` (new), `src/sam_trader/services/pipeline.py` (new), `src/sam_trader/services/cli.py`, `docker/Dockerfile.services`, `.env.example`, `tests/unit/test_crontab.py` (new), `tests/unit/services/test_rotate_logs.py` (new), `tests/unit/services/test_deploy_window.py` (new), `tests/unit/services/test_pipeline.py` (new), `tests/unit/services/test_cli.py`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 54/54 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for next Phase 8 ticket (sam_trader-9z3.9.4: Quote fetcher, or sam_trader-9z3.9.5: Deploy decoupling).
