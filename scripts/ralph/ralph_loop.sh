@@ -223,6 +223,20 @@ while true; do
     else
         echo "[RALPH] Single-shot mode: using ticket ${TICKET_ID}"
     fi
+    # --- Filter and sort ready tasks deterministically ---
+    # Rules: skip epic/feature containers; sort by feature number ascending,
+    # then task number ascending. This ensures Feature 1 is built before
+    # Feature 2, and task 1 before task 2 within a feature.
+    if [[ ${SINGLE_SHOT} -eq 0 ]]; then
+        READY_JSON=$(echo "${READY_JSON}" | jq '
+            [ .[] | select(.issue_type != "epic" and .issue_type != "feature") ]
+            | sort_by(
+                (.id | split(".")[1] | tonumber),
+                (.id | split(".")[2] // "0" | tonumber)
+              )
+        ')
+        echo "[RALPH] Deterministic sort: feature ascending, task ascending"
+    fi
     READY_COUNT=$(echo "${READY_JSON}" | jq 'length')
 
     if [[ "${READY_COUNT}" -eq 0 ]]; then

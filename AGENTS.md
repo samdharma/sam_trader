@@ -46,9 +46,10 @@ The Ralph loop auto-detects the ticket's phase label and injects the correspondi
 
 ## Key Decisions (see plan §2 for full rationale)
 
-- NautilusTrader v1.227.0 as sole engine. Standard components only — no custom `DataEngine`, `LiveExecEngine`, etc.
+- NautilusTrader v1.227.0 as sole engine. Standard components only — no non-standard patterns for `DataEngine`, `LiveExecEngine`, etc.
 - futu-api SDK for Futu protocol (not nautilus-futu Rust adapter).
-- Futu OpenD in separate Docker container (official image). IB Gateway in separate container (optional).
+- Futu OpenD in separate Docker container (official image). 
+- IB Gateway in separate container.
 - Parquet for historical data. PostgreSQL for relational data only. Redis for Nautilus cache persistence.
 - YAML bundle registry for strategies. ImportableStrategyConfig pattern. Multi-venue from day 1.
 - Graceful restart for all config changes (maintenance window 5am–8am HKT).
@@ -78,15 +79,16 @@ All containers use a standardized **3-layer health check** (see `docker/HEALTHCH
 
 ### Hierarchy
 ```
-EPIC (type: epic, labels: epic, meta-grouping, optional: <phase-tag>)
-└── FEATURE (type: feature, labels: <phase-tag>, meta-grouping)
-    ├── WORK tickets (type: task|bug|test|docs, labels: <phase-tag> ONLY)
+EPIC (type: epic, labels: epic, meta-grouping, <phase-tag>) - not to be closed
+└── FEATURE (type: feature, labels: <phase-tag>, meta-grouping) - not to be closed
+    ├── WORK tickets (type: task|bug|test|docs, labels: <phase-tag> ONLY). Each ticket should me atomic and small. number sequence according to build sequence  - to be closed after implementation
     │   - Use `bug` for regressions/defects; `task` for new work
     │   - Must have description with acceptance criteria
     │   - Must reference spec file or build phase doc
     │   - Dependencies set explicitly via `bd dep add`
-    └── EXIT ticket (type: task, labels: exit, <phase-tag>)
+    └── EXIT ticket (type: task, labels: <phase-tag>)
         - Last ticket before feature is complete
+        - regression test and wired (e2e) for the whole feature
         - Blocks the NEXT phase's first work ticket(s)
 ```
 
