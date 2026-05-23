@@ -70,23 +70,36 @@ from nautilus_trader.adapters.interactive_brokers.providers import InteractiveBr
 
 | Ticket | Title | Scope | Assessment |
 |--------|-------|-------|------------|
-| `sam-p5-ib-port` | Port IBKR adapter from v2 | Config, factories, instrument provider wiring in `main.py` | ⚠️ **LARGE** — ports 3 major components |
-| `sam-p5-ib-gateway` | IB Gateway Docker service | `docker-compose.yml` service definition | ✅ Small |
+| `sam_trader-9z3.6.1` | IBKR config wiring in main.py ✅ | `ib_enabled` flag, `InteractiveBrokers*Config` from `SamTraderConfig` | ✅ Small |
+| `sam_trader-9z3.6.8` | Pre-flight IB account permission check ✅ | Query IB trading permissions, disable strategies if shorts blocked | ✅ Medium |
+| `sam_trader-9z3.6.2` | IB Gateway Docker service | `docker-compose.yml` service definition, profile `ib` | ✅ Small |
+| `sam_trader-9z3.6.5` | IBKR factory registration | Register `InteractiveBrokersLiveDataClientFactory` and `InteractiveBrokersLiveExecClientFactory` | ✅ Small |
+| `sam_trader-9z3.6.6` | IBKR instrument provider wiring | Register `InteractiveBrokersInstrumentProvider` | ✅ Small |
 | `sam_trader-9z3.6.3` | Enhance IB adapter for v3 | Multi-venue config, venue aliasing, **SMART routing default** | ✅ Medium |
-| `sam_trader-9z3.6.8` | Pre-flight IB account permission check | Query IB trading permissions, disable strategies if shorts blocked | ✅ Medium |
-| `sam_trader-9z3.6.4` | [EXIT] P5: Dual-venue TradingNode | Integration test: Futu + IB simultaneously | ✅ Medium |
+| `sam_trader-9z3.6.7` | [BUG] IBKR post_only incompatibility | Adapter-level handling; venue-aware order wrapper | ✅ Medium |
+| `sam_trader-9z3.6.4` | [EXIT] Dual-venue TradingNode | Integration test: Futu + IB simultaneously | ✅ Medium |
 
-### 4.1 Decomposition: `sam-p5-ib-port`
+### 4.1 Build Order (Actual Dependency Chain)
 
-This ticket is **too large** (config + factories + instrument provider + wiring). Decompose into:
+```
+9z3.5.4 (P4 main-wire) ──► 9z3.6.1 (config wiring) ✅ DONE
+9z3.5.6 (P4 exit) ──► 9z3.6.2 (IB Gateway Docker) ──► 9z3.6.5 (factory reg) ──► 9z3.6.6 (provider wiring)
+                                                                                       │
+                                                                                       ▼
+                                                                             9z3.6.3 (enhance adapter) ──► 9z3.6.7 (post_only bug) ──► 9z3.6.4 (EXIT)
+9z3.6.8 (pre-flight perms) ✅ DONE — runs in parallel (no deps)
+```
+
+### 4.2 Decomposition: `sam-p5-ib-port`
+
+> **Original monolithic ticket `sam-p5-ib-port` was too large.** It was decomposed into 3 sub-tickets plus an IB Gateway Docker ticket inserted between config wiring and factory registration (because factories need a running gateway to connect to).
 
 | New Ticket | Title | Scope | Depends On |
 |------------|-------|-------|------------|
-| `sam_trader-9z3.6.1` | IBKR config wiring in main.py | Add `ib_enabled` flag, `InteractiveBrokers*Config` construction from `SamTraderConfig` | `sam-p4-main-wire` |
-| `sam_trader-9z3.6.5` | IBKR factory registration | Register `InteractiveBrokersLiveDataClientFactory` and `InteractiveBrokersLiveExecClientFactory` in `build_trading_node()` | `sam_trader-9z3.6.1` |
+| `sam_trader-9z3.6.1` | IBKR config wiring in main.py | Add `ib_enabled` flag, `InteractiveBrokers*Config` construction | `sam-p4-main-wire` (9z3.5.4) |
+| `sam_trader-9z3.6.2` | IB Gateway Docker service | `docker-compose.yml` service for `sam-ib-gateway` | P4 exit (9z3.5.6) |
+| `sam_trader-9z3.6.5` | IBKR factory registration | Register IB data/exec factories in `build_trading_node()` | `sam_trader-9z3.6.2` |
 | `sam_trader-9z3.6.6` | IBKR instrument provider wiring | Register `InteractiveBrokersInstrumentProvider` | `sam_trader-9z3.6.5` |
-
-**Action:** Close/repurpose original `sam-p5-ib-port` as `sam_trader-9z3.6.1` (first sub-task), create `sam_trader-9z3.6.5` and `sam_trader-9z3.6.6` as siblings.
 
 ---
 

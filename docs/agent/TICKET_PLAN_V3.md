@@ -36,7 +36,7 @@ EPIC: sam-v3 (SAM Trader V3)
 │   ↑ depends on: phase-6
 │
 ├── FEATURE: phase-8 (sam-services Container)
-│   ↑ depends on: phase-4 (can start after Futu is wired)
+│   ↑ depends on: phase-7 (beads gated via P7 EXIT → P8 Dockerfile; logically can follow phase-4)
 │
 ├── FEATURE: phase-9 (Pre-Market Pipeline)
 │   ↑ depends on: phase-8
@@ -139,51 +139,61 @@ Phase 4 ────────────────────────
                                       sam-p4-exit-dual ──► ═══ PHASE 4 GATE ═══
 
 Phase 5 ──────────────────────────────────────────────────────────────────
-  sam-p5-ib-port ──► sam-p5-ib-enhance ──► sam-p5-exit-ib ──► ═══ PHASE 5 GATE ═══
+  sam_trader-9z3.6.1 ──► sam_trader-9z3.6.2 ──► sam_trader-9z3.6.5 ──► sam_trader-9z3.6.6
+                                                                                  │
+                                                                                  ▼
+                                                                        sam_trader-9z3.6.3 ──► sam_trader-9z3.6.7 ──► sam_trader-9z3.6.4
+  sam_trader-9z3.6.8 (parallel — pre-flight IB permissions check)
+                                                                                  │
+                                                                                  ▼
+                                                                        ═══ PHASE 5 GATE ═══
 
 Phase 6 ──────────────────────────────────────────────────────────────────
-  sam-p6-pg-schema ──► sam-p6-journal ──┐
-  sam-p6-health ────────────────────────┤
-  sam-p6-bar-resub ─────────────────────┤
-  sam-p6-state ─────────────────────────┤
-                                          ▼
-                                  sam-p6-verify ──► ═══ PHASE 6 GATE ═══
+  sam_trader-9z3.7.1 ──► sam_trader-9z3.7.2 ──► sam_trader-9z3.7.8 ──┐
+  sam_trader-9z3.7.1 ──► sam_trader-9z3.7.3 ─────────────────────────┤
+  sam_trader-9z3.7.1 ──► sam_trader-9z3.7.4 ─────────────────────────┤
+  sam_trader-9z3.7.1 ──► sam_trader-9z3.7.5 ─────────────────────────┤
+  sam_trader-9z3.7.7 ─────────────────────────────────────────────────┤
+                                                                        ▼
+                                                                sam_trader-9z3.7.6 ──► ═══ PHASE 6 GATE ═══
 
 Phase 7 ──────────────────────────────────────────────────────────────────
-  sam-p7-loader ──► sam-p7-orb ──┐
-  sam-p7-momentum ───────────────┤
-  sam-p7-template ───────────────┤
-  sam-p7-bundle-validate ────────┤
-                                  ▼
-                          sam-p7-verify ──► ═══ PHASE 7 GATE ═══
+  sam_trader-9z3.8.1 ──► sam_trader-9z3.8.4 ──► sam_trader-9z3.8.2 ──┐
+  sam_trader-9z3.8.1 ──► sam_trader-9z3.8.4 ──► sam_trader-9z3.8.3 ──┤
+  sam_trader-9z3.8.1 ──► sam_trader-9z3.8.5 ──────────────────────────┤
+                                                                        ▼
+                                                                sam_trader-9z3.8.6 ──► ═══ PHASE 7 GATE ═══
 
 Phase 8 ──────────────────────────────────────────────────────────────────
-  sam-p8-dockerfile ──► sam-p8-cli ──┐
-  sam-p8-cron ───────────────────────┤
-  sam-p8-quote ──────────────────────┤
-                                      ▼
-                              sam-p8-verify ──► ═══ PHASE 8 GATE ═══
+  sam_trader-9z3.9.1 ──► sam_trader-9z3.9.2 ──► sam_trader-9z3.9.3 ──► sam_trader-9z3.9.5 ──┐
+  sam_trader-9z3.9.1 ──► sam_trader-9z3.9.4 ────────────────────────────────────────────────┤
+                                                                                              ▼
+                                                                                    sam_trader-9z3.9.6 ──► ═══ PHASE 8 GATE ═══
 
 Phase 9 ──────────────────────────────────────────────────────────────────
-  sam-p9-gapscan ──► sam-p9-ai ──► sam-p9-risk-1 ──► sam-p9-risk-2 ──► sam-p9-risk-3 ──┐
-                                                                                        ├──► sam-p9-orch-1 ──► sam-p9-orch-2 ──► sam-p9-orch-3 ──► sam-p9-verify
-  sam-p9-regime ────────────────────────────────────────────────────────────────────────┘
-                                                                                        │
-                                                                                        ▼
-                                                                              ═══ PHASE 9 GATE ═══
+  sam_trader-9z3.10.1 ──► sam_trader-9z3.10.2 ──► sam_trader-9z3.10.7 ──► sam_trader-9z3.10.8 ──► sam_trader-9z3.10.9 ──┐
+  sam_trader-9z3.10.4 ───────────────────────────────────────────────────────────────────────────────────────────────────┤
+                                                                                                                         ▼
+                                                                                                   sam_trader-9z3.10.10 ──► sam_trader-9z3.10.11 ──► sam_trader-9z3.10.12 ──► sam_trader-9z3.10.6
+                                                                                                                                                                                                          │
+                                                                                                                                                                                                          ▼
+                                                                                                                                                                                                ═══ PHASE 9 GATE ═══
 
 Phase 10 ─────────────────────────────────────────────────────────────────
-  sam-p10-safety ──► sam-p10-api ──► sam-p10-dashboard ──► sam-p10-verify
-                                                                   │
-                                                                   ▼
-                                                         ═══ PHASE 10 GATE ═══
+  sam_trader-9z3.11.1 ──┬─────────────────────────────────────────────────┐
+  sam_trader-9z3.11.2 ──┤                                                  │
+                         ▼                                                  │
+                  sam_trader-9z3.11.3 ──► sam_trader-9z3.11.4 ──► sam_trader-9z3.11.5
+                                                                                  │
+                                                                                  ▼
+                                                                        ═══ PHASE 10 GATE ═══
 
 Phase 11 ─────────────────────────────────────────────────────────────────
-  sam-p11-deploy ──► sam-p11-wizard ──► sam-p11-docs ──► sam-p11-e2e
-                                                                  │
-                                                                  ▼
-                                                        ═══ PHASE 11 GATE ═══
-                                                        (FULL SYSTEM VALIDATED)
+  sam_trader-9z3.12.1 ──► sam_trader-9z3.12.2 ──► sam_trader-9z3.12.3 ──► sam_trader-9z3.12.4
+                                                                                  │
+                                                                                  ▼
+                                                                        ═══ PHASE 11 GATE ═══
+                                                                        (FULL SYSTEM VALIDATED)
 ```
 
 ---
@@ -287,47 +297,53 @@ Phase 11 ───────────────────────�
 ### Phase 5: IBKR Adapter Re-integration
 
 > **Goal:** Port IBKR adapter from v2. Enhanced for multi-venue coexistence. Both Futu + IB work simultaneously in same TradingNode.
+> **Original monolithic ticket `sam-p5-ib-port` was decomposed into sub-tickets 9z3.6.1, 9z3.6.5, 9z3.6.6.**
+> **Build order (actual dependency chain):** 6.1 → 6.2 → 6.5 → 6.6 → 6.3 → 6.7 → 6.4  (6.8 runs in parallel)
 
-| # | Ticket ID | Title | Type | Port | AC Highlights |
-|---|-----------|-------|------|------|---------------|
-| 5.1a | `sam_trader-9z3.6.1` | IBKR config wiring in main.py | task | port | Add `ib_enabled` flag. Construct `InteractiveBrokersDataClientConfig` and `InteractiveBrokersExecClientConfig` from `SamTraderConfig`. Wire IB env vars into `main.py`. |
-| 5.1b | `sam_trader-9z3.6.5` | IBKR factory registration in main.py | task | port | Register `InteractiveBrokersLiveDataClientFactory` and `InteractiveBrokersLiveExecClientFactory` in `build_trading_node()`. Conditional on `ib_enabled`. Lazy imports. |
-| 5.1c | `sam_trader-9z3.6.6` | IBKR instrument provider wiring | task | port | Register `InteractiveBrokersInstrumentProvider` in `build_trading_node()`. Instrument resolution for IB venue. No conflicts with Futu provider. |
-
-> **Note:** 5.1 was decomposed from a monolithic ticket into 3 sequential sub-tasks.
-| 5.2 | `sam-p5-ib-gateway` | IB Gateway Docker service (profile: ib) | task | port | Port `ib-gateway` service from v2 `docker-compose.yml`. `ghcr.io/gnzsnz/ib-gateway:stable`. Env vars from `.env`. VNC port. |
-| 5.3 | `sam-p5-ib-enhance` | Enhance IB adapter for v3 patterns (multi-venue, new config) | task | enhance | Update IB config to use `SamTraderConfig` fields. Venue aliasing consistent with Futu. Ensure no conflicts between Futu and IB subscriptions. |
-| 5.4 | `sam-p5-exit-ib` | Exit: dual-venue TradingNode (Futu + IB) | exit | — | Integration test: start TradingNode with both Futu + IB factories. Load 1 Futu bundle + 1 IB bundle. Both strategies instantiated. Data flows from both venues. No cross-venue contamination. |
+| # | Ticket ID | Title | Type | AC Highlights |
+|---|-----------|-------|------|---------------|
+| 5.1 | `sam_trader-9z3.6.1` | IBKR config wiring in main.py ✅ | task | Add `ib_enabled` flag. Construct `InteractiveBrokersDataClientConfig` and `InteractiveBrokersExecClientConfig` from `SamTraderConfig`. Wire IB env vars. Depends on P4 main-wire (`9z3.5.4`). |
+| 5.2 | `sam_trader-9z3.6.8` | Pre-flight IB account trading permissions check ✅ | task | On IB connect, query trading permissions. If short-selling disabled and bundle requires it, log CRITICAL and disable strategy. Prevents v2 189-rejection scenario. Runs in parallel (no deps). |
+| 5.3 | `sam_trader-9z3.6.2` | IB Gateway Docker service (profile: ib) | task | `ghcr.io/gnzsnz/ib-gateway:stable`. Port 4004, VNC 5900. Profile: `ib`. Env vars: TWS_USERID, TWS_PASSWORD, TRADING_MODE. Depends on P4 exit (`9z3.5.6`). Blocks factory registration. |
+| 5.4 | `sam_trader-9z3.6.5` | IBKR factory registration in main.py | task | Register `InteractiveBrokersLiveDataClientFactory` and `InteractiveBrokersLiveExecClientFactory`. Conditional on `ib_enabled`. Lazy imports. Depends on IB Gateway Docker (`9z3.6.2`). Blocks instrument provider. |
+| 5.5 | `sam_trader-9z3.6.6` | IBKR instrument provider wiring | task | Register `InteractiveBrokersInstrumentProvider`. Instrument resolution for IB venue. No conflicts with Futu. Depends on factory registration (`9z3.6.5`). Blocks enhance adapter. |
+| 5.6 | `sam_trader-9z3.6.3` | Enhance IBKR adapter for v3 patterns | task | IB config uses `SamTraderConfig` fields. Venue aliasing consistent with Futu. SMART routing default (prevents v2 code-10311 warnings). No cross-venue contamination. Depends on instrument provider (`9z3.6.6`). Blocks post_only bug. |
+| 5.7 | `sam_trader-9z3.6.7` | [BUG] IBKR post_only incompatibility — bracket orders rejected | bug | Adapter-level handling of Nautilus `post_only=True` default that IB doesn't support. Venue-aware order wrapper. Port fixes from v2 operational day 1 (108 rejections, 0 fills). Depends on enhance adapter (`9z3.6.3`). Blocks EXIT. |
+| 5.8 | `sam_trader-9z3.6.4` | [EXIT] Dual-venue TradingNode (Futu + IB) | exit | Integration test: both Futu + IB factories, 1 Futu bundle + 1 IB bundle, both strategies instantiated, data flows from both venues, no cross-contamination. Depends on post_only bug (`9z3.6.7`). Blocks P6 schema (`9z3.7.1`) and P6 RejectionMonitor (`9z3.7.7`). |
 
 ---
 
 ### Phase 6: Actors & State Management
 
-> **Goal:** TradeJournalActor, HealthMonitorActor, BarResubscriptionActor. PostgreSQL schema with venue column. Redis state persistence.
+> **Goal:** TradeJournalActor, HealthMonitorActor, BarResubscriptionActor, RejectionMonitorActor, RealizedPnLTrackerActor. PostgreSQL schema with venue column. Redis state persistence.
+> **Build order:** 7.1 (schema) is the single gateway — all actors depend on it. 7.2→7.8 form a chain (journal→realized pnl). 7.3/7.4/7.5 are parallel after schema. 7.7 has no actor deps (only P5 exit). All converge to EXIT.
 
-| # | Ticket ID | Title | Type | Port | AC Highlights |
-|---|-----------|-------|------|------|---------------|
-| 6.1 | `sam-p6-pg-schema` | PostgreSQL schema: fills, orders, positions with venue column | task | port+enhance | Port schema from v2 `docker/postgres/init/`. Add `venue VARCHAR` to `fills` table. Add `trd_market VARCHAR` for Futu market code. |
-| 6.2 | `sam-p6-journal` | TradeJournalActor: multi-venue fill journaling | task | port+enhance | Port `actors/trade_journal.py` from v2. Listen for `OrderFilled` events. Write to PostgreSQL via asyncpg. Tag fills with venue from `instrument_id.venue`. Handle both Futu and IB fill events. |
-| 6.3 | `sam-p6-health` | HealthMonitorActor: heartbeat + metrics | task | port | Port `actors/health_monitor.py` from v2. Periodic heartbeat. Report: total orders, positions, venue connection status (both Futu and IB). |
-| 6.4 | `sam-p6-bar-resub` | BarResubscriptionActor: bar recovery on reconnect | task | port | Port `actors/bar_resubscription.py` from v2. Monitor bar subscriptions. Re-subscribe on disconnect/reconnect. Handle both Futu and IB bar types. |
-| 6.5 | `sam-p6-state` | State persistence: Redis cache database wiring | task | port | Wire Redis `CacheConfig` in `main.py`. `load_state=True, save_state=True` from env. Test: save state → restart → verify state restored. |
-| 6.6 | `sam-p6-verify` | Verify: actors run, fills journaled, state persisted | exit | — | Integration test: execute trade → fill appears in PostgreSQL. HealthMonitorActor logs heartbeat. Restart with state → strategy state reloaded. |
+| # | Ticket ID | Title | Type | AC Highlights |
+|---|-----------|-------|------|---------------|
+| 6.1 | `sam_trader-9z3.7.1` | PostgreSQL schema: fills, orders, positions with venue column | task | `docker/postgres/init/01_schema.sql`. `venue` and `trd_market` columns. Depends on P5 exit (`9z3.6.4`). Blocks all other P6 tickets. |
+| 6.2 | `sam_trader-9z3.7.2` | TradeJournalActor: multi-venue fill journaling | task | Subclass Actor. Listen `OrderFilled` → write to PostgreSQL via asyncpg. Tag fills with venue. Depends on schema (`9z3.7.1`). Blocks RealizedPnL (`9z3.7.8`). |
+| 6.3 | `sam_trader-9z3.7.3` | HealthMonitorActor: heartbeat + multi-venue metrics | task | Periodic heartbeat (30s). Report orders, positions, venue connection status. Depends on schema (`9z3.7.1`). Blocks EXIT. |
+| 6.4 | `sam_trader-9z3.7.4` | BarResubscriptionActor: bar recovery on reconnect | task | Monitor bar subscriptions. Re-subscribe on disconnect/reconnect. Depends on schema (`9z3.7.1`). Blocks EXIT. |
+| 6.5 | `sam_trader-9z3.7.5` | State persistence: Redis CacheConfig wiring | task | Wire `CacheConfig` in `main.py`. Save on shutdown, load on startup. Depends on schema (`9z3.7.1`). Blocks EXIT. |
+| 6.6 | `sam_trader-9z3.7.7` | RejectionMonitorActor: per-instrument rejection circuit breaker | task | Subscribe `OrderRejected`. Track consecutive rejections per (instrument, strategy, reason). Emit `StrategyHaltRequest` at threshold (3). 15-min cooldown. Addresses v2 189-rejection no-self-halt issue. Depends on P5 exit (`9z3.6.4`). Blocks EXIT. |
+| 6.7 | `sam_trader-9z3.7.8` | RealizedPnLTrackerActor: per-strategy realized P&L | task | Subscribe `OrderFilled`. FIFO matching per strategy. Persist to Redis (`sam:pnl:{strategy_id}:{date}`). Pure realized — no unrealized. Resets at 00:00 UTC. Addresses v2 ambiguous max_daily_loss. Depends on TradeJournal (`9z3.7.2`). Blocks EXIT. |
+| 6.8 | `sam_trader-9z3.7.6` | [EXIT] Actors run, fills journaled, state persisted | exit | Integration test: fill appears in PG with venue tag. HealthMonitor heartbeat. State restored from Redis. Bar subscriptions restored on reconnect. Depends on 7.3/7.4/7.5/7.7/7.8. Blocks P7 BundleLoader (`9z3.8.1`). |
 
 ---
 
 ### Phase 7: Strategy Library & Bundle System
 
 > **Goal:** OrbStrategy, MomentumStrategy, strategy template. Multi-venue bundle loader. Bundle validation.
+> **Build order:** 8.1 (loader) → 8.4 (template) → 8.2 (orb) + 8.3 (momentum). 8.5 (validation) is parallel after loader. All converge to EXIT.
 
-| # | Ticket ID | Title | Type | Port | AC Highlights |
-|---|-----------|-------|------|------|---------------|
-| 7.1 | `sam-p7-loader` | BundleLoader: multi-venue YAML → ImportableStrategyConfig | task | port+enhance | Port `bundle_loader.py` from v2. Add `venue: FUTU` support. Validate Futu-specific config fields. `instrument_id` validation for Futu symbology. Merge bracket+risk into strategy config. |
-| 7.2 | `sam-p7-orb` | OrbStrategy: port from v2 with venue-aware config | task | port+enhance | Port `strategies/orb.py` from v2. Update to use `instrument_id.venue` for order routing. ATR range filter. Breakout confirmation. Bracket orders. |
-| 7.3 | `sam-p7-momentum` | MomentumStrategy: port from v2 with venue-aware config | task | port+enhance | Port `strategies/momentum.py` from v2. Venue-aware order routing. Session time guards. Always-in-market behavior. |
-| 7.4 | `sam-p7-template` | Strategy template: copy-paste template for new strategies | task | port | Port `strategies/_template.py` from v2. Document all hooks. Factory usage patterns. Bracket order patterns. |
-| 7.5 | `sam-p7-bundle-validate` | Bundle validation: schema check + backtest gate | task | new | Extend bundle loader with validation layer. Schema validation via Pydantic or manual. Backtest gate: run backtest before allowing live deployment. Validation report with pass/fail criteria. |
-| 7.6 | `sam-p7-verify` | Verify: strategy lifecycle with Futu data | exit | — | Integration test: load OrbStrategy bundle. Strategy starts. Receives bar data from Futu. Detects breakout → submits bracket order. Order flows through execution → fills journaled. |
+| # | Ticket ID | Title | Type | AC Highlights |
+|---|-----------|-------|------|---------------|
+| 7.1 | `sam_trader-9z3.8.1` | BundleLoader: multi-venue YAML → ImportableStrategyConfig | task | Port from v2. Validate `venue: FUTU` and `venue: IB`. Merge bracket+risk into strategy config. Depends on P6 exit (`9z3.7.6`). Blocks template and validation. |
+| 7.2 | `sam_trader-9z3.8.4` | Strategy template: copy-paste template for new strategies | task | Port `_template.py` from v2. Document all hooks. Venue-aware `post_only=False` patterns for IB. Depends on loader (`9z3.8.1`). Blocks Orb and Momentum. |
+| 7.3 | `sam_trader-9z3.8.2` | OrbStrategy: port from v2 with venue-aware config | task | Port `orb.py` from v2. Configurable entry order type (MARKET/LIMIT/STOP_MARKET). `tp_post_only=False` for IB. ATR range filter, bracket orders. Depends on template (`9z3.8.4`). Blocks EXIT. |
+| 7.4 | `sam_trader-9z3.8.3` | MomentumStrategy: port from v2 with venue-aware config | task | Port `momentum.py` from v2. `allowed_directions` filter (LONG/SHORT). Configurable entry order type. `tp_post_only=False` for IB. Depends on template (`9z3.8.4`). Blocks EXIT. |
+| 7.5 | `sam_trader-9z3.8.5` | Bundle validation: schema check + backtest gate | task | Schema validation. Strategy class existence check. Backtest gate before deployment. `sam validate-bundles` CLI. Depends on loader (`9z3.8.1`). Blocks EXIT. |
+| 7.6 | `sam_trader-9z3.8.6` | [EXIT] Verify: strategy lifecycle with Futu data | exit | Integration test: OrbStrategy bundle loaded. Bar data from Futu. Breakout → bracket order → fill journaled to PG. State persists across restart. Depends on Orb/Momentum/Validation. Blocks P8 Dockerfile (`9z3.9.1`). |
 
 ---
 
@@ -349,37 +365,38 @@ Phase 11 ───────────────────────�
 ### Phase 9: Pre-Market Pipeline
 
 > **Goal:** Gap scanner → AI analysis → risk manager → bundle generator → readiness report. Full autonomous pre-market pipeline.
+> **Parent tickets `9z3.10.3` (Risk Manager) and `9z3.10.5` (Pipeline Orchestrator) are closed-superseded.** Work distributed to sub-tickets 10.7–10.12.
+> **Build order:** Two parallel tracks converge at executor — Track A: scan → AI → MC sizer → pre-trade → heat → executor. Track B: regime → executor. Then: executor → bundle-gen → report → EXIT.
 
-| # | Ticket ID | Title | Type | Port | AC Highlights |
-|---|-----------|-------|------|------|---------------|
-| 9.1 | `sam-p9-gapscan` | Gap scanner: scan pre-market gaps, filter rules, HK+US markets | task | new | Scan Futu market data for gap candidates. Configurable gap thresholds. Blacklist support. Trend-down filter. Deduplication. Output: ranked candidate list. |
-| 9.2 | `sam-p9-ai` | AI scoring engine: candidate evaluation, recommendation grading | task | new | Score gap candidates via AI (LLM). Portfolio manager context. Recommendation grades (STRONG_BUY, BUY, HOLD, SKIP). Rule-based fast path for clear signals. |
-| 9.3a | `sam_trader-9z3.10.7` | Monte Carlo position sizer | task | new | Monte Carlo simulation for position sizing. Configurable simulations (default 10,000). VaR-based risk limit. |
-| 9.3b | `sam_trader-9z3.10.8` | Pre-trade risk checks | task | new | Max exposure check per venue. Daily loss limit check. Margin check. Reject trade if any check fails. |
-| 9.3c | `sam_trader-9z3.10.9` | Portfolio heat monitor | task | new | Real-time portfolio heat tracking. Heat threshold warnings. Heat dashboard metric. |
+| # | Ticket ID | Title | Type | AC Highlights |
+|---|-----------|-------|------|---------------|
+| 9.1 | `sam_trader-9z3.10.1` | Gap scanner: pre-market gaps, filter rules, HK+US markets | task | Scan Futu data for gap candidates. Configurable thresholds, blacklist, trend-down filter. Output: ranked candidate list. Depends on P8 exit (`9z3.9.6`). Blocks AI scoring. |
+| 9.2 | `sam_trader-9z3.10.2` | AI scoring engine: candidate evaluation, recommendation grading | task | Score candidates via LLM. Grades: STRONG_BUY, BUY, HOLD, SKIP. Rule-based fast path. Depends on gap scanner (`9z3.10.1`). Blocks MC sizer. |
+| 9.3 | `sam_trader-9z3.10.7` | Monte Carlo position sizer | task | Monte Carlo simulation (default 10,000). VaR-based risk limit. Depends on AI scoring (`9z3.10.2`). Blocks pre-trade checks. |
+| 9.4 | `sam_trader-9z3.10.8` | Pre-trade risk checks | task | Max exposure per venue. Daily loss limit. Margin check. Reject if any fails. Depends on MC sizer (`9z3.10.7`). Blocks heat monitor. |
+| 9.5 | `sam_trader-9z3.10.9` | Portfolio heat monitor | task | Real-time heat tracking. Heat threshold warnings. Depends on pre-trade (`9z3.10.8`). Blocks executor. |
+| 9.6 | `sam_trader-9z3.10.4` | Market regime detection: HMM-based classification | task | HMM classifier (trending/ranging/volatile). Regime-aware parameter adaptation. Depends on P8 exit (`9z3.9.6`). Blocks executor. |
+| 9.7 | `sam_trader-9z3.10.10` | Pipeline sequential executor | task | Run scan→AI→risk→regime in sequence. Pass candidates between stages. Fail-fast error handling. Depends on heat monitor (`9z3.10.9`) + regime (`9z3.10.4`). Blocks bundle-gen. |
+| 9.8 | `sam_trader-9z3.10.11` | Bundle YAML generator | task | Convert approved candidates to bundle YAML. Validate against schema. Write to `config/bundles.daily.yaml`. Depends on executor (`9z3.10.10`). Blocks report. |
+| 9.9 | `sam_trader-9z3.10.12` | Readiness report | task | Daily report generation. Console table + optional webhook. Includes candidates, risks, recommendations. Depends on bundle-gen (`9z3.10.11`). Blocks EXIT. |
+| 9.10 | `sam_trader-9z3.10.6` | [EXIT] Pipeline runs end-to-end, produces valid bundles | exit | Integration test: pipeline on pre-market data. ≥1 candidate, risk checks pass, bundle YAML valid, report saved. `sam pipeline run` completes. Depends on report (`9z3.10.12`). Blocks P10 safety + DB. |
 
-> **Note:** The original parent ticket `sam_trader-9z3.10.3` ("Risk manager") was **closed** as superseded by sub-tickets `10.7`, `10.8`, `10.9`. Risk integration work is distributed across the sub-tickets and the EXIT gate.
-| 9.4 | `sam-p9-regime` | Market regime detection: HMM-based classification, regime-aware adaptation | task | new | HMM regime classifier (trending, ranging, volatile). Regime-aware parameter adaptation (e.g., tighter stops in volatile regime). Output: regime label + adapted params. |
-| 9.5a | `sam_trader-9z3.10.10` | Pipeline sequential executor | task | new | Run scan → AI → risk → regime in sequence. Pass candidate list between stages. Error handling: fail fast, log stage errors. |
-| 9.5b | `sam_trader-9z3.10.11` | Bundle YAML generator | task | new | Convert approved candidates to bundle YAML. Validate against schema. Write to `config/bundles.daily.yaml`. |
-| 9.5c | `sam_trader-9z3.10.12` | Readiness report | task | new | Daily readiness report generation. Console output formatted table. Optional webhook notification. Includes candidates, risks, recommendations. |
-
-> **Note:** The original parent ticket `sam_trader-9z3.10.5` ("Pipeline orchestrator") was **closed** as superseded by sub-tickets `10.10`, `10.11`, `10.12`. Pipeline integration work is distributed across the sub-tickets and the EXIT gate.
-| 9.6 | `sam-p9-verify` | Verify: pipeline runs end-to-end, produces valid bundles | exit | — | Integration test: run pipeline on pre-market data. Pipeline produces ≥1 candidate. Risk checks pass. Bundle YAML generated and passes validation. Readiness report saved. |
+> **Note:** Original parent tickets `9z3.10.3` (Risk Manager) and `9z3.10.5` (Pipeline Orchestrator) are **closed-superseded**. Their scope is covered by sub-tickets 10.7–10.9 and 10.10–10.12 respectively, plus the EXIT gate integration test.
 
 ---
 
 ### Phase 10: Safety & Dashboard
 
 > **Goal:** Kill switch, circuit breakers, FastAPI backend, dashboard UI.
+> **Circuit breaker expanded to 5 triggers** (was 3): adds REJECTION_STREAK (via RejectionMonitorActor) and REALIZED_LOSS_LIMIT (via RealizedPnLTrackerActor).
 
-| # | Ticket ID | Title | Type | Port | AC Highlights |
-|---|-----------|-------|------|------|---------------|
-| 10.1 | `sam-p10-safety` | Safety controls: kill switch, circuit breakers, emergency halt | task | new | Kill switch — immediate cancel-all + stop trading. Circuit breakers — daily loss limit, margin limit, connection loss. Emergency halt — operator-triggered. All via TradingNode signals. |
-| 10.2 | `sam-p10-db` | Dashboard database: portfolio snapshots, scan history | task | new | Tables for portfolio snapshots, pipeline run history, alert log. Populated by sam-services cron jobs. |
-| 10.3 | `sam-p10-api` | FastAPI backend: health, positions, fills, scan results endpoints | task | new | `GET /health` → all services status. `GET /api/positions` → current positions. `GET /api/fills?limit=N` → recent fills. `GET /api/scans/latest` → latest pipeline results. `GET /api/alerts` → active alerts. |
-| 10.4 | `sam-p10-dashboard` | Static HTML dashboard: portfolio, fills, health, scans | task | new | Single-page HTML dashboard. Auto-refreshing via API calls. Portfolio table. Recent fills table. System health indicators. Pipeline results display. Alert feed. |
-| 10.5 | `sam-p10-verify` | Verify: dashboard shows live data, safety controls work | exit | — | Integration test: dashboard loads. Positions table populated. Fills table populated. Kill switch triggered → all orders cancelled. Circuit breaker trips at threshold. |
+| # | Ticket ID | Title | Type | AC Highlights |
+|---|-----------|-------|------|---------------|
+| 10.1 | `sam_trader-9z3.11.1` | Safety controls: kill switch, circuit breakers, emergency halt | task | 5 circuit breaker triggers: DAILY_PNL, MARGIN_LIMIT, CONNECTIVITY_LOSS, REJECTION_STREAK (from 9z3.7.7), REALIZED_LOSS_LIMIT (from 9z3.7.8). Kill switch cancels all order + stops trading. CLI: `sam kill`, `sam halt`. Depends on P9 exit (`9z3.10.6`). Blocks API. |
+| 10.2 | `sam_trader-9z3.11.2` | Dashboard database: portfolio snapshots, scan history, alert log | task | New PG tables: `portfolio_snapshots`, `pipeline_runs`, `alert_log`. Populated by sam-services cron. Depends on P9 exit (`9z3.10.6`). Blocks API. |
+| 10.3 | `sam_trader-9z3.11.3` | FastAPI backend: health, positions, fills, scan results endpoints | task | `GET /health`, `/api/positions`, `/api/fills`, `/api/scans/latest`, `/api/alerts`. CORS for localhost. Depends on safety (`9z3.11.1`) + DB (`9z3.11.2`). Blocks dashboard. |
+| 10.4 | `sam_trader-9z3.11.4` | Static HTML dashboard: portfolio, fills, health, scans | task | Single-page auto-refreshing HTML. Portfolio table, fills table, health indicators, alert feed. No external CDN. Depends on API (`9z3.11.3`). Blocks EXIT. |
+| 10.5 | `sam_trader-9z3.11.5` | [EXIT] Verify: dashboard shows live data, safety controls work | exit | Integration: dashboard loads, positions populated, fills populated. Kill switch → all orders cancelled. Circuit breaker trips at threshold. Depends on dashboard (`9z3.11.4`). Blocks P11 deploy (`9z3.12.1`). |
 
 ---
 
@@ -387,12 +404,12 @@ Phase 11 ───────────────────────�
 
 > **Goal:** Single-script deploy. First-run wizard. All profiles work. Full E2E gate passes.
 
-| # | Ticket ID | Title | Type | Port | AC Highlights |
-|---|-----------|-------|------|------|---------------|
-| 11.1 | `sam-p11-deploy` | deploy.sh: single-script deploy with profiles | task | port+refactor | Portable bash. Profiles: `--with-futu`, `--with-ib`, `--with-services`. Git pull/clone. Docker compose orchestration with health gating. Sequential start: postgres → redis → futu-opend → sam-trader → (optional) ib-gateway, sam-services. |
-| 11.2 | `sam-p11-wizard` | First-run wizard: interactive .env generation | task | port+enhance | Interactive prompts for: trader ID, environment, Futu credentials (account, password MD5, trade password), IB credentials. Write `.env` from template. Validate inputs. |
-| 11.3 | `sam-p11-docs` | Documentation: deploy guide, bundle guide, operator guide | task | new | `docs/user/DEPLOY_GUIDE.md` — prerequisites, flags, first-time walkthrough, daily ops, troubleshooting. `docs/user/BUNDLE_GUIDE.md` — bundle schema, examples, validation. `docs/user/OPERATOR_GUIDE.md` — daily checklist, monitoring, incident response. |
-| 11.4 | `sam-p11-e2e` | [GATE] Phase 11 E2E validation | e2e-gate | — | Fresh macOS. `git clone` + `./deploy.sh --with-futu`. Full stack healthy. sam-trader connects to sam-futu-opend. QuoteTick arrives. Order submits + fills + journals. sam-services starts. Dashboard shows data. 1-hour soak test. `./deploy.sh --stop` cleans up. |
+| # | Ticket ID | Title | Type | AC Highlights |
+|---|-----------|-------|------|---------------|
+| 11.1 | `sam_trader-9z3.12.1` | deploy.sh: single-script deploy with profiles | task | Portable bash. Profiles: `--with-futu`, `--with-ib`, `--with-services`. Git pull/clone. Sequential start with health gating. Under 300 lines. Depends on P10 exit (`9z3.11.5`). Blocks wizard. |
+| 11.2 | `sam_trader-9z3.12.2` | First-run wizard: interactive .env generation | task | Interactive prompts for trader ID, env, Futu + IB credentials. Write `.env` from template. Validate inputs. Mask passwords. Depends on deploy.sh (`9z3.12.1`). Blocks docs. |
+| 11.3 | `sam_trader-9z3.12.3` | User documentation: deploy guide, bundle guide, operator guide | task | `DEPLOY_GUIDE.md`, `BUNDLE_GUIDE.md`, `OPERATOR_GUIDE.md`. Prerequisites, daily ops, troubleshooting, incident response. Depends on wizard (`9z3.12.2`). Blocks E2E. |
+| 11.4 | `sam_trader-9z3.12.4` | [GATE] Full E2E validation: fresh deploy, Futu live, 1-hour soak | exit | Fresh macOS: `git clone` + `./deploy.sh --with-futu`. Full stack healthy. QuoteTick arrives. Order → fill → journal. Dashboard shows data. 1-hour soak test. `./deploy.sh --stop` cleans up. Depends on docs (`9z3.12.3`). |
 
 ---
 
@@ -421,19 +438,19 @@ Phase 0 ───► Phase 1 ───► Phase 2 ───► Phase 3 ───
 
 | Phase | Tickets | Type |
 |-------|---------|------|
-| Phase 0 | 9 | Foundation |
+| Phase 0 | 17 | Foundation + Hardening |
 | Phase 1 | 3 | Config + Bootstrap |
 | Phase 2 | 7 | Futu Market Data |
 | Phase 3 | 6 | Futu Execution (decomposed from 3) |
 | Phase 4 | 6 | Futu Integration |
-| Phase 5 | 6 | IBKR Re-integration (decomposed from 4) |
-| Phase 6 | 6 | Actors + State |
+| Phase 5 | 8 | IBKR Re-integration (decomposed from 1; 2 bug fixes) |
+| Phase 6 | 8 | Actors + State (2 gap-remediation actors added) |
 | Phase 7 | 6 | Strategies + Bundles |
 | Phase 8 | 6 | Services Container |
-| Phase 9 | 10 | Pre-Market Pipeline (decomposed from 6) |
+| Phase 9 | 12 | Pre-Market Pipeline (2 parent closed-superseded; 10 active) |
 | Phase 10 | 5 | Safety + Dashboard |
 | Phase 11 | 4 | Deploy + E2E |
-| **Total** | **71** | |
+| **Total** | **88** | |
 
 ---
 

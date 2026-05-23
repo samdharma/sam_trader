@@ -349,3 +349,12 @@
 - **Files Changed**: `src/sam_trader/adapters/futu/constants.py`, `tests/unit/adapters/futu/test_constants.py`, `tests/unit/adapters/futu/test_execution.py`, `tests/integration/adapters/futu/test_execution_flow.py`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 81/81 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Phase 3 bug fix complete.
+
+## Iteration 53
+- **Task**: P5: IB Gateway Docker service (profile: ib)
+- **Task ID**: sam_trader-9z3.6.2
+- **Status**: COMPLETE
+- **Decisions**: Verified `sam-ib-gateway` service already exists in `docker/docker-compose.yml` from Phase 0 scaffolding with all acceptance criteria met: `ghcr.io/gnzsnz/ib-gateway:stable` image, ports 4004/5900, env vars TWS_USERID/TWS_PASSWORD/TRADING_MODE, profile `ib`, 2FA/TWOFA settings ported from v2 (TWOFA_TIMEOUT_ACTION, TWOFA_EXIT_INTERVAL, RELOGIN_AFTER_TWOFA_TIMEOUT, EXISTING_SESSION_DETECTED_ACTION), and `sam-` prefix on all service names. Created `tests/unit/test_docker_compose.py` with `test_ib_profile_config_validates` to ensure regression protection. Cleaned up untracked `tests/paper_trading/` leftover files from prior iterations.
+- **Files Changed**: `tests/unit/test_docker_compose.py` (new)
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 1/1 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for sam_trader-9z3.6.5 (IBKR factory registration in main.py).
