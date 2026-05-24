@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any
 
+import redis.asyncio as aioredis
 from nautilus_trader.common.actor import Actor
 from nautilus_trader.common.config import ActorConfig
 from nautilus_trader.model.events import OrderRejected
@@ -44,11 +46,20 @@ class RejectionMonitorActorConfig(ActorConfig, frozen=True):
         Number of identical consecutive rejections before emitting a halt.
     cooldown_seconds : int, default 900
         Seconds before a rejection streak resets and the strategy may retry.
+    redis_host : str, optional
+        Redis host for publishing halt state (empty = disabled).
+    redis_port : int, default 6379
+        Redis port.
+    redis_password : str, optional
+        Redis password.
 
     """
 
     max_consecutive: int = 3
     cooldown_seconds: int = 900
+    redis_host: str = ""
+    redis_port: int = 6379
+    redis_password: str = ""
 
 
 class RejectionMonitorActor(Actor):
@@ -75,11 +86,22 @@ class RejectionMonitorActor(Actor):
         ] = {}
         self._topic = "events.order.*"
         self._halt_topic = "StrategyHaltRequest"
+        self._redis: aioredis.Redis | None = None
 
     def on_start(self) -> None:
         """Subscribe to all order events on the message bus."""
         self.msgbus.subscribe(topic=self._topic, handler=self._handle_order_event)
         self.log.info("RejectionMonitorActor: subscribed to order events")
+        if self.config.redis_host:
+            try:
+                self._redis = aioredis.Redis(
+                    host=self.config.redis_host,
+                    port=self.config.redis_port,
+                    password=self.config.redis_password or None,
+                    decode_responses=True,
+                )
+            except Exception as exc:  # noqa: BLE001
+                self.log.warning("RejectionMonitorActor: Redis connect failed: %s", exc)
 
     def _handle_order_event(self, event: Any) -> None:
         """Filter for ``OrderRejected`` and process streak counting."""
@@ -119,6 +141,7 @@ class RejectionMonitorActor(Actor):
             )
             self.msgbus.publish(topic=self._halt_topic, msg=request)
             record["halted"] = True
+            self._write_halt_to_redis(event)
             self.log.error(
                 f"RejectionMonitorActor: HALT emitted for {event.strategy_id} "
                 f"on {event.instrument_id} after {record['count']} rejections "
@@ -129,6 +152,21 @@ class RejectionMonitorActor(Actor):
                 f"RejectionMonitorActor: rejection {record['count']}/"
                 f"{self.config.max_consecutive} for {event.strategy_id} "
                 f"on {event.instrument_id} (reason={event.reason})"
+            )
+
+    def _write_halt_to_redis(self, event: OrderRejected) -> None:
+        """Persist halt state to Redis for the safety monitor."""
+        if self._redis is None:
+            return
+        key = f"sam:rejection_halt:{event.strategy_id}"
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(
+                self._redis.set(key, event.reason)  # type: ignore[arg-type]
+            )
+        except Exception as exc:  # noqa: BLE001
+            self.log.warning(
+                "RejectionMonitorActor: Redis write failed for %s: %s", key, exc
             )
 
     def on_stop(self) -> None:

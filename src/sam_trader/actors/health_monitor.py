@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
+import redis.asyncio as aioredis
 from nautilus_trader.common.actor import Actor
 from nautilus_trader.common.config import ActorConfig
 from nautilus_trader.model.data import Bar
@@ -25,6 +27,12 @@ class HealthMonitorActorConfig(ActorConfig, frozen=True):
         Whether Futu venue is expected to be connected.
     ib_enabled : bool, default False
         Whether IBKR venue is expected to be connected.
+    redis_host : str, optional
+        Redis host for publishing heartbeat (empty = disabled).
+    redis_port : int, default 6379
+        Redis port.
+    redis_password : str, optional
+        Redis password.
 
     """
 
@@ -32,6 +40,9 @@ class HealthMonitorActorConfig(ActorConfig, frozen=True):
     bar_stale_threshold: int = 300
     futu_enabled: bool = False
     ib_enabled: bool = False
+    redis_host: str = ""
+    redis_port: int = 6379
+    redis_password: str = ""
 
 
 class HealthMonitorActor(Actor):
@@ -50,6 +61,7 @@ class HealthMonitorActor(Actor):
         super().__init__(config)
         self._timer_name = "health_monitor_heartbeat"
         self._last_bar_times: dict[str, datetime] = {}
+        self._redis: aioredis.Redis | None = None
 
     def on_start(self) -> None:
         """Set the first heartbeat alert when the actor starts."""
@@ -60,6 +72,16 @@ class HealthMonitorActor(Actor):
             self._on_heartbeat,
         )
         self.log.info("HealthMonitorActor: heartbeat started")
+        if self.config.redis_host:
+            try:
+                self._redis = aioredis.Redis(
+                    host=self.config.redis_host,
+                    port=self.config.redis_port,
+                    password=self.config.redis_password or None,
+                    decode_responses=True,
+                )
+            except Exception as exc:  # noqa: BLE001
+                self.log.warning("HealthMonitorActor: Redis connect failed: %s", exc)
 
     def on_bar(self, bar: Bar) -> None:
         """Track the last bar received time per instrument."""
@@ -136,6 +158,7 @@ class HealthMonitorActor(Actor):
             timestamp, orders_total, positions_total, venue_status
         )
         self.log.info(heartbeat_msg)
+        self._write_heartbeat_to_redis(timestamp)
 
         stale_instruments = self._find_stale_instruments(timestamp)
         if stale_instruments:
@@ -152,6 +175,22 @@ class HealthMonitorActor(Actor):
             self._on_heartbeat,
             override=True,
         )
+
+    def _write_heartbeat_to_redis(self, timestamp: datetime) -> None:
+        """Persist heartbeat timestamp to Redis for the safety monitor."""
+        if self._redis is None:
+            return
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(
+                self._redis.set(  # type: ignore[arg-type]
+                    "sam:heartbeat:last", timestamp.isoformat()
+                )
+            )
+        except Exception as exc:  # noqa: BLE001
+            self.log.warning(
+                "HealthMonitorActor: Redis write failed for heartbeat: %s", exc
+            )
 
     @staticmethod
     def _is_market_hours(ts: datetime) -> bool:

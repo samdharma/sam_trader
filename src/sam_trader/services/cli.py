@@ -65,6 +65,12 @@ from sam_trader.services.quote_collector import QuoteCollectionService
 from sam_trader.services.readiness_report import ReadinessReportGenerator
 from sam_trader.services.regime_detection import Regime, RegimePrediction
 from sam_trader.services.rotate_logs import rotate_logs
+from sam_trader.services.safety import (
+    cmd_halt,
+    cmd_kill,
+    cmd_resume,
+    run_circuit_breaker_monitor,
+)
 from sam_trader.services.watchlist import (
     build_watchlist,
     load_watchlist_config,
@@ -2082,6 +2088,38 @@ def _signal_restart(force: bool = False) -> dict[str, Any]:
             result["detail"] = "Restart completed but sam:state_loaded not confirmed"
 
     return result
+
+
+@cli.command()
+@click.pass_context
+def kill(ctx: click.Context) -> None:
+    """Emergency kill switch — cancel all orders and halt trading."""
+    result = cmd_kill()
+    _out(ctx, result)
+
+
+@cli.command()
+@click.pass_context
+def halt(ctx: click.Context) -> None:
+    """Halt trading — cancel all orders, position-close-only mode."""
+    result = cmd_halt()
+    _out(ctx, result)
+
+
+@cli.command()
+@click.pass_context
+def resume(ctx: click.Context) -> None:
+    """Resume trading — clear halt state."""
+    result = cmd_resume()
+    _out(ctx, result)
+
+
+@cli.command("safety-monitor")
+@click.pass_context
+def safety_monitor(ctx: click.Context) -> None:
+    """Run circuit-breaker checks once (daily PnL, rejection streak, connectivity)."""
+    result = run_circuit_breaker_monitor()
+    _out(ctx, result)
 
 
 def main(argv: list[str] | None = None) -> int:

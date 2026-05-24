@@ -32,3 +32,9 @@ TZ=Asia/Hong_Kong
 # Performance analysis — nightly stats computation (02:00 HKT daily).
 # ---------------------------------------------------------------------------
 0 2 * * * sam . /opt/sam_trader/.env_cron && cd /opt/sam_trader && /usr/local/bin/python3 -m sam_trader.services.performance_analyzer >> /opt/sam_trader/logs/performance.log 2>&1
+
+# ---------------------------------------------------------------------------
+# Safety circuit-breaker monitor — runs every minute on weekdays.
+# Checks daily PnL, rejection streaks, and connectivity.
+# ---------------------------------------------------------------------------
+* * * * 1-5 sam . /opt/sam_trader/.env_cron && cd /opt/sam_trader && /usr/local/bin/python3 -m sam_trader.services.safety >> /opt/sam_trader/logs/safety.log 2>&1

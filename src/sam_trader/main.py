@@ -22,6 +22,7 @@ from sam_trader.bundle_loader import (
     load_bundles,
 )
 from sam_trader.config import SamTraderConfig
+from sam_trader.kill_switch_subscriber import KillSwitchSubscriber
 from sam_trader.restart_subscriber import RestartSubscriber
 
 logger = logging.getLogger(__name__)
@@ -289,6 +290,9 @@ def build_trading_node() -> TradingNode:
                 config={
                     "futu_enabled": cfg.futu_enabled,
                     "ib_enabled": cfg.ib_enabled,
+                    "redis_host": cfg.redis_host,
+                    "redis_port": cfg.redis_port,
+                    "redis_password": cfg.redis_password,
                 },
             )
         )
@@ -315,7 +319,11 @@ def build_trading_node() -> TradingNode:
             ImportableActorConfig(
                 actor_path=rej_actor,
                 config_path=rej_config,
-                config={},
+                config={
+                    "redis_host": cfg.redis_host,
+                    "redis_port": cfg.redis_port,
+                    "redis_password": cfg.redis_password,
+                },
             )
         )
         logger.info("RejectionMonitorActor registered")
@@ -415,13 +423,17 @@ def main() -> None:
     cfg = SamTraderConfig.from_env()
     _notify_state_loaded(cfg)
 
-    subscriber = RestartSubscriber(node, cfg)
-    subscriber.start()
+    restart_sub = RestartSubscriber(node, cfg)
+    restart_sub.start()
+
+    kill_switch_sub = KillSwitchSubscriber(node, cfg)
+    kill_switch_sub.start()
 
     try:
         node.run()
     finally:
-        subscriber.stop()
+        kill_switch_sub.stop()
+        restart_sub.stop()
         node.dispose()
 
 
