@@ -1175,3 +1175,19 @@
 - **Files Changed**: `src/sam_trader/services/dashboard.py` (new), `tests/unit/services/test_dashboard.py` (new), `docker/Dockerfile.services`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 10/10 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Phase 10 ticket 11.7 closed. Ready for 11.8 (EXIT: Verify safety controls + dashboard).
+
+## Iteration 112
+- **Task**: [EXIT] P10: Verify safety controls + dashboard
+- **Task ID**: sam_trader-9z3.11.8
+- **Status**: COMPLETE
+- **Decisions**: 
+  1. Created `tests/integration/test_phase10_exit.py` with 19 integration tests covering all 11 Phase 10 acceptance criteria.
+  2. `TestKillSwitch` (3 tests): validates `sam kill` publishes HALTED to Redis, KillSwitchSubscriber sets TradingState.HALTED and cancels orders, and CLI command returns success.
+  3. `TestResume` (3 tests): validates `sam resume` publishes RUNNING, subscriber sets TradingState.ACTIVE, and CLI command returns success.
+  4. `TestDailyPnlBreaker` (2 tests): validates DAILY_PNL breaker trips when realized loss exceeds max_daily_loss and monitor publishes kill action.
+  5. `TestRejectionStreakBreaker` (2 tests): validates REJECTION_STREAK breaker halts strategy when RejectionMonitorActor writes halt key and monitor sets strategy_halt key.
+  6. `TestDashboard` (6 tests): validates dashboard renders HTML, contains 30s auto-refresh meta tag, shows fills from PG, shows positions from PG, shows P&L from Redis (RealizedPnLTrackerActor), and health endpoint reports all services UP.
+  7. `TestSafetyStatePersistence` (3 tests): validates safety state survives sam-services restart via Redis persistence, dashboard reads persisted state, and `sam safety-monitor` CLI runs circuit breaker checks.
+- **Files Changed**: `tests/integration/test_phase10_exit.py` (new)
+- **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 19/19 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: Phase 10 EXIT complete. All 3 Phase 10 tickets (9z3.11.6, 9z3.11.7, 9z3.11.8) closed. Ready for Phase 11 (Deploy Script & E2E Validation).
