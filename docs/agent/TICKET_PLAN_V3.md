@@ -175,16 +175,16 @@ Phase 8 ────────────────────────
                                                                                             sam_trader-9z3.9.6 ──► ═══ PHASE 8 GATE ═══
 
 Phase 9 ──────────────────────────────────────────────────────────────────
-  sam_trader-9z3.10.14 ──┐
-  sam_trader-9z3.10.15 ──┤
+  sam_trader-9z3.10.16 ──┐
+  sam_trader-9z3.10.17 ──┤
                           ▼
-                   sam_trader-9z3.10.1 ──► sam_trader-9z3.10.2 ──► sam_trader-9z3.10.7 ──► sam_trader-9z3.10.8 ──► sam_trader-9z3.10.9 ──┐
-                   sam_trader-9z3.10.4 ──────────────────────────────────────────────────────────────────────────────────────────────────┤
-                                                                                                                                            ▼
-                                                                                  sam_trader-9z3.10.10 ──► sam_trader-9z3.10.11 ──► sam_trader-9z3.10.12 ──► sam_trader-9z3.10.13
-                                                                                                                                                                                                                 │
-                                                                                                                                                                                                                 ▼
-                                                                                                                                                                                                       ═══ PHASE 9 GATE ═══
+                   sam_trader-9z3.10.18 ──► sam_trader-9z3.10.20 ──► sam_trader-9z3.10.21 ──► sam_trader-9z3.10.22 ──► sam_trader-9z3.10.23 ──┐
+                   sam_trader-9z3.10.19 ──────────────────────────────────────────────────────────────────────────────────────────────────────┤
+                                                                                                                                               ▼
+                                                                                     sam_trader-9z3.10.24 ──► sam_trader-9z3.10.25 ──► sam_trader-9z3.10.26 ──► sam_trader-9z3.10.27
+                                                                                                                                                                                                                    │
+                                                                                                                                                                                                                    ▼
+                                                                                                                                                                                                          ═══ PHASE 9 GATE ═══
 
 Phase 10 ─────────────────────────────────────────────────────────────────
   sam_trader-9z3.11.1 ──┬─────────────────────────────────────────────────┐
@@ -391,24 +391,24 @@ Phase 11 ───────────────────────�
 ### Phase 9: Pre-Market Pipeline
 
 > **Goal:** Nautilus-native pre-market pipeline using broker real-time data feeds (Futu + IB). Gap scanner → AI analysis → risk manager → regime detection → bundle generator → readiness report.
-> **Status:** Not Started (revamped 2026-05-24 — broker feeds replace web scraping)
+> **Status:** Not Started (renumbered 2026-05-24 — 12 sequential tickets 10.16–10.27)
 > **Build ref:** [BUILD_PHASE_9.md](../reference/BUILD_PHASE_9.md)
-> **Build order:** Two parallel tracks converge at executor — Track A: watchlist → quote collector → gap scanner → AI → MC sizer → pre-trade → heat → executor. Track B: regime → executor. Then: executor → bundle-gen → report → EXIT.
+> **Build order:** Tickets numbered sequentially matching build order. Two parallel tracks converge at executor — Track A: watchlist → quote collector → gap scanner → AI → MC → pre-trade → heat → executor. Track B: regime → executor. Then: executor → bundle-gen → report → EXIT.
 
-| # | Ticket ID | Title | Type | AC Highlights |
-|---|-----------|-------|------|---------------|
-| 9.0a | `sam_trader-9z3.10.14` | **NEW** PreMarketWatchlist — config-driven symbol universe per market | task | YAML config per market. Dynamic from active bundles or static hand-curated. US + HK separation. Validates symbols via FutuInstrumentProvider. `sam watchlist` CLI. |
-| 9.0b | `sam_trader-9z3.10.15` | **NEW** QuoteCollectionService — reusable Nautilus data client wrapper | task | Wraps FutuLiveDataClient for sam-services. Creates MessageBus+Cache+Clock. Connects, subscribes QuoteTick, collects for N seconds, disconnects, returns dict[InstrumentId, QuoteTick]. Reused by gap scanner, sam quote CLI, regime detection. |
-| 9.1 | `sam_trader-9z3.10.1` | **REVAMPED** PreMarketGapScanner — Nautilus-native broker data scanner | task | Uses FutuLiveDataClient for real-time QuoteTick. ZERO web scraping. Multi-pass (04:30 + 08:30 ET). Trend detection (RISING/FADING/STABLE). Filters: threshold, blacklist, OTC/ETF. Redis output. `sam gapscan` CLI. |
-| 9.2 | `sam_trader-9z3.10.2` | AI scoring engine — LLM candidate evaluation | task | Scores candidates across 6 dimensions. LLM: DeepSeek / Moonshot Kimi K2.6. Grades: STRONG_BUY, BUY, HOLD, SKIP. Rule-based fallback. Input now from real-time broker data (improved quality). |
-| 9.3 | `sam_trader-9z3.10.4` | Market regime detection — HMM-based classification | task | HMM classifier (trending/ranging/volatile/bearish). Can use QuoteCollectionService for live bar data. Regime-aware parameter adaptation. |
-| 9.4 | `sam_trader-9z3.10.7` | Monte Carlo position sizer | task | Monte Carlo simulation (default 10,000). VaR-based risk limit. |
-| 9.5 | `sam_trader-9z3.10.8` | Pre-trade risk checks | task | Max exposure, daily loss, margin checks. |
-| 9.6 | `sam_trader-9z3.10.9` | Portfolio heat monitor | task | Real-time heat tracking. |
-| 9.7 | `sam_trader-9z3.10.10` | Pipeline sequential executor | task | Run scan→AI→risk→regime in sequence. Fail-fast error handling. |
-| 9.8 | `sam_trader-9z3.10.11` | Bundle YAML generator | task | Convert approved candidates to bundle YAML. Validate against schema. |
-| 9.9 | `sam_trader-9z3.10.12` | Readiness report | task | Console table + optional webhook. |
-| 9.10 | `sam_trader-9z3.10.13` | [EXIT] Pipeline e2e validation | exit | Integration test: pipeline on pre-market data. >=1 candidate, valid bundle YAML, report saved. |
+| # | Ticket ID | Title | Type | Ralph Order |
+|---|-----------|-------|------|-------------|
+| 1 | `sam_trader-9z3.10.16` | PreMarketWatchlist — config-driven symbol universe | task | **1st** (root) |
+| 2 | `sam_trader-9z3.10.17` | QuoteCollectionService — reusable Nautilus data client wrapper | task | **2nd** (root, parallel with 16) |
+| 3 | `sam_trader-9z3.10.18` | PreMarketGapScanner — Nautilus-native broker data scanner | task | **3rd** (depends on 16, 17) |
+| 4 | `sam_trader-9z3.10.19` | Market Regime Detection — HMM classification | task | **4th** (independent root, parallel track) |
+| 5 | `sam_trader-9z3.10.20` | AI Scoring Engine — LLM candidate evaluation | task | **5th** (depends on 18) |
+| 6 | `sam_trader-9z3.10.21` | Monte Carlo Position Sizer | task | **6th** (depends on 20) |
+| 7 | `sam_trader-9z3.10.22` | Pre-trade Risk Checks | task | **7th** (depends on 21) |
+| 8 | `sam_trader-9z3.10.23` | Portfolio Heat Monitor | task | **8th** (depends on 22) |
+| 9 | `sam_trader-9z3.10.24` | Pipeline Sequential Executor | task | **9th** (depends on 19, 23) |
+| 10 | `sam_trader-9z3.10.25` | Bundle YAML Generator | task | **10th** (depends on 24) |
+| 11 | `sam_trader-9z3.10.26` | Readiness Report | task | **11th** (depends on 25) |
+| 12 | `sam_trader-9z3.10.27` | [EXIT] Pipeline E2E Validation | exit | **12th** (depends on 26) |
 
 > **Note:** Original parent tickets `9z3.10.3` (Risk Manager) and `9z3.10.5` (Pipeline Orchestrator) are **closed-superseded**. Their scope is covered by sub-tickets 10.7-10.9 and 10.10-10.12 respectively, plus the EXIT gate integration test. Original EXIT `9z3.10.6` closed - renumbered to `9z3.10.13` for sequence alignment (EXIT must have highest number).
 
@@ -478,7 +478,7 @@ Phase 0 ───► Phase 1 ───► Phase 2 ───► Phase 3 ───
 | Phase 6 | 9 | Actors + State (2 gap-remediation actors; EXIT renumbered 7.6→7.9) |
 | Phase 7 | 6 | Strategies + Bundles |
 | Phase 8 | 11 | Services Container (revised: +5 Nautilus-native integrations) |
-| Phase 9 | 14 | Pre-Market Pipeline (revamped: +2 Nautilus-native tickets, +1 EXIT, -2 superseded) |
+| Phase 9 | 12 | Pre-Market Pipeline (renumbered: sequential 10.16–10.27 matching build order) |
 | Phase 10 | 5 | Safety + Dashboard |
 | Phase 11 | 4 | Deploy + E2E |
 | **Total** | **93** | (revised Phase 8: 6→11 tickets) |
