@@ -1006,3 +1006,17 @@
 - **Files Changed**: `tests/integration/test_phase8_cli_exit.py` (new)
 - **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 7/7 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Phase 8 EXIT complete. All 11 Phase 8 tickets closed. Ready for Phase 9.
+
+## Iteration 100
+- **Task**: P9: PreMarketGapScanner — Nautilus-native real-time broker data scanner
+- **Task ID**: sam_trader-9z3.10.18
+- **Status**: COMPLETE
+- **Decisions**:
+  1. Verified all acceptance criteria were already implemented in commit 538e35b (rolled-back iteration was re-applied successfully).
+  2. PreMarketGapScanner in `src/sam_trader/services/gap_scanner.py` with QuoteCollectionService integration, composite prev-close loaders (PG fills → Futu k-line fallback), gap computation, 5 filters, OTC/ETF exclusion, multi-pass trend detection (RISING/FADING/STABLE/LATE_BREAKER), cross-validation, and Redis persistence.
+  3. CLI `sam gapscan [--market US|HK] [--pass 1|2] [--json]` implemented in `services/cli.py`.
+  4. HK market supported via HKEX venue mapping in watchlist config.
+  5. All 91 tests pass: 38 unit gap scanner tests, 5 integration gap scanner tests, 36 CLI tests, 12 other service tests.
+- **Files Changed**: `.beads/issues.jsonl` (ticket status update)
+- **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 91/91 tests passed, no lint/type issues)
+- **Blockers / Notes**: None. Ready for next Phase 9 ticket (sam_trader-9z3.10.20: AI Scoring Engine).
