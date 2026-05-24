@@ -816,6 +816,223 @@ class TestSnapshotCommand:
         assert "2026-05-24T09:00:00+00:00" in captured.out
 
 
+class TestBundleDiffCommand:
+    @patch("sam_trader.services.cli._redis_cli")
+    def test_bundle_diff_added(
+        self, mock_redis_mod: Any, capsys: Any, tmp_path: pathlib.Path
+    ) -> None:
+        """Bundle in current but not in snapshot → ADDED."""
+        mock_r = MagicMock()
+        mock_r.keys.return_value = ["sam:snapshot:2026-05-24T10:00:00+00:00"]
+        mock_r.get.return_value = json.dumps(
+            {
+                "bundles": {
+                    "old-bundle": {"id": "old-bundle", "enabled": True, "venue": "FUTU"}
+                }
+            }
+        )
+        mock_redis_mod.Redis.return_value = mock_r
+
+        bundles_file = tmp_path / "bundles.yaml"
+        bundles_file.write_text(
+            "bundles:\n"
+            "  - id: new-bundle\n"
+            "    enabled: true\n"
+            "    venue: FUTU\n"
+        )
+        with patch("sam_trader.services.cli.DEFAULT_BUNDLES_PATH", bundles_file):
+            rc = main(["bundle-diff"])
+
+        captured = capsys.readouterr()
+        assert rc == 0
+        assert "ADDED" in captured.out
+        assert "new-bundle" in captured.out
+        assert "old-bundle" not in captured.out or "REMOVED" in captured.out
+
+    @patch("sam_trader.services.cli._redis_cli")
+    def test_bundle_diff_removed(
+        self, mock_redis_mod: Any, capsys: Any, tmp_path: pathlib.Path
+    ) -> None:
+        """Bundle in snapshot but not in current → REMOVED."""
+        mock_r = MagicMock()
+        mock_r.keys.return_value = ["sam:snapshot:2026-05-24T10:00:00+00:00"]
+        mock_r.get.return_value = json.dumps(
+            {
+                "bundles": {
+                    "gone-bundle": {
+                        "id": "gone-bundle",
+                        "enabled": True,
+                        "venue": "FUTU",
+                    }
+                }
+            }
+        )
+        mock_redis_mod.Redis.return_value = mock_r
+
+        bundles_file = tmp_path / "bundles.yaml"
+        bundles_file.write_text("bundles: []\n")
+        with patch("sam_trader.services.cli.DEFAULT_BUNDLES_PATH", bundles_file):
+            rc = main(["bundle-diff"])
+
+        captured = capsys.readouterr()
+        assert rc == 0
+        assert "REMOVED" in captured.out
+        assert "gone-bundle" in captured.out
+
+    @patch("sam_trader.services.cli._redis_cli")
+    def test_bundle_diff_modified(
+        self, mock_redis_mod: Any, capsys: Any, tmp_path: pathlib.Path
+    ) -> None:
+        """Same ID, different config → MODIFIED with changed keys."""
+        mock_r = MagicMock()
+        mock_r.keys.return_value = ["sam:snapshot:2026-05-24T10:00:00+00:00"]
+        mock_r.get.return_value = json.dumps(
+            {
+                "bundles": {
+                    "tsla-orb": {
+                        "id": "tsla-orb",
+                        "enabled": True,
+                        "venue": "FUTU",
+                        "strategy": {"config": {"trade_size": 5}},
+                    }
+                }
+            }
+        )
+        mock_redis_mod.Redis.return_value = mock_r
+
+        bundles_file = tmp_path / "bundles.yaml"
+        bundles_file.write_text(
+            "bundles:\n"
+            "  - id: tsla-orb\n"
+            "    enabled: true\n"
+            "    venue: FUTU\n"
+            "    strategy:\n"
+            "      config:\n"
+            "        trade_size: 10\n"
+        )
+        with patch("sam_trader.services.cli.DEFAULT_BUNDLES_PATH", bundles_file):
+            rc = main(["bundle-diff"])
+
+        captured = capsys.readouterr()
+        assert rc == 0
+        assert "MODIFIED" in captured.out
+        assert "tsla-orb" in captured.out
+        assert "strategy" in captured.out
+
+    @patch("sam_trader.services.cli._redis_cli")
+    def test_bundle_diff_version_bump(
+        self, mock_redis_mod: Any, capsys: Any, tmp_path: pathlib.Path
+    ) -> None:
+        """Version field changed → VERSION BUMPS."""
+        mock_r = MagicMock()
+        mock_r.keys.return_value = ["sam:snapshot:2026-05-24T10:00:00+00:00"]
+        mock_r.get.return_value = json.dumps(
+            {
+                "bundles": {
+                    "orb-aggressive": {
+                        "id": "orb-aggressive",
+                        "enabled": True,
+                        "venue": "FUTU",
+                        "family": "ORB_aggressive",
+                        "version": "1.0.0",
+                        "variant": "aggressive",
+                    }
+                }
+            }
+        )
+        mock_redis_mod.Redis.return_value = mock_r
+
+        bundles_file = tmp_path / "bundles.yaml"
+        bundles_file.write_text(
+            "bundles:\n"
+            "  - id: orb-aggressive\n"
+            "    enabled: true\n"
+            "    venue: FUTU\n"
+            "    family: ORB_aggressive\n"
+            '    version: "1.1.0"\n'
+            "    variant: aggressive\n"
+        )
+        with patch("sam_trader.services.cli.DEFAULT_BUNDLES_PATH", bundles_file):
+            rc = main(["bundle-diff"])
+
+        captured = capsys.readouterr()
+        assert rc == 0
+        assert "VERSION BUMPS" in captured.out
+        assert "orb-aggressive" in captured.out
+        assert "1.0.0" in captured.out
+        assert "1.1.0" in captured.out
+
+    @patch("sam_trader.services.cli._redis_cli")
+    def test_bundle_diff_no_snapshot(
+        self, mock_redis_mod: Any, capsys: Any, tmp_path: pathlib.Path
+    ) -> None:
+        """No snapshot in Redis → all bundles shown as NEW."""
+        mock_r = MagicMock()
+        mock_r.keys.return_value = []
+        mock_redis_mod.Redis.return_value = mock_r
+
+        bundles_file = tmp_path / "bundles.yaml"
+        bundles_file.write_text(
+            "bundles:\n"
+            "  - id: first-bundle\n"
+            "    enabled: true\n"
+            "    venue: FUTU\n"
+        )
+        with patch("sam_trader.services.cli.DEFAULT_BUNDLES_PATH", bundles_file):
+            rc = main(["bundle-diff"])
+
+        captured = capsys.readouterr()
+        assert rc == 0
+        assert "NEW" in captured.out or "new" in captured.out
+        assert "first-bundle" in captured.out
+        assert (
+            "no snapshot" in captured.out.lower() or "first-run" in captured.out.lower()
+        )
+
+    @patch("sam_trader.services.cli._redis_cli")
+    def test_bundle_diff_json(
+        self, mock_redis_mod: Any, capsys: Any, tmp_path: pathlib.Path
+    ) -> None:
+        """--json flag emits structured diff output."""
+        mock_r = MagicMock()
+        mock_r.keys.return_value = ["sam:snapshot:2026-05-24T10:00:00+00:00"]
+        mock_r.get.return_value = json.dumps(
+            {
+                "bundles": {
+                    "existing": {
+                        "id": "existing",
+                        "enabled": True,
+                        "venue": "FUTU",
+                        "version": "1.0.0",
+                    }
+                }
+            }
+        )
+        mock_redis_mod.Redis.return_value = mock_r
+
+        bundles_file = tmp_path / "bundles.yaml"
+        bundles_file.write_text(
+            "bundles:\n"
+            "  - id: existing\n"
+            "    enabled: true\n"
+            "    venue: FUTU\n"
+            '    version: "1.1.0"\n'
+            "  - id: new-one\n"
+            "    enabled: true\n"
+            "    venue: IB\n"
+        )
+        with patch("sam_trader.services.cli.DEFAULT_BUNDLES_PATH", bundles_file):
+            rc = main(["--json", "bundle-diff"])
+
+        captured = capsys.readouterr()
+        assert rc == 0
+        data = json.loads(captured.out)
+        assert data["command"] == "bundle-diff"
+        assert "new-one" in data["added"]
+        assert data["version_bumps"]
+        assert data["version_bumps"][0]["id"] == "existing"
+
+
 class TestJsonGlobalFlag:
     @patch("sam_trader.services.cli._run")
     def test_json_flag_on_status(self, mock_run: Any, capsys: Any) -> None:

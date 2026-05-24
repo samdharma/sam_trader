@@ -194,6 +194,31 @@ def _get_active_bundle_ids(path: Path) -> list[str]:
         return []
 
 
+def _get_bundle_snapshot_data(path: Path) -> dict[str, dict[str, Any]]:
+    """Return mapping of bundle ID → raw bundle dict from YAML.
+
+    Only includes *enabled* bundles so the snapshot reflects what is
+    actually deployed.  The raw dicts are used by ``bundle diff`` to
+    detect per-key configuration changes.
+    """
+    if not path.exists():
+        return {}
+    try:
+        raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+        if not isinstance(raw, dict):
+            return {}
+        bundles = raw.get("bundles", [])
+        if not isinstance(bundles, list):
+            return {}
+        return {
+            str(b["id"]): dict(b)
+            for b in bundles
+            if isinstance(b, dict) and b.get("enabled", True) and "id" in b
+        }
+    except Exception:
+        return {}
+
+
 @cli.command()
 @click.option("--list", "list_flag", is_flag=True, help="Show last 10 snapshots.")
 @click.option(
@@ -246,6 +271,7 @@ def snapshot(ctx: click.Context, list_flag: bool, show: int | None) -> None:
         "bundles_hash": bundles_hash,
         "timestamp": timestamp,
         "active_strategies": active_strategies,
+        "bundles": _get_bundle_snapshot_data(bundles_path),
     }
 
     key = f"sam:snapshot:{timestamp}"
@@ -1091,6 +1117,181 @@ def validate_bundles_cmd(ctx: click.Context, path: Path, no_backtest: bool) -> N
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+
+def _diff_bundles(
+    current: dict[str, dict[str, Any]],
+    snapshot: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    """Compare current bundles against snapshot bundles.
+
+    Returns a dict with keys:
+    - ``added``: list of bundle IDs present in current but not snapshot
+    - ``removed``: list of bundle IDs present in snapshot but not current
+    - ``modified``: list of dicts with ``id``, ``changed_keys``, ``old``, ``new``
+    - ``version_bumps``: list of dicts with ``id``, ``old_version``, ``new_version``
+    """
+    current_ids = set(current.keys())
+    snapshot_ids = set(snapshot.keys())
+
+    added = sorted(current_ids - snapshot_ids)
+    removed = sorted(snapshot_ids - current_ids)
+
+    modified: list[dict[str, Any]] = []
+    version_bumps: list[dict[str, Any]] = []
+
+    for bid in sorted(current_ids & snapshot_ids):
+        cur = current[bid]
+        snap = snapshot[bid]
+
+        # Simple top-level key diff (ignoring ordering differences in lists)
+        changed_keys: list[str] = []
+        all_keys = set(cur.keys()) | set(snap.keys())
+        for key in sorted(all_keys):
+            if cur.get(key) != snap.get(key):
+                changed_keys.append(key)
+
+        if changed_keys:
+            modified.append(
+                {
+                    "id": bid,
+                    "changed_keys": changed_keys,
+                    "old": {k: snap.get(k) for k in changed_keys},
+                    "new": {k: cur.get(k) for k in changed_keys},
+                }
+            )
+
+        # Version bump detection (Phase 7 metadata)
+        cur_ver = str(cur.get("version", "")) if cur.get("version") is not None else ""
+        snap_ver = (
+            str(snap.get("version", "")) if snap.get("version") is not None else ""
+        )
+        if cur_ver and snap_ver and cur_ver != snap_ver:
+            version_bumps.append(
+                {
+                    "id": bid,
+                    "old_version": snap_ver,
+                    "new_version": cur_ver,
+                }
+            )
+
+    return {
+        "added": added,
+        "removed": removed,
+        "modified": modified,
+        "version_bumps": version_bumps,
+    }
+
+
+def _format_bundle_diff(diff: dict[str, Any]) -> str:
+    """Render bundle diff as human-readable text."""
+    lines: list[str] = ["Bundle Diff", "=" * 40]
+
+    if diff.get("added"):
+        lines.append("\n  ADDED")
+        lines.append("  " + "-" * 36)
+        for bid in diff["added"]:
+            lines.append(f"    + {bid}")
+
+    if diff.get("removed"):
+        lines.append("\n  REMOVED")
+        lines.append("  " + "-" * 36)
+        for bid in diff["removed"]:
+            lines.append(f"    - {bid}")
+
+    if diff.get("modified"):
+        lines.append("\n  MODIFIED")
+        lines.append("  " + "-" * 36)
+        for mod in diff["modified"]:
+            bid = mod["id"]
+            keys = ", ".join(mod["changed_keys"])
+            lines.append(f"    ~ {bid}  ({keys})")
+
+    if diff.get("version_bumps"):
+        lines.append("\n  VERSION BUMPS")
+        lines.append("  " + "-" * 36)
+        for vb in diff["version_bumps"]:
+            lines.append(f"    ~ {vb['id']}  {vb['old_version']} → {vb['new_version']}")
+
+    if not any(diff[k] for k in ("added", "removed", "modified", "version_bumps")):
+        lines.append("\n  No pending bundle changes.")
+
+    return "\n".join(lines)
+
+
+@cli.command("bundle-diff")
+@click.pass_context
+def bundle_diff(ctx: click.Context) -> None:
+    """Show pending bundle changes compared to last deployed snapshot."""
+    if _redis_cli is None:
+        raise click.ClickException("redis package not available")
+
+    try:
+        r = _redis_cli.Redis(
+            host=REDIS_HOST,
+            port=int(REDIS_PORT),
+            password=REDIS_PASSWORD or None,
+            decode_responses=True,
+            socket_connect_timeout=5,
+        )
+        r.ping()
+    except Exception as exc:
+        raise click.ClickException(f"Redis connection failed: {exc}")
+
+    bundles_path = DEFAULT_BUNDLES_PATH
+    current = _get_bundle_snapshot_data(bundles_path)
+
+    # Find latest snapshot
+    keys = sorted(r.keys("sam:snapshot:*"), reverse=True)
+    if not keys:
+        # First-run case: no snapshot exists
+        result: dict[str, Any] = {
+            "command": "bundle-diff",
+            "status": "new",
+            "note": "No snapshot found — all bundles are new (first-run)",
+            "added": sorted(current.keys()),
+            "removed": [],
+            "modified": [],
+            "version_bumps": [],
+        }
+        if ctx.obj.get("json"):
+            _out(ctx, result)
+        else:
+            lines = ["Bundle Diff", "=" * 40]
+            lines.append("\n  NEW (no snapshot baseline)")
+            lines.append("  " + "-" * 36)
+            for bid in result["added"]:
+                lines.append(f"    + {bid}")
+            click.echo("\n".join(lines))
+        return
+
+    latest_key = keys[0]
+    raw = r.get(latest_key)
+    if not raw:
+        raise click.ClickException(f"Snapshot {latest_key} data missing")
+
+    try:
+        snap_data = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise click.ClickException(f"Corrupt snapshot data: {exc}")
+
+    snapshot_bundles = snap_data.get("bundles", {})
+    diff = _diff_bundles(current, snapshot_bundles)
+
+    result = {
+        "command": "bundle-diff",
+        "status": "diff",
+        "snapshot_key": latest_key,
+        "added": diff["added"],
+        "removed": diff["removed"],
+        "modified": diff["modified"],
+        "version_bumps": diff["version_bumps"],
+    }
+
+    if ctx.obj.get("json"):
+        _out(ctx, result)
+    else:
+        click.echo(_format_bundle_diff(diff))
 
 
 def _signal_restart(force: bool = False) -> dict[str, Any]:

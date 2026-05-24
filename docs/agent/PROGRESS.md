@@ -955,3 +955,19 @@
 - **Files Changed**: `src/sam_trader/services/cli.py`, `tests/unit/services/test_cli.py`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 38/38 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ready for next Phase 8 ticket or Phase 9.
+
+## Iteration 97
+- **Task**: P8: Add sam bundle diff — show pending bundle changes
+- **Task ID**: sam_trader-9z3.9.16
+- **Status**: COMPLETE
+- **Decisions**: 
+  1. Added `sam bundle diff` CLI command (`bundle-diff` subcommand) that compares current `config/bundles.yaml` against the latest Redis snapshot (`sam:snapshot:*`).
+  2. Updated `snapshot` command to store full bundle configs in the snapshot payload under `bundles` key (backward-compatible — old snapshots without `bundles` still work, just show ID-level diffs only).
+  3. Added `_get_bundle_snapshot_data()` helper to extract enabled bundle dicts from YAML, `_diff_bundles()` for deep comparison, and `_format_bundle_diff()` for human-readable output.
+  4. Diff categories: ADDED (new IDs), REMOVED (deleted IDs), MODIFIED (same ID, changed keys with old/new values), VERSION BUMPS (Phase 7 `version` metadata field changed).
+  5. First-run case: when no snapshot exists, all bundles shown as NEW with informative message.
+  6. `--json` global flag supported for CI consumption.
+  7. 6 unit tests covering all AC: added, removed, modified, version bump, no snapshot, and JSON output.
+- **Files Changed**: `src/sam_trader/services/cli.py`, `tests/unit/services/test_cli.py`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 44/44 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for next Phase 8 ticket or Phase 9.
