@@ -821,6 +821,22 @@
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 6/6 integration tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: Phase 8 exit gate complete. All Phase 8 tickets (9z3.9.1 through 9z3.9.11) are closed. Ready for Phase 9 (Pre-Market Pipeline).
 
+## Iteration 93
+- **Task**: P7: Add dynamic position sizing to OrbStrategy and MomentumStrategy
+- **Task ID**: sam_trader-9z3.8.8
+- **Status**: COMPLETE
+- **Decisions**: 
+  1. Extracted shared `compute_risk_based_size()` helper to `strategies/common.py` to keep sizing logic DRY across strategies.
+  2. Added `risk_per_trade_pct: float = 0.0` and `account_risk_currency: float = 0.0` to both `OrbStrategyConfig` and `MomentumStrategyConfig`. Default values preserve existing fixed-size behavior (backward compatible).
+  3. Rewrote `OrbStrategy._compute_trade_size()` to use risk-based formula when `risk_per_trade_pct > 0`: `size = int(account_risk_currency * risk_per_trade_pct / max(sl_distance, tick_size))`, clamped to `[1, max_position]`. Added optional ATR-based volatility adjustment (higher ATR/price ratio → smaller size).
+  4. Added `_get_sl_distance()` and `_compute_trade_size()` to `MomentumStrategy`, mirroring OrbStrategy logic without ATR adjustment (MomentumStrategy does not track ATR).
+  5. Wired both strategies' `_enter_long`/`_enter_short` to pass `entry_price` to `_compute_trade_size()` so ATR adjustment can compute the ratio.
+  6. Added 6 tests in `test_common.py` for the shared helper, 4 tests in `test_orb.py` for risk-based sizing, fixed fallback, clamping, and ATR adjustment, and 3 tests in `test_momentum.py` for the same patterns.
+  7. Updated `orb_strategy_enhancement_spec.md` §3.6 to mark dynamic sizing as implemented. Updated `GAP_ANALYSIS_RISK_STRATEGY_JOURNAL_PERF.md` line 71 to remove the dynamic position sizing gap entry.
+- **Files Changed**: `src/sam_trader/strategies/common.py`, `src/sam_trader/strategies/orb.py`, `src/sam_trader/strategies/momentum.py`, `tests/unit/strategies/test_common.py`, `tests/unit/strategies/test_orb.py`, `tests/unit/strategies/test_momentum.py`, `docs/reference/orb_strategy_enhancement_spec.md`, `docs/reference/GAP_ANALYSIS_RISK_STRATEGY_JOURNAL_PERF.md`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 73/73 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Phase 7 ticket 9z3.8.8 complete.
+
 ## Iteration 92
 - **Task**: P9: Market regime detection — HMM-based classification, regime-aware adaptation
 - **Task ID**: sam_trader-9z3.10.4 (renumbered to 9z3.10.19 in 2026-05-24 renumbering)
