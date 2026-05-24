@@ -406,7 +406,7 @@ sam_trader/
 
 ### Phase 9: Pre-Market Pipeline
 > **Goal:** Gap scanner → AI analysis → risk manager → bundle generator → readiness report.
-> **Status:** Not Started  
+> **Status:** Not Started (revamped 2026-05-24 — Nautilus-native broker feeds replace web scraping)
 > **Depends on:** Phase 8
 
 ### Phase 10: Safety & Dashboard
