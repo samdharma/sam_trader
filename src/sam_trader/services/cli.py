@@ -20,6 +20,7 @@ Usage (inside sam-services container):
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 import os
@@ -37,6 +38,7 @@ from sam_trader.services.backup import BackupError
 from sam_trader.services.backup import backup as run_backup
 from sam_trader.services.backup import restore as run_restore
 from sam_trader.services.deploy_window import check_window as check_deploy_window
+from sam_trader.services.deploy_window import is_in_window
 from sam_trader.services.gap_scanner import (
     CompositePrevCloseLoader,
     FutuKLinePrevCloseLoader,
@@ -205,10 +207,15 @@ def status(ctx: click.Context) -> None:
     _out(ctx, result)
 
 
-@cli.command()
-@click.pass_context
-def health(ctx: click.Context) -> None:
-    """Deep health check (PG, Redis, Futu OpenD, Nautilus)."""
+def _run_health_checks() -> dict[str, Any]:
+    """Run deep health checks and return a dict of check results.
+
+    Returns
+    -------
+    dict[str, Any]
+        Mapping of service name → result dict with ``status`` and
+        ``detail``/``health`` keys.
+    """
     checks: dict[str, Any] = {}
 
     # PostgreSQL
@@ -306,6 +313,14 @@ def health(ctx: click.Context) -> None:
     except Exception as exc:
         checks["sam_trader"] = {"status": "DOWN", "detail": str(exc)}
 
+    return checks
+
+
+@cli.command()
+@click.pass_context
+def health(ctx: click.Context) -> None:
+    """Deep health check (PG, Redis, Futu OpenD, Nautilus)."""
+    checks = _run_health_checks()
     all_up = all(c["status"] == "UP" for c in checks.values())
     result = {
         "command": "health",
@@ -313,6 +328,191 @@ def health(ctx: click.Context) -> None:
         "checks": checks,
     }
     _out(ctx, result)
+
+
+@cli.command()
+@click.option(
+    "--skip-window",
+    is_flag=True,
+    help="Bypass deploy-window check (for testing).",
+)
+@click.pass_context
+def preflight(ctx: click.Context, skip_window: bool) -> None:
+    """Pre-update validation — dry-run, read-only.
+
+    Checks deploy window, bundle validity, service health, git status,
+    and pending bundle changes.  Exit code: 0=all-clear, 1=warnings,
+    2=blocking issues.
+    """
+    checks: dict[str, Any] = {}
+    blocking_issues: list[str] = []
+    warnings_list: list[str] = []
+
+    # 1. Deploy window
+    if skip_window:
+        checks["deploy_window"] = {
+            "status": "SKIPPED",
+            "detail": "Bypassed via --skip-window",
+        }
+    else:
+        window = os.getenv("DEPLOY_WINDOW", "05:00-08:00")
+        active = is_in_window(window)
+        if active:
+            checks["deploy_window"] = {
+                "status": "PASS",
+                "detail": f"Window {window} is active",
+            }
+        else:
+            checks["deploy_window"] = {
+                "status": "FAIL",
+                "detail": f"Window {window} is NOT active",
+            }
+            blocking_issues.append("deploy_window")
+
+    # 2. Bundles valid
+    bundles_path = DEFAULT_BUNDLES_PATH
+    if bundles_path.exists():
+        try:
+            result_obj = validate_bundles(bundles_path, backtest_gate=False)
+            if result_obj.all_passed:
+                checks["bundles_valid"] = {
+                    "status": "PASS",
+                    "detail": result_obj.summary,
+                }
+            else:
+                checks["bundles_valid"] = {
+                    "status": "FAIL",
+                    "detail": result_obj.summary,
+                }
+                blocking_issues.append("bundles_valid")
+        except Exception as exc:
+            checks["bundles_valid"] = {
+                "status": "FAIL",
+                "detail": f"Validation error: {exc}",
+            }
+            blocking_issues.append("bundles_valid")
+    else:
+        checks["bundles_valid"] = {
+            "status": "FAIL",
+            "detail": f"Bundles file not found: {bundles_path}",
+        }
+        blocking_issues.append("bundles_valid")
+
+    # 3. Services healthy
+    health_checks = _run_health_checks()
+    services_up = all(c["status"] == "UP" for c in health_checks.values())
+    if services_up:
+        checks["services_healthy"] = {
+            "status": "PASS",
+            "detail": "All services UP",
+            "checks": health_checks,
+        }
+    else:
+        down = [k for k, v in health_checks.items() if v["status"] != "UP"]
+        checks["services_healthy"] = {
+            "status": "FAIL",
+            "detail": f"Services DOWN: {', '.join(down)}",
+            "checks": health_checks,
+        }
+        blocking_issues.append("services_healthy")
+
+    # 4. Pending git changes (informational only)
+    try:
+        r = subprocess.run(
+            ["git", "status", "--short"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        git_out = r.stdout.strip()
+        if git_out:
+            checks["git_status"] = {
+                "status": "INFO",
+                "detail": "Pending changes detected",
+                "changes": git_out.split("\n"),
+            }
+        else:
+            checks["git_status"] = {
+                "status": "INFO",
+                "detail": "Working tree clean",
+                "changes": [],
+            }
+    except Exception as exc:
+        checks["git_status"] = {
+            "status": "INFO",
+            "detail": f"Could not check git status: {exc}",
+            "changes": [],
+        }
+
+    # 5. Pending bundle changes (compare hash in Redis)
+    try:
+        if bundles_path.exists():
+            current_hash = hashlib.sha256(bundles_path.read_bytes()).hexdigest()
+        else:
+            current_hash = ""
+
+        stored_hash: str | None = None
+        if _redis_cli is not None:
+            try:
+                r = _redis_cli.Redis(
+                    host=REDIS_HOST,
+                    port=int(REDIS_PORT),
+                    password=REDIS_PASSWORD or None,
+                    decode_responses=True,
+                    socket_connect_timeout=5,
+                )
+                stored_hash = r.get("sam:bundles:snapshot_hash")
+            except Exception:
+                pass
+
+        if stored_hash is None:
+            checks["bundle_changes"] = {
+                "status": "WARN",
+                "detail": (
+                    "No snapshot hash in Redis — "
+                    "run 'sam apply' once to establish baseline"
+                ),
+            }
+            warnings_list.append("bundle_changes")
+        elif current_hash != stored_hash:
+            checks["bundle_changes"] = {
+                "status": "WARN",
+                "detail": "bundles.yaml differs from last deployed snapshot",
+                "current_hash": current_hash[:16],
+                "stored_hash": stored_hash[:16],
+            }
+            warnings_list.append("bundle_changes")
+        else:
+            checks["bundle_changes"] = {
+                "status": "PASS",
+                "detail": "bundles.yaml matches deployed snapshot",
+            }
+    except Exception as exc:
+        checks["bundle_changes"] = {
+            "status": "WARN",
+            "detail": f"Could not compare bundle snapshot: {exc}",
+        }
+        warnings_list.append("bundle_changes")
+
+    # Determine exit code
+    if blocking_issues:
+        overall = "FAIL"
+        exit_code = 2
+    elif warnings_list:
+        overall = "WARN"
+        exit_code = 1
+    else:
+        overall = "PASS"
+        exit_code = 0
+
+    result = {
+        "command": "preflight",
+        "overall": overall,
+        "exit_code": exit_code,
+        "checks": checks,
+    }
+    _out(ctx, result)
+    return exit_code  # type: ignore[return-value]
 
 
 @cli.command()
@@ -949,7 +1149,9 @@ def _signal_restart(force: bool = False) -> dict[str, Any]:
 def main(argv: list[str] | None = None) -> int:
     """CLI entry point (also used by ``sam-validate-bundles`` console script)."""
     try:
-        cli.main(args=argv, standalone_mode=False)
+        rv = cli.main(args=argv, standalone_mode=False)
+        if isinstance(rv, int):
+            return rv
         return 0
     except click.ClickException as exc:
         click.echo(f"ERROR: {exc.message}", err=True)

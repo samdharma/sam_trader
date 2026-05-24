@@ -584,6 +584,138 @@ class TestGapscanCommand:
         assert "pass must be 1 or 2" in captured.err or "ERROR" in captured.err
 
 
+class TestPreflightCommand:
+    @patch("sam_trader.services.cli._run_health_checks")
+    @patch("sam_trader.services.cli.validate_bundles")
+    @patch("sam_trader.services.cli.is_in_window")
+    @patch("sam_trader.services.cli.subprocess.run")
+    @patch("sam_trader.services.cli._redis_cli")
+    @patch("sam_trader.services.cli.hashlib.sha256")
+    def test_preflight_all_clear(
+        self,
+        mock_sha256: Any,
+        mock_redis_mod: Any,
+        mock_subproc: Any,
+        mock_window: Any,
+        mock_validate: Any,
+        mock_health: Any,
+        capsys: Any,
+        tmp_path: pathlib.Path,
+    ) -> None:
+        mock_window.return_value = True
+        result = MagicMock()
+        result.all_passed = True
+        result.summary = "2/2 bundles passed validation"
+        mock_validate.return_value = result
+        mock_health.return_value = {
+            "postgres": {"status": "UP"},
+            "redis": {"status": "UP"},
+            "futu_opend": {"status": "UP", "health": "healthy"},
+            "sam_trader": {"status": "UP", "health": "healthy"},
+        }
+        mock_subproc.return_value = MagicMock(returncode=0, stdout="")
+
+        mock_sha256.return_value.hexdigest.return_value = "a" * 64
+        mock_redis_client = MagicMock()
+        mock_redis_client.get.return_value = "a" * 64
+        mock_redis_mod.Redis.return_value = mock_redis_client
+
+        # Point DEFAULT_BUNDLES_PATH to a real file
+        from sam_trader.services.cli import DEFAULT_BUNDLES_PATH
+
+        bundles_file = tmp_path / "bundles.yaml"
+        bundles_file.write_text("bundles:\n  - id: test\n")
+        with patch.object(type(DEFAULT_BUNDLES_PATH), "exists", return_value=True):
+            with patch(
+                "sam_trader.services.cli.DEFAULT_BUNDLES_PATH",
+                bundles_file,
+            ):
+                rc = main(["preflight"])
+
+        captured = capsys.readouterr()
+        assert rc == 0
+        assert "PASS" in captured.out
+        assert "exit_code" in captured.out or "exit" in captured.out.lower()
+
+    @patch("sam_trader.services.cli._run_health_checks")
+    @patch("sam_trader.services.cli.validate_bundles")
+    @patch("sam_trader.services.cli.is_in_window")
+    @patch("sam_trader.services.cli.subprocess.run")
+    def test_preflight_outside_window(
+        self,
+        mock_subproc: Any,
+        mock_window: Any,
+        mock_validate: Any,
+        mock_health: Any,
+        capsys: Any,
+        tmp_path: pathlib.Path,
+    ) -> None:
+        mock_window.return_value = False
+        result = MagicMock()
+        result.all_passed = True
+        result.summary = "2/2 bundles passed validation"
+        mock_validate.return_value = result
+        mock_health.return_value = {
+            "postgres": {"status": "UP"},
+            "redis": {"status": "UP"},
+            "futu_opend": {"status": "UP", "health": "healthy"},
+            "sam_trader": {"status": "UP", "health": "healthy"},
+        }
+        mock_subproc.return_value = MagicMock(returncode=0, stdout="")
+
+        bundles_file = tmp_path / "bundles.yaml"
+        bundles_file.write_text("bundles:\n  - id: test\n")
+        with patch(
+            "sam_trader.services.cli.DEFAULT_BUNDLES_PATH",
+            bundles_file,
+        ):
+            rc = main(["preflight"])
+
+        captured = capsys.readouterr()
+        assert rc == 2
+        assert "FAIL" in captured.out
+        assert "deploy_window" in captured.out.lower()
+
+    @patch("sam_trader.services.cli._run_health_checks")
+    @patch("sam_trader.services.cli.validate_bundles")
+    @patch("sam_trader.services.cli.is_in_window")
+    @patch("sam_trader.services.cli.subprocess.run")
+    def test_preflight_invalid_bundles(
+        self,
+        mock_subproc: Any,
+        mock_window: Any,
+        mock_validate: Any,
+        mock_health: Any,
+        capsys: Any,
+        tmp_path: pathlib.Path,
+    ) -> None:
+        mock_window.return_value = True
+        result = MagicMock()
+        result.all_passed = False
+        result.summary = "0/2 bundles passed validation"
+        mock_validate.return_value = result
+        mock_health.return_value = {
+            "postgres": {"status": "UP"},
+            "redis": {"status": "UP"},
+            "futu_opend": {"status": "UP", "health": "healthy"},
+            "sam_trader": {"status": "UP", "health": "healthy"},
+        }
+        mock_subproc.return_value = MagicMock(returncode=0, stdout="")
+
+        bundles_file = tmp_path / "bundles.yaml"
+        bundles_file.write_text("bundles:\n  - id: bad\n")
+        with patch(
+            "sam_trader.services.cli.DEFAULT_BUNDLES_PATH",
+            bundles_file,
+        ):
+            rc = main(["preflight"])
+
+        captured = capsys.readouterr()
+        assert rc == 2
+        assert "FAIL" in captured.out
+        assert "bundles_valid" in captured.out.lower()
+
+
 class TestJsonGlobalFlag:
     @patch("sam_trader.services.cli._run")
     def test_json_flag_on_status(self, mock_run: Any, capsys: Any) -> None:

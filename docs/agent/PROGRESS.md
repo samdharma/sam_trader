@@ -925,3 +925,18 @@
 - **Files Changed**: `src/sam_trader/services/cli.py`, `src/sam_trader/main.py`, `tests/unit/services/test_cli.py`, `tests/integration/test_deploy_decouple.py`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 46/46 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ready for next Phase 8 ticket or Phase 9.
+
+## Iteration 95
+- **Task**: P8: Add sam preflight — pre-update validation command
+- **Task ID**: sam_trader-9z3.9.14
+- **Status**: COMPLETE
+- **Decisions**: 
+  1. Added `sam preflight` CLI command with `--skip-window` flag and `--json` support (via existing global flag).
+  2. Extracted `_run_health_checks()` helper from the existing `health` command so preflight can reuse the same deep-check logic without side-effects.
+  3. Five checks implemented: deploy window (`is_in_window`), bundle validity (`validate_bundles` with `backtest_gate=False` for speed), services healthy (`_run_health_checks`), pending git changes (`git status --short` — informational only, no exit-code impact), pending bundle changes (SHA-256 hash of `bundles.yaml` compared against `sam:bundles:snapshot_hash` in Redis).
+  4. Exit-code semantics: 0 = all clear, 1 = warnings (bundle hash mismatch or no baseline), 2 = blocking issues (window inactive, bundles invalid, services unhealthy). Git status is purely informational and never affects the exit code.
+  5. Modified `main()` to propagate integer return values from commands (required because `cli.main(standalone_mode=False)` swallows `ctx.exit()`). Added `# type: ignore[return-value]` on the preflight return since Click decorators expect `None`.
+  6. Three unit tests: `test_preflight_all_clear` (exit 0, all checks PASS), `test_preflight_outside_window` (exit 2, deploy_window FAIL), `test_preflight_invalid_bundles` (exit 2, bundles_valid FAIL). All mocks are at the function level for deterministic, fast tests.
+- **Files Changed**: `src/sam_trader/services/cli.py`, `tests/unit/services/test_cli.py`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 35/35 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for next Phase 8 ticket or Phase 9.
