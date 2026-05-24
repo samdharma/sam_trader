@@ -1,7 +1,7 @@
 # Build Phase 10 — Safety & Dashboard
 
-> **Status:** Not Started  
-> **Goal:** Kill switch, circuit breakers, FastAPI backend, dashboard UI.  
+> **Status:** Not Started (simplified 2026-05-24 — 3 tickets, no new tables, no FastAPI)  
+> **Goal:** Operator safety controls (kill switch, circuit breakers) + basic read-only dashboard showing existing Phase 6/8 data.  
 > **Prev Phase:** [BUILD_PHASE_9.md](./BUILD_PHASE_9.md) — Pre-Market Pipeline  
 > **Next Phase:** [BUILD_PHASE_11.md](./BUILD_PHASE_11.md) — Deploy Script & E2E Validation
 
@@ -11,155 +11,189 @@
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│                      Safety Layer                             │
+│  sam-services: Safety + Dashboard                             │
 ├──────────────────────────────────────────────────────────────┤
-│  Kill Switch                                                  │
-│    └── Immediate: cancel-all + stop trading                  │
-│  Circuit Breakers                                             │
-│    └── Daily loss limit                                       │
-│    └── Margin limit                                           │
-│    └── Connection loss timeout                                │
-│  Emergency Halt                                               │
-│    └── Operator-triggered via API or CLI                     │
-├──────────────────────────────────────────────────────────────┤
-│                      Dashboard                                │
-├──────────────────────────────────────────────────────────────┤
-│  FastAPI Backend                                              │
-│    ├── GET /health                                            │
-│    ├── GET /api/positions                                     │
-│    ├── GET /api/fills                                         │
-│    ├── GET /api/scans/latest                                  │
-│    └── GET /api/alerts                                        │
-├──────────────────────────────────────────────────────────────┤
-│  Static HTML Frontend                                         │
-│    ├── Portfolio table (auto-refresh)                        │
-│    ├── Recent fills table                                     │
-│    ├── System health indicators                               │
-│    ├── Pipeline results                                       │
-│    └── Alert feed                                             │
+│                                                               │
+│  ┌─────────────────────────────────────────────────────────┐ │
+│  │ Safety Controls (11.6)                                    │ │
+│  │                                                           │ │
+│  │  CLI: sam kill / sam halt / sam resume                   │ │
+│  │    └── Sets LiveRiskEngine trading_state (Phase 8)       │ │
+│  │    └── Publishes to Redis sam:kill_switch                │ │
+│  │                                                           │ │
+│  │  Circuit Breakers (automated):                            │ │
+│  │    ├── DAILY_PNL → reads sam:pnl:* Redis keys            │ │
+│  │    │   (RealizedPnLTrackerActor, Phase 6, already built) │ │
+│  │    ├── REJECTION_STREAK → listens StrategyHaltRequest    │ │
+│  │    │   (RejectionMonitorActor, Phase 6, already built)   │ │
+│  │    └── CONNECTIVITY_LOSS → polls HealthMonitorActor      │ │
+│  │        (Phase 6, already built)                           │ │
+│  └─────────────────────────────────────────────────────────┘ │
+│                                                               │
+│  ┌─────────────────────────────────────────────────────────┐ │
+│  │ Basic Dashboard (11.7)                                    │ │
+│  │                                                           │ │
+│  │  Single dashboard.html on port 8080                       │ │
+│  │  Auto-refresh 30s (meta tag)                              │ │
+│  │                                                           │ │
+│  │  Sections:                                                │ │
+│  │  ┌─ System Health ─────────────────────────────────────┐ │ │
+│  │  │ PG ● UP  Redis ● UP  Futu ● UP  Trader ● UP        │ │ │
+│  │  └─────────────────────────────────────────────────────┘ │ │
+│  │  ┌─ Today's Fills (last 20) ───────────────────────────┐ │ │
+│  │  │ Time       Symbol Side Qty  Price   Venue Slippage  │ │ │
+│  │  │ 09:35:12   TSLA   BUY  100  245.30  FUTU  +0.02    │ │ │
+│  │  │ 09:32:05   NVDA   SELL  50  178.15  IB    -0.01   │ │ │
+│  │  └─────────────────────────────────────────────────────┘ │ │
+│  │  ┌─ Current Positions ─────────────────────────────────┐ │ │
+│  │  │ Symbol Venue Qty   Avg Px   Unreal P&L  Strategy    │ │ │
+│  │  │ TSLA   FUTU  100   245.30   +125.00     tsla-orb    │ │ │
+│  │  └─────────────────────────────────────────────────────┘ │ │
+│  │  ┌─ P&L Summary ───────────────────────────────────────┐ │ │
+│  │  │ tsla-orb-15m-futu:  +$342.50                        │ │ │
+│  │  │ nvda-mom-5m-ib:     -$87.30                         │ │ │
+│  │  │ TOTAL REALIZED:     +$255.20                        │ │ │
+│  │  └─────────────────────────────────────────────────────┘ │ │
+│  └─────────────────────────────────────────────────────────┘ │
 └──────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 2. Pre-Discovered Reference — FastAPI
+## 2. What Phase 6 + 8 Already Built (Dashboard Data Sources)
+
+| Data | Writer | Table/Key | Freshness |
+|------|--------|-----------|-----------|
+| Fills | TradeJournalActor (Phase 6) | `fills` PG table | Real-time |
+| Orders | TradeJournalActor (Phase 6) | `orders` PG table | Real-time |
+| Positions | PositionSnapshotActor (Phase 8) | `positions` PG table | Every 60s |
+| Realized P&L | RealizedPnLTrackerActor (Phase 6) | `sam:pnl:{strategy}:{date}` Redis | Real-time |
+| Rejections | RejectionMonitorActor (Phase 6) | MessageBus events | Real-time |
+| Pre-trade risk | LiveRiskEngine (Phase 8) | trading_state | Active |
+| System health | `sam health` CLI (Phase 8) | docker inspect | On-demand |
+
+**The dashboard reads existing data — zero new tables, zero new writers.**
+
+---
+
+## 3. Dashboard Backend (No FastAPI)
+
+The dashboard uses a simple Python HTTP server — **no new dependencies**:
 
 ```python
-from fastapi import FastAPI
-from fastapi.responses import HTMLResponse
+# src/sam_trader/services/dashboard.py
+import json
+from http.server import HTTPServer, BaseHTTPRequestHandler
 import asyncpg
 
-app = FastAPI()
+class DashboardHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        if self.path == "/health":
+            self._json_response(get_health())
+        elif self.path == "/api/dashboard":
+            self._json_response(get_dashboard_data())
+        else:
+            self._serve_html("dashboard.html")
 
-@app.get("/health")
-async def health():
+def get_dashboard_data():
+    """Query PG fills + positions, Redis P&L, docker health."""
     return {
-        "status": "healthy",
-        "services": {
-            "sam-trader": await check_trader(),
-            "sam-postgres": await check_postgres(),
-            "sam-redis": await check_redis(),
-        }
+        "health": check_all_services(),
+        "fills": query_fills(limit=20),
+        "positions": query_positions(),
+        "pnl": query_pnl_from_redis(),
     }
-
-@app.get("/api/fills")
-async def get_fills(limit: int = 50):
-    pool = await get_pg_pool()
-    rows = await pool.fetch("SELECT * FROM fills ORDER BY ts_event DESC LIMIT $1", limit)
-    return [dict(r) for r in rows]
 ```
 
 ---
 
-## 3. Pre-Discovered Reference — Kill Switch
+## 4. Safety Controls (Glue Over Existing Infrastructure)
+
+### 4.1 What Already Exists
+
+| Component | Phase | What It Does |
+|-----------|-------|-------------|
+| `LiveRiskEngine` | 8 | Pre-trade rate limits, notional caps, `trading_state` (HALTED/RUNNING) |
+| `RejectionMonitorActor` | 6 | Tracks rejection streaks, emits `StrategyHaltRequest` |
+| `RealizedPnLTrackerActor` | 6 | Tracks realized P&L per strategy in Redis |
+| `HealthMonitorActor` | 6 | Periodic heartbeat with venue connection status |
+| `sam restart` CLI | 8 | Graceful restart via Redis signal |
+
+### 4.2 What Phase 10 Adds
 
 ```python
-class SafetyController:
-    def __init__(self, trader: Trader):
-        self.trader = trader
-        self._halted = False
+# Safety CLI commands (thin wrappers)
+def cmd_kill():
+    """Cancel all orders, halt trading, publish to Redis."""
+    redis.publish("sam:kill_switch", "HALTED")
+    # LiveRiskEngine reads trading_state from Redis
 
-    def kill_switch(self) -> None:
-        self._halted = True
-        self.trader.cancel_all_orders()
-        self.trader.close_all_positions()
-        self.trader.stop()
+def cmd_halt():
+    """Position-close-only mode. No new entries."""
+    redis.publish("sam:kill_switch", "CLOSE_ONLY")
 
-    def check_circuit_breakers(self) -> bool:
-        daily_pnl = self._calculate_daily_pnl()
-        if daily_pnl < -self.max_daily_loss:
-            self.kill_switch()
-            return False
-        return True
+def cmd_resume():
+    """Clear halt, re-enable trading."""
+    redis.publish("sam:kill_switch", "RUNNING")
+
+# Circuit breaker monitor (runs as periodic task in sam-services)
+async def monitor_circuit_breakers():
+    while True:
+        await check_daily_pnl_breaker()      # reads sam:pnl:* Redis
+        await check_rejection_streak()        # reads MessageBus events
+        await check_connectivity()            # reads HealthMonitorActor heartbeat
+        await asyncio.sleep(10)
+```
+
+**Zero new risk math.** All computation is in existing Nautilus components and actors. Safety controls are just thresholds + triggers.
+
+---
+
+## 5. Ticket Breakdown
+
+| # | Ticket ID | Title | Type | Dependencies | Ralph Order |
+|---|-----------|-------|------|-------------|-------------|
+| 1 | `9z3.11.6` | Safety controls — kill switch, circuit breakers, emergency halt | task | Phase 9 EXIT (10.27) | **1st** |
+| 2 | `9z3.11.7` | Basic dashboard — single HTML page with fills, positions, P&L, health | task | Phase 9 EXIT (10.27) | **2nd** (parallel with 6) |
+| 3 | `9z3.11.8` | [EXIT] Verify safety controls + dashboard | exit | 11.6, 11.7 | **3rd** |
+
+### 5.1 Dependency Graph
+
+```
+Phase 9 EXIT (10.27)
+       │
+       ├──► 11.6 (Safety Controls) ──┐
+       │                              ├──► 11.8 (EXIT) ──► Phase 11
+       └──► 11.7 (Dashboard) ────────┘
 ```
 
 ---
 
-## 4. Ticket Breakdown
+## 6. What Was Removed (vs Original Phase 10)
 
-| Ticket | Title | Scope | Assessment |
-|--------|-------|-------|------------|
-| `sam_trader-9z3.11.1` | Safety controls | Kill switch + circuit breakers + emergency halt + **Phase 6 actor integration** | ✅ Medium |
-| `sam_trader-9z3.11.2` | Dashboard database | Portfolio snapshots, scan history tables | ✅ Small |
-| `sam_trader-9z3.11.3` | FastAPI backend | Health, positions, fills, scans, alerts endpoints | ✅ Medium |
-| `sam_trader-9z3.11.4` | Static HTML dashboard | Single-page auto-refreshing UI | ✅ Medium |
-| `sam_trader-9z3.11.5` | [EXIT] Verify safety + dashboard | Integration test: kill switch, circuit breaker, dashboard data | ✅ Medium |
-
-**No decomposition needed for Phase 10.** All tickets are well-scoped.
-
----
-
-## 5. Dashboard HTML Template Pattern
-
-```html
-<!DOCTYPE html>
-<html>
-<head>
-  <title>SAM Trader Dashboard</title>
-  <meta http-equiv="refresh" content="30">
-  <style>
-    .healthy { color: green; }
-    .unhealthy { color: red; }
-  </style>
-</head>
-<body>
-  <h1>SAM Trader Dashboard</h1>
-  <div id="health"></div>
-  <div id="positions"></div>
-  <div id="fills"></div>
-  <script>
-    async function load() {
-      const health = await fetch('/health').then(r => r.json());
-      document.getElementById('health').innerHTML = JSON.stringify(health, null, 2);
-    }
-    load();
-    setInterval(load, 30000);
-  </script>
-</body>
-</html>
-```
+| Removed | Why |
+|---------|-----|
+| Dashboard DB ticket (old 11.2) | No new tables needed — reads existing PG tables |
+| FastAPI backend (old 11.3) | Overkill — simple http.server handles 2 endpoints + static HTML |
+| `/api/scans` endpoint | No scans exist (Phase 9 not built) |
+| `/api/alerts` endpoint | No alert system exists |
+| Pipeline results section | Pipeline doesn't exist yet |
+| Alert feed section | No alerts |
+| `portfolio_snapshots` table | PositionSnapshotActor already writes `positions` |
+| Complex SafetyController class | LiveRiskEngine + actors already handle risk — just needs triggers |
 
 ---
 
-## 5. Integration with Phase 6 Actors (Gap Remediation)
+## 7. Future Enhancement Path
 
-> **v2 Post-Mortem (21-May):** 189 rejections with no self-halt; max_daily_loss triggered 9× with ambiguous unrealized P&L behavior.
-
-**Circuit breaker trigger sources expanded from 3 to 5:**
-
-1. `DAILY_PNL` (existing)
-2. `MARGIN_LIMIT` (existing)
-3. `CONNECTIVITY_LOSS` (existing)
-4. **`REJECTION_STREAK`** (new) — triggered by `StrategyHaltRequest` from RejectionMonitorActor (`sam_trader-9z3.7.7`)
-5. **`REALIZED_LOSS_LIMIT`** (new) — uses `RealizedPnLTrackerActor.get_realized_pnl()` (`sam_trader-9z3.7.8`)
-
-**Key design points:**
-- `REALIZED_LOSS_LIMIT` uses **purely realized** P&L, eliminating the v2 ambiguity where unrealized gains offset daily-loss calculations.
-- `REJECTION_STREAK` auto-resets when RejectionMonitorActor cooldown expires.
-- Defensive checks: if Phase 6 actors are not running, skip those trigger sources (no hard dependency).
-
-**Beads ticket:** `sam_trader-9z3.11.1`
+After core mechanics are proven and refined:
+- Upgrade to FastAPI for richer API
+- Add scan results section (Phase 9 data)
+- Add alert/notification system
+- Add order-management capability
+- Add pipeline status
+- Real-time WebSocket updates instead of 30s refresh
 
 ---
 
-*Last updated: 2026-05-22*
+*Last updated: 2026-05-24 — Simplified from 5 to 3 tickets. Zero new tables, zero new frameworks.*

@@ -187,13 +187,13 @@ Phase 9 ────────────────────────
                                                                                                                                                                                                           ═══ PHASE 9 GATE ═══
 
 Phase 10 ─────────────────────────────────────────────────────────────────
-  sam_trader-9z3.11.1 ──┬─────────────────────────────────────────────────┐
-  sam_trader-9z3.11.2 ──┤                                                  │
+  sam_trader-9z3.11.6 ──┬─────────────────────────────────────────────────┐
+  sam_trader-9z3.11.7 ──┘                                                  │
                          ▼                                                  │
-                  sam_trader-9z3.11.3 ──► sam_trader-9z3.11.4 ──► sam_trader-9z3.11.5
-                                                                                  │
-                                                                                  ▼
-                                                                        ═══ PHASE 10 GATE ═══
+                  sam_trader-9z3.11.8
+                         │
+                         ▼
+               ═══ PHASE 10 GATE ═══
 
 Phase 11 ─────────────────────────────────────────────────────────────────
   sam_trader-9z3.12.1 ──► sam_trader-9z3.12.2 ──► sam_trader-9z3.12.3 ──► sam_trader-9z3.12.4
@@ -414,17 +414,23 @@ Phase 11 ───────────────────────�
 
 ### Phase 10: Safety & Dashboard
 
-> **Goal:** Kill switch, circuit breakers, FastAPI backend, dashboard UI.
-> **Circuit breaker expanded to 5 triggers** (was 3): adds REJECTION_STREAK (via RejectionMonitorActor) and REALIZED_LOSS_LIMIT (via RealizedPnLTrackerActor).
-> **Build order:** 11.1 (safety) and 11.2 (DB) are independent roots. Both block API. API → dashboard → EXIT. No cross-phase dependencies.
+> **Goal:** Operator safety controls (kill switch, circuit breakers) + basic read-only dashboard showing existing Phase 6/8 data. No new tables, no FastAPI.
+> **Status:** Not Started (simplified 2026-05-24 — 3 tickets from 5)
+> **Build ref:** [BUILD_PHASE_10.md](../reference/BUILD_PHASE_10.md)
+> **Build order:** Safety (11.6) and Dashboard (11.7) are parallel roots after Phase 9 EXIT. EXIT (11.8) depends on both.
 
-| # | Ticket ID | Title | Type | AC Highlights |
-|---|-----------|-------|------|---------------|
-| 10.1 | `sam_trader-9z3.11.1` | Safety controls: kill switch, circuit breakers, emergency halt | task | 5 circuit breaker triggers: DAILY_PNL, MARGIN_LIMIT, CONNECTIVITY_LOSS, REJECTION_STREAK (from 9z3.7.7), REALIZED_LOSS_LIMIT (from 9z3.7.8). Kill switch cancels all orders + stops trading. CLI: `sam kill`, `sam halt`. No deps. Blocks API. |
-| 10.2 | `sam_trader-9z3.11.2` | Dashboard database: portfolio snapshots, scan history, alert log | task | New PG tables: `portfolio_snapshots`, `pipeline_runs`, `alert_log`. Populated by sam-services cron. No deps. Blocks API. |
-| 10.3 | `sam_trader-9z3.11.3` | FastAPI backend: health, positions, fills, scan results endpoints | task | `GET /health`, `/api/positions`, `/api/fills`, `/api/scans/latest`, `/api/alerts`. CORS for localhost. Depends on safety (`9z3.11.1`) + DB (`9z3.11.2`). Blocks dashboard. |
-| 10.4 | `sam_trader-9z3.11.4` | Static HTML dashboard: portfolio, fills, health, scans | task | Single-page auto-refreshing HTML. Portfolio table, fills table, health indicators, alert feed. No external CDN. Depends on API (`9z3.11.3`). Blocks EXIT. |
-| 10.5 | `sam_trader-9z3.11.5` | [EXIT] Verify: dashboard shows live data, safety controls work | exit | Integration: dashboard loads, positions populated, fills populated. Kill switch → all orders cancelled. Circuit breaker trips at threshold. Depends on dashboard (`9z3.11.4`). Blocks P11 deploy (`9z3.12.1`). |
+| # | Ticket ID | Title | Type | Ralph Order |
+|---|-----------|-------|------|-------------|
+| 1 | `sam_trader-9z3.11.6` | Safety controls — kill switch, circuit breakers, emergency halt | task | **1st** (parallel with 7) |
+| 2 | `sam_trader-9z3.11.7` | Basic dashboard — single HTML page: fills, positions, P&L, health | task | **2nd** (parallel with 6) |
+| 3 | `sam_trader-9z3.11.8` | [EXIT] Verify safety controls + dashboard | exit | **3rd** (depends on 6, 7) |
+
+**Simplification notes:**
+- Removed: FastAPI backend (overkill — uses simple http.server)
+- Removed: Dashboard database ticket (reads existing fills/orders/positions tables)
+- Removed: Pipeline results + alert feed sections (Phase 9 not yet built)
+- Circuit breakers consume existing actor data: RealizedPnLTrackerActor (Phase 6), RejectionMonitorActor (Phase 6), HealthMonitorActor (Phase 6)
+- Kill switch uses LiveRiskEngine trading_state (already wired, Phase 8)
 
 ---
 
@@ -477,7 +483,7 @@ Phase 0 ───► Phase 1 ───► Phase 2 ───► Phase 3 ───
 | Phase 7 | 6 | Strategies + Bundles |
 | Phase 8 | 11 | Services Container (revised: +5 Nautilus-native integrations) |
 | Phase 9 | 12 | Pre-Market Pipeline (renumbered: sequential 10.16–10.27 matching build order) |
-| Phase 10 | 5 | Safety + Dashboard |
+| Phase 10 | 3 | Safety + Dashboard (simplified: no FastAPI, no new tables) |
 | Phase 11 | 4 | Deploy + E2E |
 | **Total** | **93** | (revised Phase 8: 6→11 tickets) |
 
