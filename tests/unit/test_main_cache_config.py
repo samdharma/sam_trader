@@ -118,6 +118,9 @@ class TestMainGracefulShutdown:
         """main() calls node.dispose() after node.run() returns normally."""
         mock_node = MagicMock()
         monkeypatch.setattr(main_module, "build_trading_node", lambda: mock_node)
+        monkeypatch.setattr(
+            main_module, "RestartSubscriber", lambda node, cfg: MagicMock()
+        )
 
         main_module.main()
 
@@ -133,6 +136,9 @@ class TestMainGracefulShutdown:
         mock_node = MagicMock()
         mock_node.run.side_effect = RuntimeError("boom")
         monkeypatch.setattr(main_module, "build_trading_node", lambda: mock_node)
+        monkeypatch.setattr(
+            main_module, "RestartSubscriber", lambda node, cfg: MagicMock()
+        )
 
         with pytest.raises(RuntimeError, match="boom"):
             main_module.main()

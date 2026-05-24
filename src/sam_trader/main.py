@@ -22,6 +22,7 @@ from sam_trader.bundle_loader import (
     load_bundles,
 )
 from sam_trader.config import SamTraderConfig
+from sam_trader.restart_subscriber import RestartSubscriber
 
 logger = logging.getLogger(__name__)
 
@@ -276,7 +277,9 @@ def build_trading_node() -> TradingNode:
                 },
             )
         )
-        logger.info("TradeJournalActor registered (%d instruments)", len(instrument_ids))
+        logger.info(
+            "TradeJournalActor registered (%d instruments)", len(instrument_ids)
+        )
 
     if cfg.actor_health_enabled:
         actors.append(
@@ -292,30 +295,38 @@ def build_trading_node() -> TradingNode:
         logger.info("HealthMonitorActor registered")
 
     if cfg.actor_bar_resub_enabled:
+        bar_resub_actor = "sam_trader.actors.bar_resubscription:BarResubscriptionActor"
+        bar_resub_config = (
+            "sam_trader.actors.bar_resubscription:BarResubscriptionActorConfig"
+        )
         actors.append(
             ImportableActorConfig(
-                actor_path="sam_trader.actors.bar_resubscription:BarResubscriptionActor",
-                config_path="sam_trader.actors.bar_resubscription:BarResubscriptionActorConfig",
+                actor_path=bar_resub_actor,
+                config_path=bar_resub_config,
                 config={},
             )
         )
         logger.info("BarResubscriptionActor registered")
 
     if cfg.actor_rejection_monitor_enabled:
+        rej_actor = "sam_trader.actors.rejection_monitor:RejectionMonitorActor"
+        rej_config = "sam_trader.actors.rejection_monitor:RejectionMonitorActorConfig"
         actors.append(
             ImportableActorConfig(
-                actor_path="sam_trader.actors.rejection_monitor:RejectionMonitorActor",
-                config_path="sam_trader.actors.rejection_monitor:RejectionMonitorActorConfig",
+                actor_path=rej_actor,
+                config_path=rej_config,
                 config={},
             )
         )
         logger.info("RejectionMonitorActor registered")
 
     if cfg.actor_realized_pnl_enabled:
+        pnl_actor = "sam_trader.actors.realized_pnl:RealizedPnLTrackerActor"
+        pnl_config = "sam_trader.actors.realized_pnl:RealizedPnLTrackerActorConfig"
         actors.append(
             ImportableActorConfig(
-                actor_path="sam_trader.actors.realized_pnl:RealizedPnLTrackerActor",
-                config_path="sam_trader.actors.realized_pnl:RealizedPnLTrackerActorConfig",
+                actor_path=pnl_actor,
+                config_path=pnl_config,
                 config={
                     "redis_host": cfg.redis_host,
                     "redis_port": cfg.redis_port,
@@ -324,7 +335,9 @@ def build_trading_node() -> TradingNode:
                 },
             )
         )
-        logger.info("RealizedPnLTrackerActor registered (%d instruments)", len(instrument_ids))
+        logger.info(
+            "RealizedPnLTrackerActor registered (%d instruments)", len(instrument_ids)
+        )
 
     # --- Phase 8 actors ---
 
@@ -379,9 +392,15 @@ def main() -> None:
     """Main entry point for SAM Trader."""
     node = build_trading_node()
     node.build()
+
+    cfg = SamTraderConfig.from_env()
+    subscriber = RestartSubscriber(node, cfg)
+    subscriber.start()
+
     try:
         node.run()
     finally:
+        subscriber.stop()
         node.dispose()
 
 

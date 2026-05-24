@@ -44,6 +44,7 @@ class SamTraderConfig:
     # State persistence
     state_save_enabled: bool
     state_load_enabled: bool
+    state_save_handshake_timeout: int
 
     # Bundles
     bundles_path: str
@@ -128,6 +129,9 @@ class SamTraderConfig:
             in ("1", "true", "yes"),
             state_load_enabled=os.environ.get("STATE_LOAD_ENABLED", "").lower()
             in ("1", "true", "yes"),
+            state_save_handshake_timeout=int(
+                os.environ.get("STATE_SAVE_HANDSHAKE_TIMEOUT", "30")
+            ),
             bundles_path=os.environ.get("BUNDLES_PATH", "config/bundles.yaml"),
             postgres_host=os.environ.get("POSTGRES_HOST", "sam-postgres"),
             postgres_port=int(os.environ.get("POSTGRES_PORT", "5432")),

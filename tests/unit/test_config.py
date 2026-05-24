@@ -37,6 +37,7 @@ class TestSamTraderConfig:
             "ACTOR_POSITION_SNAPSHOT_ENABLED",
             "STATE_SAVE_ENABLED",
             "STATE_LOAD_ENABLED",
+            "STATE_SAVE_HANDSHAKE_TIMEOUT",
             "BUNDLES_PATH",
             "POSTGRES_HOST",
             "POSTGRES_PORT",
@@ -78,6 +79,7 @@ class TestSamTraderConfig:
         assert cfg.actor_position_snapshot_enabled is False
         assert cfg.state_save_enabled is False
         assert cfg.state_load_enabled is False
+        assert cfg.state_save_handshake_timeout == 30
         assert cfg.bundles_path == "config/bundles.yaml"
         assert cfg.postgres_host == "sam-postgres"
         assert cfg.postgres_port == 5432
@@ -117,6 +119,7 @@ class TestSamTraderConfig:
         monkeypatch.setenv("ACTOR_POSITION_SNAPSHOT_ENABLED", "true")
         monkeypatch.setenv("STATE_SAVE_ENABLED", "true")
         monkeypatch.setenv("STATE_LOAD_ENABLED", "true")
+        monkeypatch.setenv("STATE_SAVE_HANDSHAKE_TIMEOUT", "60")
         monkeypatch.setenv("BUNDLES_PATH", "custom/bundles.yaml")
         monkeypatch.setenv("POSTGRES_HOST", "custom-pg")
         monkeypatch.setenv("POSTGRES_PORT", "5433")
@@ -156,6 +159,7 @@ class TestSamTraderConfig:
         assert cfg.actor_position_snapshot_enabled is True
         assert cfg.state_save_enabled is True
         assert cfg.state_load_enabled is True
+        assert cfg.state_save_handshake_timeout == 60
         assert cfg.bundles_path == "custom/bundles.yaml"
         assert cfg.postgres_host == "custom-pg"
         assert cfg.postgres_port == 5433
@@ -198,6 +202,7 @@ class TestSamTraderConfig:
             actor_position_snapshot_enabled=False,
             state_save_enabled=False,
             state_load_enabled=False,
+            state_save_handshake_timeout=30,
             bundles_path="config/bundles.yaml",
             postgres_host="sam-postgres",
             postgres_port=5432,
@@ -248,6 +253,7 @@ class TestSamTraderConfig:
             actor_position_snapshot_enabled=False,
             state_save_enabled=False,
             state_load_enabled=False,
+            state_save_handshake_timeout=30,
             bundles_path="config/bundles.yaml",
             postgres_host="sam-postgres",
             postgres_port=5432,
