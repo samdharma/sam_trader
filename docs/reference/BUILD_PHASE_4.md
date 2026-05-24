@@ -1,6 +1,6 @@
 # Build Phase 4 — Futu Instrument Provider & TradingNode Integration
 
-> **Status:** Not Started  
+> **Status:** ✅ Complete (all 6 tickets closed incl EXIT 9z3.5.6)  
 > **Goal:** `FutuInstrumentProvider` resolves symbols. Factories wired into TradingNode. Futu bundles loadable. Full Futu-only TradingNode operational.  
 > **Prev Phase:** [BUILD_PHASE_3.md](./BUILD_PHASE_3.md) — Futu Execution Adapter  
 > **Next Phase:** [BUILD_PHASE_5.md](./BUILD_PHASE_5.md) — IBKR Adapter Re-integration
@@ -231,4 +231,19 @@ from sam_trader.adapters.futu.config import FutuDataClientConfig, FutuExecClient
 
 ---
 
-*Last updated: 2026-05-21*
+---
+
+## 7. Ticket Summary
+
+| Ticket | Title | Status |
+|--------|-------|--------|
+| `sam_trader-9z3.5.1` | Futu parsing module: instruments | ✅ Closed |
+| `sam_trader-9z3.5.2` | FutuInstrumentProvider | ✅ Closed |
+| `sam_trader-9z3.5.3` | Futu factories | ✅ Closed |
+| `sam_trader-9z3.5.4` | Wire Futu factories into main.py | ✅ Closed |
+| `sam_trader-9z3.5.5` | Bundle support for Futu venue | ✅ Closed |
+| `sam_trader-9z3.5.6` | [EXIT] Futu-only TradingNode | ✅ Closed |
+
+---
+
+*Last updated: 2026-05-24 — Status updated to Complete during gap audit; ticket summary added*

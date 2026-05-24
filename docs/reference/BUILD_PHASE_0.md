@@ -1,6 +1,6 @@
 # Build Phase 0 — Foundation & Docker Stack Hardening
 
-> **Status:** In Progress  
+> **Status:** ✅ Complete (all 20 tickets closed, incl 2 EXIT gates)  
 > **Scope:** Original Phase 0 (skeleton) + Phase 0-H (hardening)
 
 ---

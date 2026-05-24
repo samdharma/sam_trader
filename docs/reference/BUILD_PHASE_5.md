@@ -1,6 +1,6 @@
 # Build Phase 5 — IBKR Adapter Re-integration
 
-> **Status:** Not Started  
+> **Status:** ✅ Complete (all 14 tickets closed incl EXIT 9z3.6.4)  
 > **Goal:** Port IBKR adapter from v2. Enhanced for multi-venue coexistence. Both Futu + IB work simultaneously in same TradingNode.  
 > **Prev Phase:** [BUILD_PHASE_4.md](./BUILD_PHASE_4.md) — Futu Instrument Provider & TradingNode Integration  
 > **Next Phase:** [BUILD_PHASE_6.md](./BUILD_PHASE_6.md) — Actors & State Management
@@ -180,4 +180,27 @@ from nautilus_trader.adapters.interactive_brokers.providers import InteractiveBr
 
 ---
 
-*Last updated: 2026-05-21*
+---
+
+## 8. Ticket Summary
+
+| Ticket | Title | Status |
+|--------|-------|--------|
+| `sam_trader-9z3.6.1` | IBKR config wiring in main.py | ✅ Closed |
+| `sam_trader-9z3.6.8` | Pre-flight IB account trading permissions check | ✅ Closed |
+| `sam_trader-9z3.6.2` | IB Gateway Docker service (profile: ib) | ✅ Closed |
+| `sam_trader-9z3.6.5` | IBKR factory registration in main.py | ✅ Closed |
+| `sam_trader-9z3.6.6` | IBKR instrument provider wiring | ✅ Closed |
+| `sam_trader-9z3.6.3` | Enhance IBKR adapter for v3 patterns | ✅ Closed |
+| `sam_trader-9z3.6.7` | [BUG] IBKR post_only incompatibility | ✅ Closed |
+| `sam_trader-9z3.6.4` | [EXIT] Dual-venue TradingNode (Futu + IB) | ✅ Closed |
+| `sam_trader-9z3.6.9` | Remove dead permission checking infrastructure | ✅ Closed |
+| `sam_trader-9z3.6.10` | Fix .env.example WAIT_FOR broker defaults mismatch | ✅ Closed |
+| `sam_trader-9z3.6.11` | Fix silent fallback on invalid IB_MARKET_DATA_TYPE | ✅ Closed |
+| `sam_trader-9z3.6.12` | Remove dead ib_trading_mode field from SamTraderConfig | ✅ Closed |
+| `sam_trader-9z3.6.13` | Integration test for standard IB execution path post-cleanup | ✅ Closed |
+| `sam_trader-9z3.6.14` | Remove non-standard custom IB exec client and factory | ✅ Closed |
+
+---
+
+*Last updated: 2026-05-24 — Status updated to Complete during gap audit; ticket summary added*

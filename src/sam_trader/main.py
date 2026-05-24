@@ -194,8 +194,14 @@ def build_trading_node() -> TradingNode:
             )
 
     strategies: list = []
+    instrument_ids: list[str] = []
     try:
         all_bundles = load_bundles(cfg.bundles_path)
+        # Extract instrument IDs from bundles for actors that need them
+        for bundle in all_bundles:
+            ins_id = bundle.config.get("instrument_id")
+            if ins_id and isinstance(ins_id, str) and ins_id not in instrument_ids:
+                instrument_ids.append(ins_id)
         # Filter bundles by enabled venue to prevent cross-venue contamination.
         # A bundle for a disabled venue would try to subscribe through a
         # non-existent client and raise runtime errors.
@@ -252,6 +258,76 @@ def build_trading_node() -> TradingNode:
     )
 
     actors: list[ImportableActorConfig] = []
+
+    # --- Phase 6 actors ---
+
+    if cfg.actor_journal_enabled:
+        actors.append(
+            ImportableActorConfig(
+                actor_path="sam_trader.actors.trade_journal:TradeJournalActor",
+                config_path="sam_trader.actors.trade_journal:TradeJournalActorConfig",
+                config={
+                    "postgres_host": cfg.postgres_host,
+                    "postgres_port": cfg.postgres_port,
+                    "postgres_db": cfg.postgres_db,
+                    "postgres_user": cfg.postgres_user,
+                    "postgres_password": cfg.postgres_password,
+                    "instrument_ids": instrument_ids,
+                },
+            )
+        )
+        logger.info("TradeJournalActor registered (%d instruments)", len(instrument_ids))
+
+    if cfg.actor_health_enabled:
+        actors.append(
+            ImportableActorConfig(
+                actor_path="sam_trader.actors.health_monitor:HealthMonitorActor",
+                config_path="sam_trader.actors.health_monitor:HealthMonitorActorConfig",
+                config={
+                    "futu_enabled": cfg.futu_enabled,
+                    "ib_enabled": cfg.ib_enabled,
+                },
+            )
+        )
+        logger.info("HealthMonitorActor registered")
+
+    if cfg.actor_bar_resub_enabled:
+        actors.append(
+            ImportableActorConfig(
+                actor_path="sam_trader.actors.bar_resubscription:BarResubscriptionActor",
+                config_path="sam_trader.actors.bar_resubscription:BarResubscriptionActorConfig",
+                config={},
+            )
+        )
+        logger.info("BarResubscriptionActor registered")
+
+    if cfg.actor_rejection_monitor_enabled:
+        actors.append(
+            ImportableActorConfig(
+                actor_path="sam_trader.actors.rejection_monitor:RejectionMonitorActor",
+                config_path="sam_trader.actors.rejection_monitor:RejectionMonitorActorConfig",
+                config={},
+            )
+        )
+        logger.info("RejectionMonitorActor registered")
+
+    if cfg.actor_realized_pnl_enabled:
+        actors.append(
+            ImportableActorConfig(
+                actor_path="sam_trader.actors.realized_pnl:RealizedPnLTrackerActor",
+                config_path="sam_trader.actors.realized_pnl:RealizedPnLTrackerActorConfig",
+                config={
+                    "redis_host": cfg.redis_host,
+                    "redis_port": cfg.redis_port,
+                    "redis_password": cfg.redis_password,
+                    "instrument_ids": instrument_ids,
+                },
+            )
+        )
+        logger.info("RealizedPnLTrackerActor registered (%d instruments)", len(instrument_ids))
+
+    # --- Phase 8 actors ---
+
     if cfg.actor_position_snapshot_enabled:
         actors.append(
             ImportableActorConfig(

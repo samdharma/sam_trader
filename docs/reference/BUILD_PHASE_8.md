@@ -1,10 +1,11 @@
 # Build Phase 8 — sam-services Container
 
-> **Status:** In Progress  
+> **Status:** ✅ Complete (Phase 8 EXIT validated 2026-05-23)  
 > **Goal:** Operations container with CLI, cron, health checks, backup, quote fetcher, performance analysis, and production safeguards. Decoupled from sam-trader.  
 > **Prev Phase:** [BUILD_PHASE_7.md](./BUILD_PHASE_7.md) — Strategy Library & Bundle System  
 > **Next Phase:** [BUILD_PHASE_9.md](./BUILD_PHASE_9.md) — Pre-Market Pipeline  
-> **Gap Analysis:** [GAP_ANALYSIS_RISK_STRATEGY_JOURNAL_PERF.md](./GAP_ANALYSIS_RISK_STRATEGY_JOURNAL_PERF.md)
+> **Gap Analysis:** [GAP_ANALYSIS_RISK_STRATEGY_JOURNAL_PERF.md](./GAP_ANALYSIS_RISK_STRATEGY_JOURNAL_PERF.md)  
+> **Phase 6 cross-connection:** Phase 8 actor wiring fix also completed Phase 6 EXIT — see [BUILD_PHASE_6.md](./BUILD_PHASE_6.md) §2 for main.py wiring details.
 
 ---
 

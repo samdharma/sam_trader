@@ -1,9 +1,9 @@
-# SAM Trader V3 — Architecture & Build Plan
+# SAM Trader V3 - Architecture & Build Plan
 
-> **Status:** Planning  
-> **Last Updated:** 2026-05-20  
-> **Purpose:** Single source of truth for SAM Trader V3. Written for AI agents and humans.  
-> **Repo:** `github.com/samdharma/sam_trader`  
+> **Status:** Active (Phases 0–8 complete; Phases 9–11 pending)
+> **Last Updated:** 2026-05-24
+> **Purpose:** Single source of truth for SAM Trader V3. Written for AI agents and humans.
+> **Repo:** `github.com/samdharma/sam_trader`
 > **Predecessor:** CSAM Trader V2 (`~/Trading/csam_trader/`)
 
 ---
@@ -11,14 +11,14 @@
 ## 1. Goals
 
 1. **Ground-up rebuild** of the trading platform as **sam_trader v3**, selectively porting proven components from csam_trader v2.
-2. **FUTUBULL as primary broker** — free US real-time market data via Futu OpenD API. IBKR as secondary (re-integrated after Futu is validated).
+2. **FUTUBULL as primary broker** - free US real-time market data via Futu OpenD API. IBKR as secondary (re-integrated after Futu is validated).
 3. **Production-grade autonomous trading** on NautilusTrader (v1.227+). Standard Nautilus components and recommended patterns. No custom implementations unless no standard alternative exists.
-4. **Multi-venue, multi-strategy** — Futu first, IBKR second. Additional brokers added as needed.
-5. **Pluggable strategies via bundle config** — YAML-specified bundles combining strategy type, instrument, venue, parameters, bracket orders, risk/reward criteria. Bundles are the unit of deployment.
-6. **Decoupled operations** — `sam-trader` container runs TradingNode 24/7. `sam-services` container runs pre-market pipeline, dashboard, cron, CLI independently. Restart services without touching trading.
-7. **Graceful restart for hot-loading** — strategies/bundles/configs loaded at node build time. Graceful restart (state save → stop → build → run → state restore) for config changes. Maintenance window: 5am–8am HKT daily.
-8. **Single-script deployable** — portable bash script. First-run wizard, generates config, pulls from GitHub, runs `docker compose up`.
-9. **Self-contained deployment** — sensible defaults for Futu, IBKR, and all services. No Linux host plan required at this stage.
+4. **Multi-venue, multi-strategy** - Futu first, IBKR second. Additional brokers added as needed.
+5. **Pluggable strategies via bundle config** - YAML-specified bundles combining strategy type, instrument, venue, parameters, bracket orders, risk/reward criteria. Bundles are the unit of deployment.
+6. **Decoupled operations** - `sam-trader` container runs TradingNode 24/7. `sam-services` container runs pre-market pipeline, dashboard, cron, CLI independently. Restart services without touching trading.
+7. **Graceful restart for hot-loading** - strategies/bundles/configs loaded at node build time. Graceful restart (state save → stop → build → run → state restore) for config changes. Maintenance window: 5am-8am HKT daily.
+8. **Single-script deployable** - portable bash script. First-run wizard, generates config, pulls from GitHub, runs `docker compose up`.
+9. **Self-contained deployment** - sensible defaults for Futu, IBKR, and all services. No Linux host plan required at this stage.
 
 ---
 
@@ -36,8 +36,8 @@
 | D8 | **Redis for Nautilus cache state** | Required for `load_state`/`save_state` (actor/strategy state persistence). Minimal footprint (~30MB Alpine). |
 | D9 | **YAML bundle registry** | Single config file defines all active strategies. Multi-venue from day 1 (`venue: FUTU` and `venue: IB`). |
 | D10 | **ImportableStrategyConfig pattern** | Nautilus-recommended. Strategy classes referenced by dotted path. No hardcoded strategies in bootstrap. |
-| D11 | **Graceful restart for config changes** | `save_state()` → `stop()` → `build(new_config)` → `run()` → state restored. ~5–10s downtime. |
-| D12 | **Maintenance window 5am–8am HKT** | All restarts, updates, strategy changes happen only in this window. System is read-only otherwise. |
+| D11 | **Graceful restart for config changes** | `save_state()` → `stop()` → `build(new_config)` → `run()` → state restored. ~5-10s downtime. |
+| D12 | **Maintenance window 5am-8am HKT** | All restarts, updates, strategy changes happen only in this window. System is read-only otherwise. |
 | D13 | **Futu subscription quota manager** | Futu-specific constraint. Tracks active subscriptions per data type, releases unused subs, warns at limits. Not needed for IBKR. |
 
 ---
@@ -46,14 +46,14 @@
 
 | Asset | Source (v2) | Destination (v3) | Changes |
 |-------|------------|-------------------|---------|
-| `connection.py` | `adapters/futu/connection.py` | `adapters/futu/connection.py` | Minimal — update module references to `sam_trader` |
-| `config.py` | `config.py` | `config.py` | Major — add Futu fields, multi-broker support, `SamTraderConfig` |
-| `bundle_loader.py` | `bundle_loader.py` | `bundle_loader.py` | Moderate — multi-venue support (`FUTU` + `IB`) |
-| `main.py` | `main.py` | `main.py` | Major — multi-broker factory registration, Futu-first wiring |
-| OrbStrategy | `strategies/orb.py` | `strategies/orb.py` | Minor — venue-aware config, Futu-compatible params |
-| MomentumStrategy | `strategies/momentum.py` | `strategies/momentum.py` | Minor — same |
+| `connection.py` | `adapters/futu/connection.py` | `adapters/futu/connection.py` | Minimal - update module references to `sam_trader` |
+| `config.py` | `config.py` | `config.py` | Major - add Futu fields, multi-broker support, `SamTraderConfig` |
+| `bundle_loader.py` | `bundle_loader.py` | `bundle_loader.py` | Moderate - multi-venue support (`FUTU` + `IB`) |
+| `main.py` | `main.py` | `main.py` | Major - multi-broker factory registration, Futu-first wiring |
+| OrbStrategy | `strategies/orb.py` | `strategies/orb.py` | Minor - venue-aware config, Futu-compatible params |
+| MomentumStrategy | `strategies/momentum.py` | `strategies/momentum.py` | Minor - same |
 | Strategy template | `strategies/_template.py` | `strategies/_template.py` | Minor |
-| TradeJournalActor | `actors/trade_journal.py` | `actors/trade_journal.py` | Minor — add venue column to fills |
+| TradeJournalActor | `actors/trade_journal.py` | `actors/trade_journal.py` | Minor - add venue column to fills |
 | HealthMonitorActor | `actors/health_monitor.py` | `actors/health_monitor.py` | None |
 | BarResubscriptionActor | `actors/bar_resubscription.py` | `actors/bar_resubscription.py` | Minor |
 | `docker-compose.yml` | Pattern, profiles, networks | Rewritten for v3 naming | All service/network/volume names changed |
@@ -356,55 +356,67 @@ sam_trader/
 
 ---
 
-## 6. Roadmap — Build Phases
+## 6. Roadmap - Build Phases
 
-### Phase 0: Foundation — Skeleton & Docker Stack
+### Phase 0: Foundation - Skeleton & Docker Stack
 > **Goal:** Empty repo with docker-compose defining all services. No trading logic yet.
+> **Status:** ✅ Complete (all 20 tickets closed incl 2 EXIT gates)
 > **Depends on:** Nothing
 
 ### Phase 1: Configuration & Bootstrap
 > **Goal:** `SamTraderConfig` loads from env vars. `main.py` bootstraps TradingNode with multi-broker placeholders.
+> **Status:** ✅ Complete (config + bootstrap + integration test)
 > **Depends on:** Phase 0
 
-### Phase 2: Futu Adapter — Market Data
+### Phase 2: Futu Adapter - Market Data
 > **Goal:** `FutuLiveDataClient` streams QuoteTick, TradeTick, Bar, OrderBookDelta to Nautilus message bus.
+> **Status:** ✅ Complete (all 7 tickets closed incl EXIT 9z3.3.7)
 > **Depends on:** Phase 1
 
-### Phase 3: Futu Adapter — Execution
+### Phase 3: Futu Adapter - Execution
 > **Goal:** `FutuLiveExecutionClient` submits/modifies/cancels orders. OrderFilled events flow to message bus.
+> **Status:** ✅ Complete (all 10 tickets closed incl EXIT 9z3.4.3)
 > **Depends on:** Phase 2
 
-### Phase 4: Futu Adapter — Instrument Provider & Integration
+### Phase 4: Futu Adapter - Instrument Provider & Integration
 > **Goal:** `FutuInstrumentProvider` resolves symbols. Factories wired into TradingNode. Futu bundles loadable.
+> **Status:** ✅ Complete (all 6 tickets closed incl EXIT 9z3.5.6)
 > **Depends on:** Phase 3
 
 ### Phase 5: IBKR Adapter (Re-integration)
 > **Goal:** Port IBKR adapter from v2. Enhanced for multi-venue coexistence. Both Futu + IB work simultaneously.
+> **Status:** ✅ Complete (all 14 tickets closed incl EXIT 9z3.6.4)
 > **Depends on:** Phase 4
 
 ### Phase 6: Actors & State Management
-> **Goal:** TradeJournalActor, HealthMonitorActor, BarResubscriptionActor. PostgreSQL + Redis state persistence.
+> **Goal:** TradeJournalActor, HealthMonitorActor, BarResubscriptionActor, RejectionMonitorActor, RealizedPnLTrackerActor. PostgreSQL schema with venue column. Redis state persistence.
+> **Status:** ✅ Complete (EXIT validated 2026-05-24). All 6 actors wired into `main.py` via `ImportableActorConfig` pattern. Integration test `tests/integration/test_phase6_exit.py` validates all 6 AC.
 > **Depends on:** Phase 5 (needs fills from both venues to flow)
 
 ### Phase 7: Strategy Library & Bundle System
 > **Goal:** OrbStrategy, MomentumStrategy, strategy template. Multi-venue bundle loader. Bundle validation.
+> **Status:** ✅ Complete (all 6 tickets closed incl EXIT 9z3.8.6)
 > **Depends on:** Phase 6
 
 ### Phase 8: sam-services Container
-> **Goal:** Operations container with CLI, cron, health checks, backup, quote fetcher, **performance analysis** (Nautilus-native PortfolioAnalyzer), and **production safeguards** (LiveRiskEngine, PositionSnapshot, Slippage). Decoupled from sam-trader.
-> **Revised 2026-05-23:** Expanded from 6 to 11 tickets with 5 Nautilus-native integrations per gap analysis.
+> **Goal:** Operations container with CLI, cron, health checks, backup, quote fetcher, **performance analysis** (Nautilus-native PortfolioAnalyzer), and **production safeguards** (LiveRiskEngine, PositionSnapshot, Slippage). Decoupled from sam-trader.  
+> **Status:** ✅ Complete (EXIT validated 2026-05-24). 11 tickets all closed. 110 unit + 6 integration tests passing. Phase 6 actor wiring gap discovered and fixed during validation.  
+> **Revised 2026-05-23:** Expanded from 6 to 11 tickets with 5 Nautilus-native integrations per gap analysis.  
 > **Depends on:** Phase 7 (needs journal actors, bundle system, strategies for full integration test)
 
 ### Phase 9: Pre-Market Pipeline
 > **Goal:** Gap scanner → AI analysis → risk manager → bundle generator → readiness report.
+> **Status:** Not Started  
 > **Depends on:** Phase 8
 
 ### Phase 10: Safety & Dashboard
 > **Goal:** Kill switch, circuit breakers, FastAPI backend, dashboard UI.
+> **Status:** Not Started  
 > **Depends on:** Phase 9
 
 ### Phase 11: Deploy Script & E2E Validation
 > **Goal:** Single-script deploy. First-run wizard. All profiles work. Full E2E gate passes.
+> **Status:** Not Started  
 > **Depends on:** Phase 10
 
 ---
@@ -485,12 +497,12 @@ sam_trader/
 2. Use `futu-api` SDK + build our own adapter (adopting nautilus-futu patterns)
 3. Build our own TCP/protobuf client
 
-**Decision:** Option 2 — use `futu-api` SDK + build our own adapter.
+**Decision:** Option 2 - use `futu-api` SDK + build our own adapter.
 
 **Rationale:**
 - `futu-api` is officially maintained by Futu. Protocol updates are handled upstream.
 - No Rust build pipeline required. Single `pip install futu-api==10.5.6508`.
-- `nautilus-futu` has excellent architecture patterns (shared client, push channel isolation, reconnection with subscription restoration, multi-market venue aliases, account auto-discovery) — we adopt these patterns but implement against `futu-api`.
+- `nautilus-futu` has excellent architecture patterns (shared client, push channel isolation, reconnection with subscription restoration, multi-market venue aliases, account auto-discovery) - we adopt these patterns but implement against `futu-api`.
 - Nautilus core uses Rust/msgspec internally; we avoid Rust version conflicts by keeping our adapter in pure Python.
 - Full control over the codebase. We can tune for our subscription quota constraints, venue symbology, and config patterns.
 

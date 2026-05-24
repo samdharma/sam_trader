@@ -37,6 +37,8 @@ class SamTraderConfig:
     actor_bar_resub_enabled: bool
     actor_journal_enabled: bool
     actor_health_enabled: bool
+    actor_rejection_monitor_enabled: bool
+    actor_realized_pnl_enabled: bool
     actor_position_snapshot_enabled: bool
 
     # State persistence
@@ -106,6 +108,14 @@ class SamTraderConfig:
             actor_journal_enabled=os.environ.get("ACTOR_JOURNAL_ENABLED", "").lower()
             in ("1", "true", "yes"),
             actor_health_enabled=os.environ.get("ACTOR_HEALTH_ENABLED", "").lower()
+            in ("1", "true", "yes"),
+            actor_rejection_monitor_enabled=os.environ.get(
+                "ACTOR_REJECTION_MONITOR_ENABLED", ""
+            ).lower()
+            in ("1", "true", "yes"),
+            actor_realized_pnl_enabled=os.environ.get(
+                "ACTOR_REALIZED_PNL_ENABLED", ""
+            ).lower()
             in ("1", "true", "yes"),
             actor_position_snapshot_enabled=(
                 os.environ.get("ACTOR_POSITION_SNAPSHOT_ENABLED", "").lower()

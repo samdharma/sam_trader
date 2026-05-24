@@ -435,6 +435,10 @@ class TestPositionSnapshotActorWiring:
         monkeypatch.setenv("STATE_LOAD_ENABLED", "false")
         monkeypatch.delenv("ACTOR_POSITION_SNAPSHOT_ENABLED", raising=False)
         monkeypatch.setenv("ACTOR_JOURNAL_ENABLED", "true")
+        monkeypatch.setenv("ACTOR_HEALTH_ENABLED", "false")
+        monkeypatch.setenv("ACTOR_BAR_RESUB_ENABLED", "false")
+        monkeypatch.setenv("ACTOR_REJECTION_MONITOR_ENABLED", "false")
+        monkeypatch.setenv("ACTOR_REALIZED_PNL_ENABLED", "false")
 
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
@@ -442,7 +446,16 @@ class TestPositionSnapshotActorWiring:
             node = build_trading_node()
 
             actors = node._config.actors
-            assert len(actors) == 1
+            actor_paths = [a.actor_path for a in actors]
+            assert len(actors) == 2
+            assert (
+                "sam_trader.actors.trade_journal:TradeJournalActor"
+                in actor_paths
+            )
+            assert (
+                "sam_trader.actors.position_snapshot:PositionSnapshotActor"
+                in actor_paths
+            )
         finally:
             loop.close()
             asyncio.set_event_loop(None)
@@ -459,6 +472,10 @@ class TestPositionSnapshotActorWiring:
         monkeypatch.setenv("STATE_LOAD_ENABLED", "false")
         monkeypatch.delenv("ACTOR_POSITION_SNAPSHOT_ENABLED", raising=False)
         monkeypatch.delenv("ACTOR_JOURNAL_ENABLED", raising=False)
+        monkeypatch.setenv("ACTOR_HEALTH_ENABLED", "false")
+        monkeypatch.setenv("ACTOR_BAR_RESUB_ENABLED", "false")
+        monkeypatch.setenv("ACTOR_REJECTION_MONITOR_ENABLED", "false")
+        monkeypatch.setenv("ACTOR_REALIZED_PNL_ENABLED", "false")
 
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)

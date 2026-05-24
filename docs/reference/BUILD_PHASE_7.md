@@ -1,6 +1,6 @@
 # Build Phase 7 — Strategy Library & Bundle System
 
-> **Status:** Not Started  
+> **Status:** ✅ Complete (all 6 tickets closed incl EXIT 9z3.8.6)  
 > **Goal:** OrbStrategy, MomentumStrategy, strategy template. Multi-venue bundle loader. Bundle validation.  
 > **Prev Phase:** [BUILD_PHASE_6.md](./BUILD_PHASE_6.md) — Actors & State Management  
 > **Next Phase:** [BUILD_PHASE_8.md](./BUILD_PHASE_8.md) — sam-services Container
@@ -231,4 +231,19 @@ This enables immediate fallback to long-only without code changes.
 
 ---
 
-*Last updated: 2026-05-22*
+---
+
+## 9. Ticket Summary
+
+| Ticket | Title | Status |
+|--------|-------|--------|
+| `sam_trader-9z3.8.1` | BundleLoader — multi-venue YAML → ImportableStrategyConfig | ✅ Closed |
+| `sam_trader-9z3.8.2` | OrbStrategy — port from v2 with venue-aware config | ✅ Closed |
+| `sam_trader-9z3.8.3` | MomentumStrategy — port from v2 with venue-aware config | ✅ Closed |
+| `sam_trader-9z3.8.4` | Strategy template — copy-paste starter | ✅ Closed |
+| `sam_trader-9z3.8.5` | Bundle validation — schema check + backtest gate | ✅ Closed |
+| `sam_trader-9z3.8.6` | [EXIT] Verify strategy lifecycle with Futu data | ✅ Closed |
+
+---
+
+*Last updated: 2026-05-24 — Status updated to Complete during gap audit; ticket summary added*
