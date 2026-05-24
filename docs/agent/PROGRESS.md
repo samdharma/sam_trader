@@ -871,3 +871,20 @@
 - **Files Changed**: `src/sam_trader/services/quote_collector.py` (new), `tests/unit/services/test_quote_collector.py` (new)
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 16/16 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ready for next Phase 9 ticket (sam_trader-9z3.10.18: PreMarketGapScanner).
+
+## Iteration 93
+- **Task**: P1: Add Redis restart-request subscriber for graceful state-save handshake
+- **Task ID**: sam_trader-9z3.2.2
+- **Status**: COMPLETE
+- **Decisions**: 
+  1. Created `RestartSubscriber` class in `src/sam_trader/restart_subscriber.py` that runs a background daemon thread with an asyncio Redis pub/sub listener.
+  2. Subscribes to `sam:restart_request` channel; on "graceful" message, schedules `node.trader.save()` on the node's event loop via `call_soon_threadsafe()` to avoid thread-safety issues, with a timeout governed by `STATE_SAVE_HANDSHAKE_TIMEOUT` env var (default 30s).
+  3. After successful save, publishes `sam:state_saved` confirmation to Redis with JSON payload containing `trader_id`, ISO timestamp, and `status: saved`.
+  4. All Redis connection/listen errors are caught and logged as warnings; the subscriber never crashes the node.
+  5. Added `state_save_handshake_timeout` field to `SamTraderConfig` with default 30.
+  6. Wired subscriber into `main.py` so it starts after `node.build()` and stops before `node.dispose()`.
+  7. Updated `.env.example` with `STATE_SAVE_HANDSHAKE_TIMEOUT=30`.
+  8. Also fixed pre-existing E501 line-too-long violations in `main.py` for Phase 6 actor `ImportableActorConfig` paths.
+- **Files Changed**: `src/sam_trader/restart_subscriber.py` (new), `src/sam_trader/config.py`, `src/sam_trader/main.py`, `.env.example`, `tests/unit/test_restart_subscriber.py` (new), `tests/unit/test_config.py`, `tests/unit/test_main_cache_config.py`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 18/18 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for next phase-1 ticket or phase exit.
