@@ -823,7 +823,7 @@
 
 ## Iteration 92
 - **Task**: P9: Market regime detection — HMM-based classification, regime-aware adaptation
-- **Task ID**: sam_trader-9z3.10.4
+- **Task ID**: sam_trader-9z3.10.4 (renumbered to 9z3.10.19 in 2026-05-24 renumbering)
 - **Status**: COMPLETE
 - **Decisions**: 
   1. Created `src/sam_trader/services/regime_detection.py` with `HMMRegimeClassifier` and `RegimeAdapter`.
@@ -838,4 +838,4 @@
   10. Added `hmmlearn` to `pyproject.toml` dependencies.
 - **Files Changed**: `src/sam_trader/services/regime_detection.py` (new), `tests/unit/services/test_regime_detection.py` (new), `pyproject.toml`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 44/44 tests passed, black/isort/flake8/mypy all green)
-- **Blockers / Notes**: None. Ready for next Phase 9 ticket (sam_trader-9z3.10.7: Monte Carlo position sizer, or sam_trader-9z3.10.1: PreMarketGapScanner).
+- **Blockers / Notes**: None. Ready for next Phase 9 ticket. (Note: Tickets renumbered 2026-05-24 — 9z3.10.7 → 9z3.10.21, 9z3.10.1 → 9z3.10.18)

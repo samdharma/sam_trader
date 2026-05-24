@@ -410,8 +410,6 @@ Phase 11 ───────────────────────�
 | 11 | `sam_trader-9z3.10.26` | Readiness Report | task | **11th** (depends on 25) |
 | 12 | `sam_trader-9z3.10.27` | [EXIT] Pipeline E2E Validation | exit | **12th** (depends on 26) |
 
-> **Note:** Original parent tickets `9z3.10.3` (Risk Manager) and `9z3.10.5` (Pipeline Orchestrator) are **closed-superseded**. Their scope is covered by sub-tickets 10.7-10.9 and 10.10-10.12 respectively, plus the EXIT gate integration test. Original EXIT `9z3.10.6` closed - renumbered to `9z3.10.13` for sequence alignment (EXIT must have highest number).
-
 ---
 
 ### Phase 10: Safety & Dashboard

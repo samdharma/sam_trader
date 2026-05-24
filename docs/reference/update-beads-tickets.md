@@ -37,7 +37,7 @@
 |--------|------------------|
 | `sam_trader-9z3.6.2` | `sam_trader-9z3.5.6` (P4 EXIT) |
 | `sam_trader-9z3.7.7` | `sam_trader-9z3.6.4` (P5 EXIT) |
-| `sam_trader-9z3.10.4` | `sam_trader-9z3.9.6` (P8 EXIT) |
+| `sam_trader-9z3.10.4` (renumbered → 9z3.10.19) | `sam_trader-9z3.9.6` (P8 EXIT) |
 
 ### 2.3 Cross-Phase Skip Links Removed
 

@@ -31,9 +31,9 @@ SAM Trader V3 has built a solid foundation (phases 0–7): dual-venue connectivi
 
 | Phase | Ticket | Capability |
 |-------|--------|------------|
-| 9 | `9z3.10.7` | Monte Carlo position sizer — VaR-based, 10K simulations |
-| 9 | `9z3.10.8` | Pre-trade risk checks — max exposure, daily loss, margin |
-| 9 | `9z3.10.9` | Portfolio heat monitor — real-time heat tracking |
+| 9 | `9z3.10.21` | Monte Carlo position sizer — VaR-based, 10K simulations |
+| 9 | `9z3.10.22` | Pre-trade risk checks — max exposure, daily loss, margin |
+| 9 | `9z3.10.23` | Portfolio heat monitor — real-time heat tracking |
 | 10 | `9z3.11.1` | Kill switch + 5 circuit breakers: DAILY_PNL, MARGIN_LIMIT, CONNECTIVITY_LOSS, REJECTION_STREAK, REALIZED_LOSS_LIMIT |
 
 ### 1.3 What NautilusTrader Provides Natively (UNUSED)
@@ -117,10 +117,10 @@ Both strategies share patterns: bracket orders, venue-aware IB `post_only=False`
 
 | Phase | Ticket | Capability |
 |-------|--------|------------|
-| 9 | `9z3.10.1` | Gap scanner — pre-market gap candidates |
-| 9 | `9z3.10.2` | AI scoring engine — LLM grades candidates |
-| 9 | `9z3.10.4` | Market regime detection — HMM (trending/ranging/volatile) → parameter adaptation |
-| 9 | `9z3.10.11` | Bundle YAML generator — AI → bundles |
+| 9 | `9z3.10.18` | Gap scanner — pre-market gap candidates |
+| 9 | `9z3.10.20` | AI scoring engine — LLM grades candidates |
+| 9 | `9z3.10.19` | Market regime detection — HMM (trending/ranging/volatile) → parameter adaptation |
+| 9 | `9z3.10.25` | Bundle YAML generator — AI → bundles |
 
 **Note:** No new strategy types are planned in phases 8–11. The Phase 9 pipeline generates bundles for *existing* strategies (ORB + Momentum), not new strategy types.
 
@@ -245,8 +245,8 @@ Both strategies share patterns: bracket orders, venue-aware IB `post_only=False`
 
 | Phase | Ticket | Capability |
 |-------|--------|------------|
-| 9 | `9z3.10.4` | Market regime detection (HMM) — performance context, not analysis |
-| 9 | `9z3.10.12` | Readiness report — daily pre-market summary, not post-trade analysis |
+| 9 | `9z3.10.19` | Market regime detection (HMM) — performance context, not analysis |
+| 9 | `9z3.10.26` | Readiness report — daily pre-market summary, not post-trade analysis |
 | 10 | `9z3.11.3` | FastAPI `/api/positions`, `/api/fills` — raw data endpoints |
 | 10 | `9z3.11.4` | Static HTML dashboard — positions + fills tables |
 
