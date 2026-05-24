@@ -128,6 +128,12 @@ def _load_bundle(bundle: dict[str, Any]) -> ImportableStrategyConfig:
     # Preserve bundle ID so permission checks and logs can reference it
     config.setdefault("bundle_id", bundle.get("id", "unknown"))
 
+    # Pass through optional metadata fields so strategies can access them
+    for meta_key in ("family", "version", "variant"):
+        value = bundle.get(meta_key)
+        if value is not None:
+            config.setdefault(meta_key, value)
+
     return ImportableStrategyConfig(
         strategy_path=strategy_path,
         config_path=config_path,

@@ -6,6 +6,7 @@ import dataclasses
 import importlib
 import logging
 import os
+import re
 from typing import Any
 
 import yaml
@@ -25,6 +26,10 @@ from sam_trader.bundle_loader import (
 )
 
 logger = logging.getLogger(__name__)
+
+_SEMVER_RE = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
+_FAMILY_RE = re.compile(r"^[A-Za-z0-9_]+$")
+
 
 # Synthetic backtest timestamps — 2024-01-01 00:00:00 UTC in nanoseconds
 _BACKTEST_BASE_TS = 1_704_067_200_000_000_000
@@ -123,6 +128,27 @@ def _validate_bundle_schema(bundle: dict[str, Any]) -> tuple[list[str], list[str
     risk = bundle.get("risk")
     if risk is not None and not isinstance(risk, dict):
         errors.append("Field 'risk' must be a mapping")
+
+    # metadata: family
+    family = bundle.get("family")
+    if family is not None:
+        if not isinstance(family, str):
+            errors.append("Field 'family' must be a string")
+        elif not _FAMILY_RE.match(family):
+            errors.append("Field 'family' must be alphanumeric with underscores only")
+
+    # metadata: version (semver)
+    version = bundle.get("version")
+    if version is not None:
+        if not isinstance(version, str):
+            errors.append("Field 'version' must be a string")
+        elif not _SEMVER_RE.match(version):
+            errors.append("Field 'version' must be a valid semver string (x.y.z)")
+
+    # metadata: variant
+    variant = bundle.get("variant")
+    if variant is not None and not isinstance(variant, str):
+        errors.append("Field 'variant' must be a string")
 
     return errors, warnings
 

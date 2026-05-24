@@ -330,3 +330,52 @@ bundles:
         configs = load_bundles(str(path))
         assert len(configs) == 1
         assert configs[0].config["exchange"] == "NASDAQ"
+
+    def test_version_metadata_parsed(self, tmp_path: pathlib.Path) -> None:
+        """Optional family, version, and variant metadata are passed to config."""
+        yaml_content = """
+bundles:
+  - id: "orb-aggressive-tsla"
+    enabled: true
+    venue: FUTU
+    family: ORB_aggressive
+    version: "1.0.0"
+    variant: aggressive
+    strategy:
+      path: sam_trader.strategies.orb:OrbStrategy
+      config:
+        instrument_id: "TSLA.NASDAQ"
+        bar_type: "TSLA.NASDAQ-5-MINUTE-LAST-EXTERNAL"
+"""
+        path = tmp_path / "bundles.yaml"
+        path.write_text(yaml_content)
+
+        configs = load_bundles(str(path))
+        assert len(configs) == 1
+        cfg = configs[0].config
+        assert cfg["family"] == "ORB_aggressive"
+        assert cfg["version"] == "1.0.0"
+        assert cfg["variant"] == "aggressive"
+
+    def test_missing_metadata_ok(self, tmp_path: pathlib.Path) -> None:
+        """Bundles without family/version/variant load identically."""
+        yaml_content = """
+bundles:
+  - id: "tsla-orb-15m-futu"
+    enabled: true
+    venue: FUTU
+    strategy:
+      path: sam_trader.strategies.orb:OrbStrategy
+      config:
+        instrument_id: "TSLA.NASDAQ"
+        bar_type: "TSLA.NASDAQ-15-MINUTE-LAST-EXTERNAL"
+"""
+        path = tmp_path / "bundles.yaml"
+        path.write_text(yaml_content)
+
+        configs = load_bundles(str(path))
+        assert len(configs) == 1
+        cfg = configs[0].config
+        assert "family" not in cfg
+        assert "version" not in cfg
+        assert "variant" not in cfg

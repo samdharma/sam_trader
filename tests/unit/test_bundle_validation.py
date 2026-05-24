@@ -120,6 +120,39 @@ class TestValidateBundleSchema:
         errors, _ = _validate_bundle_schema(bundle)
         assert any("Field 'risk' must be a mapping" in e for e in errors)
 
+    def test_valid_version_accepted(self) -> None:
+        for version in ("0.0.1", "1.0.0", "1.2.3", "10.20.30"):
+            bundle = _make_bundle(version=version)
+            errors, _ = _validate_bundle_schema(bundle)
+            assert not any("version" in e for e in errors), version
+
+    def test_invalid_version_rejected(self) -> None:
+        for version in ("1.0", "v1.0.0", "1.0.0-beta", "1.0.0.0", "", "01.02.03"):
+            bundle = _make_bundle(version=version)
+            errors, _ = _validate_bundle_schema(bundle)
+            assert any(
+                "Field 'version' must be a valid semver string (x.y.z)" in e
+                for e in errors
+            ), version
+
+    def test_family_alphanumeric_only(self) -> None:
+        bundle = _make_bundle(family="ORB_aggressive_v1")
+        errors, _ = _validate_bundle_schema(bundle)
+        assert errors == []
+
+    def test_family_invalid_chars_rejected(self) -> None:
+        bundle = _make_bundle(family="ORB-aggressive")
+        errors, _ = _validate_bundle_schema(bundle)
+        assert any(
+            "Field 'family' must be alphanumeric with underscores only" in e
+            for e in errors
+        )
+
+    def test_variant_free_text(self) -> None:
+        bundle = _make_bundle(variant="bearish-v1.3 🔥")
+        errors, _ = _validate_bundle_schema(bundle)
+        assert errors == []
+
 
 # ---------------------------------------------------------------------------
 # Strategy class validation

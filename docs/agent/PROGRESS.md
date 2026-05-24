@@ -888,3 +888,16 @@
 - **Files Changed**: `src/sam_trader/restart_subscriber.py` (new), `src/sam_trader/config.py`, `src/sam_trader/main.py`, `.env.example`, `tests/unit/test_restart_subscriber.py` (new), `tests/unit/test_config.py`, `tests/unit/test_main_cache_config.py`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 18/18 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ready for next phase-1 ticket or phase exit.
+
+## Iteration 95
+- **Task**: P7: Add family/version/variant metadata to bundle schema
+- **Task ID**: sam_trader-9z3.8.7
+- **Status**: COMPLETE
+- **Decisions**:
+  1. bundle_loader.py: optional `family`, `version`, `variant` fields at bundle level are passed through to the strategy config dict via `config.setdefault()` so strategies can access them.
+  2. bundle_validation.py: `version` validated as semver regex `^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$`, `family` validated as alphanumeric+underscore, `variant` as free-text string.
+  3. All three fields are optional — existing bundles without them work identically (backward-compatible).
+  4. bundles.example.yaml: added two versioned examples (ORB_aggressive_v1.0.0, ORB_bearish_v1.3.0) demonstrating same strategy class with different configs.
+- **Files Changed**: `src/sam_trader/bundle_loader.py`, `src/sam_trader/bundle_validation.py`, `config/bundles.example.yaml`, `tests/unit/test_bundle_loader.py`, `tests/unit/test_bundle_validation.py`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 57/57 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for next Phase 7 ticket or Phase 7 EXIT.
