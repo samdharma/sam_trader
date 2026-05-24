@@ -839,3 +839,18 @@
 - **Files Changed**: `src/sam_trader/services/regime_detection.py` (new), `tests/unit/services/test_regime_detection.py` (new), `pyproject.toml`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 44/44 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ready for next Phase 9 ticket. (Note: Tickets renumbered 2026-05-24 — 9z3.10.7 → 9z3.10.21, 9z3.10.1 → 9z3.10.18)
+
+## Iteration 93
+- **Task**: P9: PreMarketWatchlist — config-driven symbol universe per market
+- **Task ID**: sam_trader-9z3.10.16
+- **Status**: COMPLETE
+- **Decisions**:
+  1. Created `config/premarket_watchlist.yaml` with per-market (US/HK) symbol universes, `min_gap_pct`, `max_candidates`, and `premarket_only` toggle.
+  2. Dynamic mode extracts instrument IDs from enabled bundles in `config/bundles.yaml` and groups them by market via suffix mapping (`.NASDAQ`/`.NYSE` → US, `.HKEX` → HK).
+  3. Static mode: non-empty `symbols` list in config overrides dynamic extraction for that market.
+  4. Pre-market filter (`filter_premarket`) keeps only US exchange-listed symbols (NASDAQ, NYSE, AMEX, ARCA, BATS) and drops HK symbols since HK has no pre-market session.
+  5. `validate_symbols()` accepts a `FutuInstrumentProvider` instance and returns `(valid, invalid)` tuples by checking the provider cache / load_async.
+  6. Added `sam watchlist [--market US|HK]` CLI command with human-readable table output and `--json` support.
+- **Files Changed**: `config/premarket_watchlist.yaml` (new), `src/sam_trader/services/watchlist.py` (new), `src/sam_trader/services/cli.py` (watchlist command), `tests/unit/services/test_watchlist.py` (new)
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 19/19 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for next Phase 9 ticket (sam_trader-9z3.10.17: QuoteCollectionService).
