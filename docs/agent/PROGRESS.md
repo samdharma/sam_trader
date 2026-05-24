@@ -1137,3 +1137,17 @@
 - **Files Changed**: `src/sam_trader/services/readiness_report.py` (new), `tests/unit/services/test_readiness_report.py` (new), `src/sam_trader/services/cli.py`, `tests/unit/services/test_cli.py`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 72/72 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ready for next Phase 9 ticket (sam_trader-9z3.10.27: [EXIT] Pipeline E2E Validation).
+
+## Iteration 109
+- **Task**: [EXIT] P9: Pipeline runs end-to-end, produces valid bundles
+- **Task ID**: sam_trader-9z3.10.27
+- **Status**: COMPLETE
+- **Decisions**:
+  1. Created `tests/integration/test_phase9_exit.py` with 11 integration tests covering all 7 acceptance criteria.
+  2. Tests use mocked `FakeQuoteService` and `FakePrevCloseLoader` to avoid live broker dependencies — consistent with prior phase EXIT patterns.
+  3. Full pipeline wired: gap scan → AI scoring → position sizing → risk checks → heat monitor → regime detection → bundle generation → readiness report.
+  4. Bundle schema validation uses existing `_validate_bundle_schema` from `bundle_validation.py`.
+  5. `sam pipeline run` placeholder verified; `sam readiness --simulate` CLI mode verified via `CliRunner`.
+- **Files Changed**: `tests/integration/test_phase9_exit.py` (new)
+- **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 11/11 integration tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: Phase 9 complete. All 12 tickets (10.16–10.27) closed. Phase 10 tickets (11.6, 11.7, 11.8) are unblocked.
