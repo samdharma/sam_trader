@@ -39,6 +39,10 @@ from sam_trader.bundle_validation import validate_bundles
 from sam_trader.services.backup import BackupError
 from sam_trader.services.backup import backup as run_backup
 from sam_trader.services.backup import restore as run_restore
+from sam_trader.services.bundle_generator import (
+    generate_bundles,
+    write_bundles,
+)
 from sam_trader.services.deploy_window import check_window as check_deploy_window
 from sam_trader.services.deploy_window import is_in_window
 from sam_trader.services.gap_scanner import (
@@ -49,8 +53,17 @@ from sam_trader.services.gap_scanner import (
     PreMarketGapScanner,
 )
 from sam_trader.services.pipeline import run_pipeline
+from sam_trader.services.pipeline_executor import (
+    PipelineCandidate,
+    PipelineExecutor,
+    PipelineExecutorConfig,
+    PipelineResult,
+    PipelineStageRecord,
+)
 from sam_trader.services.quote import _redis_client, format_quote, get_quote
 from sam_trader.services.quote_collector import QuoteCollectionService
+from sam_trader.services.readiness_report import ReadinessReportGenerator
+from sam_trader.services.regime_detection import Regime, RegimePrediction
 from sam_trader.services.rotate_logs import rotate_logs
 from sam_trader.services.watchlist import (
     build_watchlist,
@@ -1218,6 +1231,333 @@ def gapscan(ctx: click.Context, market: str, pass_number: int) -> None:
                     f"{c.quote_last:>12.2f} {c.trend:<14}"
                 )
         click.echo("\n".join(lines))
+
+
+@cli.command()
+@click.option("--market", default="US", help="Market to scan (US or HK).")
+@click.option("--simulate", is_flag=True, help="Use synthetic demo data.")
+@click.option("--webhook-url", default=None, help="Override webhook URL.")
+@click.option("--no-save", is_flag=True, help="Skip audit JSON save.")
+@click.pass_context
+def readiness(
+    ctx: click.Context,
+    market: str,
+    simulate: bool,
+    webhook_url: str | None,
+    no_save: bool,
+) -> None:
+    """Generate the daily pre-market readiness report.
+
+    In normal mode this runs the full pipeline (gap scan → AI scoring →
+    sizing → risk checks → heat monitor → bundle generation) and prints a
+    summary table.  Use ``--simulate`` for a deterministic demo report.
+    """
+    market = market.upper()
+    if market not in ("US", "HK"):
+        raise click.ClickException(f"Unknown market: {market}")
+
+    if simulate:
+        pipeline_result = _simulate_pipeline_result()
+        bundle_path: str | None = None
+    else:
+        # Load watchlist
+        try:
+            wl_cfg = load_watchlist_config("config/premarket_watchlist.yaml")
+            universe = build_watchlist(wl_cfg)
+        except Exception as exc:
+            raise click.ClickException(f"Failed to load watchlist: {exc}")
+
+        symbols = universe.get(market, [])
+        if not symbols:
+            msg = f"No symbols in watchlist for market={market}"
+            if ctx.obj.get("json"):
+                _out(ctx, {"command": "readiness", "market": market, "error": msg})
+            else:
+                click.echo(msg)
+            return
+
+        # Gap scan (pass 1)
+        market_config = wl_cfg.get(market)
+        min_gap = market_config.min_gap_pct if market_config else 2.0
+
+        scanner_cfg = GapScannerConfig(
+            market=market,
+            min_gap_pct=min_gap,
+            collection_period_secs=30,
+        )
+        quote_svc = QuoteCollectionService(
+            broker="FUTU",
+            host=os.getenv("FUTU_OPEND_HOST", "sam-futu-opend"),
+            port=int(os.getenv("FUTU_OPEND_PORT", "11111")),
+            watchlist=symbols,
+            collection_period_secs=scanner_cfg.collection_period_secs,
+            connection_timeout_secs=scanner_cfg.connection_timeout_secs,
+        )
+        prev_loader = CompositePrevCloseLoader(
+            [PGFillPrevCloseLoader(), FutuKLinePrevCloseLoader()]
+        )
+        redis = _redis_client()
+        scanner = PreMarketGapScanner(
+            config=scanner_cfg,
+            quote_service=quote_svc,
+            prev_close_loader=prev_loader,
+            redis_client=redis,
+        )
+
+        try:
+            candidates = asyncio.run(scanner.scan(symbols, pass_number=1))
+        except Exception as exc:
+            raise click.ClickException(f"Gap scan failed: {exc}")
+
+        # Pipeline executor
+        executor = PipelineExecutor(config=PipelineExecutorConfig())
+        pipeline_result = executor.run(
+            candidates=candidates,
+            trace_id=f"readiness-{market}-{datetime.now(timezone.utc).isoformat()}",
+        )
+
+        # Bundle generation
+        if pipeline_result.approved:
+            bundles = generate_bundles(pipeline_result.approved)
+            bundle_path = write_bundles(bundles)
+        else:
+            bundle_path = None
+
+    # Generate readiness report
+    gen = ReadinessReportGenerator(webhook_url=webhook_url)
+    report = gen.generate(
+        pipeline_result,
+        bundle_path=bundle_path,
+        market=market,
+    )
+
+    if not no_save:
+        try:
+            gen.save_audit(report)
+        except Exception as exc:
+            logger.warning("Failed to save readiness audit: %s", exc)
+
+    if webhook_url or gen.webhook_url:
+        try:
+            gen.send_webhook(report)
+        except Exception as exc:
+            logger.warning("Webhook delivery failed: %s", exc)
+
+    if ctx.obj.get("json"):
+        _out(
+            ctx,
+            {
+                "command": "readiness",
+                "market": report.market,
+                "candidate_count": report.candidate_count,
+                "approved_count": report.approved_count,
+                "rejected_count": report.rejected_count,
+                "bundles_generated": report.bundles_generated,
+                "bundle_path": report.bundle_path,
+                "regime": report.regime_state.get("regime"),
+                "scan_timestamp": report.scan_timestamp,
+                "trace_id": report.trace_id,
+            },
+        )
+    else:
+        click.echo(gen.format_table(report))
+
+
+def _simulate_pipeline_result() -> PipelineResult:
+    """Return a synthetic PipelineResult for demo / testing."""
+    from sam_trader.services.ai_scoring import (
+        AIRecommendation,
+        Conviction,
+        DimensionScores,
+        Grade,
+        TradeParameters,
+    )
+    from sam_trader.services.gap_scanner import GapCandidate
+    from sam_trader.services.heat_monitor import HeatMapEntry, HeatMonitorResult
+    from sam_trader.services.risk_checks import RiskCheckResult
+    from sam_trader.services.risk_sizing import PositionSizeResult
+
+    gaps = [
+        GapCandidate(
+            instrument_id="TSLA.NASDAQ",
+            prev_close=150.0,
+            quote_last=155.0,
+            gap_pct=3.33,
+            bid=154.9,
+            ask=155.1,
+            volume=1_000_000.0,
+            trend="STABLE",
+            pass_number=1,
+            cross_validated=True,
+            cross_validation_note="",
+        ),
+        GapCandidate(
+            instrument_id="AAPL.NASDAQ",
+            prev_close=180.0,
+            quote_last=185.0,
+            gap_pct=2.78,
+            bid=184.9,
+            ask=185.1,
+            volume=2_000_000.0,
+            trend="RISING",
+            pass_number=1,
+            cross_validated=True,
+            cross_validation_note="",
+        ),
+    ]
+
+    recs = [
+        AIRecommendation(
+            instrument_id="TSLA.NASDAQ",
+            grade=Grade.STRONG_BUY,
+            conviction=Conviction.STRONG,
+            confidence=0.75,
+            scores=DimensionScores(
+                gap_quality=20,
+                technical_setup=15,
+                sentiment=12,
+                liquidity=10,
+                risk=8,
+                market_context=10,
+            ),
+            trade_params=TradeParameters(
+                entry=155.0,
+                stop=150.0,
+                target=165.0,
+                position_size_pct=0.02,
+            ),
+            reasoning="Strong gap with technical support",
+            key_factors=["gap", "support"],
+            risk_factors=[],
+            llm_used="RuleBased",
+            trace_id="sim",
+            timestamp="2026-05-24T08:00:00+00:00",
+        ),
+        AIRecommendation(
+            instrument_id="AAPL.NASDAQ",
+            grade=Grade.BUY,
+            conviction=Conviction.MODERATE,
+            confidence=0.55,
+            scores=DimensionScores(
+                gap_quality=15,
+                technical_setup=10,
+                sentiment=8,
+                liquidity=10,
+                risk=7,
+                market_context=7,
+            ),
+            trade_params=TradeParameters(
+                entry=185.0,
+                stop=180.0,
+                target=195.0,
+                position_size_pct=0.015,
+            ),
+            reasoning="Moderate gap momentum",
+            key_factors=["gap"],
+            risk_factors=[],
+            llm_used="RuleBased",
+            trace_id="sim",
+            timestamp="2026-05-24T08:00:00+00:00",
+        ),
+    ]
+
+    sizes = [
+        PositionSizeResult(position_size=100, max_risk_dollars=500.0, var_95=300.0),
+        PositionSizeResult(position_size=75, max_risk_dollars=375.0, var_95=225.0),
+    ]
+
+    risks = [
+        RiskCheckResult(
+            passed=True,
+            rejected_reasons=[],
+            post_trade_exposure=15_500.0,
+            estimated_risk_dollars=500.0,
+            required_margin=0.0,
+        ),
+        RiskCheckResult(
+            passed=True,
+            rejected_reasons=[],
+            post_trade_exposure=13_875.0,
+            estimated_risk_dollars=375.0,
+            required_margin=0.0,
+        ),
+    ]
+
+    approved = [
+        PipelineCandidate(
+            gap=gaps[0],
+            recommendation=recs[0],
+            position_size=sizes[0],
+            risk_check=risks[0],
+            approved=True,
+        ),
+        PipelineCandidate(
+            gap=gaps[1],
+            recommendation=recs[1],
+            position_size=sizes[1],
+            risk_check=risks[1],
+            approved=True,
+        ),
+    ]
+
+    heat = HeatMonitorResult(
+        total_heat_pct=0.03,
+        total_notional=29_375.0,
+        heat_map={
+            "TSLA.NASDAQ": HeatMapEntry(
+                instrument_id="TSLA.NASDAQ",
+                risk_contribution=0.01,
+                notional=15_500.0,
+                concentration_pct=0.0155,
+                warning="",
+            ),
+            "AAPL.NASDAQ": HeatMapEntry(
+                instrument_id="AAPL.NASDAQ",
+                risk_contribution=0.0075,
+                notional=13_875.0,
+                concentration_pct=0.0139,
+                warning="",
+            ),
+        },
+        sector_map={"tech": 29_375.0},
+        warnings=[],
+        passed=True,
+    )
+
+    regime = RegimePrediction(
+        regime=Regime.TRENDING,
+        confidence=0.72,
+        is_stable=True,
+        model_version="sim-1.0",
+    )
+
+    audit = [
+        PipelineStageRecord(
+            stage="ai_scoring",
+            timestamp="2026-05-24T08:00:00+00:00",
+            input_count=2,
+            output_count=2,
+            errors=[],
+            notes="",
+        ),
+        PipelineStageRecord(
+            stage="merge",
+            timestamp="2026-05-24T08:01:00+00:00",
+            input_count=2,
+            output_count=2,
+            errors=[],
+            notes="regime=trending",
+        ),
+    ]
+
+    return PipelineResult(
+        approved=approved,
+        rejected=[],
+        heat_result=heat,
+        regime_prediction=regime,
+        audit_trail=audit,
+        trace_id="sim-readiness",
+    )
 
 
 @cli.command()

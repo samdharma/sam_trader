@@ -1120,3 +1120,20 @@
 - **Files Changed**: `src/sam_trader/services/bundle_generator.py` (new), `tests/unit/services/test_bundle_generator.py` (new)
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 28/28 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ready for next Phase 9 ticket (sam_trader-9z3.10.26: Readiness Report).
+
+## Iteration 108
+- **Task**: P9: Readiness Report
+- **Task ID**: sam_trader-9z3.10.26
+- **Status**: COMPLETE
+- **Decisions**: 
+  1. Created `ReadinessReportGenerator` in `src/sam_trader/services/readiness_report.py` that converts `PipelineResult` → structured `ReadinessReport` dataclass.
+  2. Report includes: scan timestamp, market, candidate counts, top-N recommendations table (symbol/grade/score/size/risk/R:R), risk summary (portfolio heat, risk checks, warnings), regime state, and bundle generation status.
+  3. Console table output via `format_table()` — human-readable aligned columns.
+  4. Optional webhook notification supports generic HTTP POST, Slack incoming webhooks, and Telegram Bot API with target-appropriate formatting.
+  5. Audit JSON saved to `logs/readiness/YYYY-MM-DD.json`.
+  6. CLI command `sam readiness [--market US|HK] [--simulate] [--webhook-url URL] [--no-save] [--json]` added to `services/cli.py`.
+  7. `--simulate` mode uses `_simulate_pipeline_result()` for deterministic demo/testing without broker connections.
+  8. Normal mode runs full pipeline: gap scan → PipelineExecutor → bundle generation → readiness report.
+- **Files Changed**: `src/sam_trader/services/readiness_report.py` (new), `tests/unit/services/test_readiness_report.py` (new), `src/sam_trader/services/cli.py`, `tests/unit/services/test_cli.py`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 72/72 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for next Phase 9 ticket (sam_trader-9z3.10.27: [EXIT] Pipeline E2E Validation).

@@ -584,6 +584,96 @@ class TestGapscanCommand:
         assert "pass must be 1 or 2" in captured.err or "ERROR" in captured.err
 
 
+class TestReadinessCommand:
+    def test_readiness_simulate_human(self, capsys: Any) -> None:
+        rc = main(["readiness", "--simulate", "--market", "US"])
+        captured = capsys.readouterr()
+        assert rc == 0
+        assert "SAM Trader V3" in captured.out
+        assert "TSLA.NASDAQ" in captured.out
+        assert "AAPL.NASDAQ" in captured.out
+        assert "STRONG_BUY" in captured.out
+        assert "Bundle Generation" in captured.out
+        assert "Market Regime" in captured.out
+
+    def test_readiness_simulate_json(self, capsys: Any) -> None:
+        rc = main(["--json", "readiness", "--simulate", "--market", "US"])
+        captured = capsys.readouterr()
+        assert rc == 0
+        data = json.loads(captured.out)
+        assert data["command"] == "readiness"
+        assert data["market"] == "US"
+        assert data["approved_count"] == 2
+        assert data["bundles_generated"] == 2
+
+    def test_readiness_simulate_no_save(
+        self, capsys: Any, tmp_path: pathlib.Path
+    ) -> None:
+        rc = main(["readiness", "--simulate", "--no-save", "--market", "US"])
+        out = capsys.readouterr().out
+        assert rc == 0
+        assert "SAM Trader V3" in out
+
+    def test_readiness_invalid_market(self, capsys: Any) -> None:
+        rc = main(["readiness", "--simulate", "--market", "EU"])
+        captured = capsys.readouterr()
+        assert rc == 1
+        assert "Unknown market" in captured.err or "ERROR" in captured.err
+
+    @patch("sam_trader.services.cli.build_watchlist")
+    @patch("sam_trader.services.cli.load_watchlist_config")
+    def test_readiness_empty_watchlist(
+        self,
+        mock_load_cfg: Any,
+        mock_build: Any,
+        capsys: Any,
+    ) -> None:
+        mock_build.return_value = {"US": []}
+        mock_load_cfg.return_value = {}
+
+        rc = main(["readiness", "--market", "US"])
+        captured = capsys.readouterr()
+        assert rc == 0
+        assert "No symbols" in captured.out
+
+    @patch("sam_trader.services.cli.ReadinessReportGenerator.send_webhook")
+    @patch("sam_trader.services.cli.ReadinessReportGenerator.save_audit")
+    def test_readiness_webhook_and_save(
+        self,
+        mock_save: Any,
+        mock_webhook: Any,
+        capsys: Any,
+    ) -> None:
+        mock_webhook.return_value = True
+        mock_save.return_value = "/tmp/readiness/2026-05-24.json"
+
+        rc = main(
+            [
+                "readiness",
+                "--simulate",
+                "--webhook-url",
+                "https://hooks.slack.com/test",
+                "--market",
+                "US",
+            ]
+        )
+        assert rc == 0
+        mock_webhook.assert_called_once()
+        mock_save.assert_called_once()
+
+    @patch("sam_trader.services.cli.ReadinessReportGenerator.send_webhook")
+    @patch("sam_trader.services.cli.ReadinessReportGenerator.save_audit")
+    def test_readiness_no_save_flag(
+        self,
+        mock_save: Any,
+        mock_webhook: Any,
+        capsys: Any,
+    ) -> None:
+        rc = main(["readiness", "--simulate", "--no-save", "--market", "US"])
+        assert rc == 0
+        mock_save.assert_not_called()
+
+
 class TestPreflightCommand:
     @patch("sam_trader.services.cli._run_health_checks")
     @patch("sam_trader.services.cli.validate_bundles")

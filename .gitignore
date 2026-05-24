@@ -62,3 +62,4 @@ htmlcov/
 # Large binaries / downloads
 downloads/
 logs/monitor*.log
+logs/readiness/
