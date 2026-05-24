@@ -476,6 +476,110 @@ class TestPerformanceCommand:
         assert "Run nightly analysis first" in captured.out
 
 
+class TestGapscanCommand:
+    @patch("sam_trader.services.cli.build_watchlist")
+    @patch("sam_trader.services.cli.load_watchlist_config")
+    @patch("sam_trader.services.cli.QuoteCollectionService")
+    @patch("sam_trader.services.cli.PreMarketGapScanner")
+    def test_gapscan_human_output(
+        self,
+        mock_scanner_cls: Any,
+        mock_quote_svc: Any,
+        mock_load_cfg: Any,
+        mock_build: Any,
+        capsys: Any,
+    ) -> None:
+        from unittest.mock import AsyncMock
+
+        mock_build.return_value = {"US": ["TSLA.NASDAQ"]}
+        mock_load_cfg.return_value = {
+            "US": MagicMock(min_gap_pct=2.0),
+        }
+
+        mock_scanner = MagicMock()
+        mock_scanner.scan = AsyncMock(
+            return_value=[
+                MagicMock(
+                    instrument_id="TSLA.NASDAQ",
+                    gap_pct=3.5,
+                    quote_last=150.0,
+                    trend="RISING",
+                    prev_close=145.0,
+                    bid=149.99,
+                    ask=150.01,
+                )
+            ]
+        )
+        mock_scanner_cls.return_value = mock_scanner
+
+        rc = main(["gapscan", "--market", "US", "--pass", "1"])
+        captured = capsys.readouterr()
+        assert rc == 0
+        assert "TSLA.NASDAQ" in captured.out
+        assert "3.5" in captured.out or "3.50" in captured.out
+        assert "RISING" in captured.out
+
+    @patch("sam_trader.services.cli.build_watchlist")
+    @patch("sam_trader.services.cli.load_watchlist_config")
+    @patch("sam_trader.services.cli.QuoteCollectionService")
+    @patch("sam_trader.services.cli.PreMarketGapScanner")
+    def test_gapscan_json_output(
+        self,
+        mock_scanner_cls: Any,
+        mock_quote_svc: Any,
+        mock_load_cfg: Any,
+        mock_build: Any,
+        capsys: Any,
+    ) -> None:
+        from unittest.mock import AsyncMock
+
+        mock_build.return_value = {"HK": ["00700.HKEX"]}
+        mock_load_cfg.return_value = {
+            "HK": MagicMock(min_gap_pct=1.5),
+        }
+
+        mock_scanner = MagicMock()
+        mock_scanner.scan = AsyncMock(return_value=[])
+        mock_scanner_cls.return_value = mock_scanner
+
+        rc = main(["--json", "gapscan", "--market", "HK", "--pass", "2"])
+        captured = capsys.readouterr()
+        assert rc == 0
+        data = json.loads(captured.out)
+        assert data["command"] == "gapscan"
+        assert data["market"] == "HK"
+        assert data["pass"] == 2
+        assert data["candidates_found"] == 0
+
+    @patch("sam_trader.services.cli.build_watchlist")
+    @patch("sam_trader.services.cli.load_watchlist_config")
+    def test_gapscan_empty_watchlist(
+        self,
+        mock_load_cfg: Any,
+        mock_build: Any,
+        capsys: Any,
+    ) -> None:
+        mock_build.return_value = {"US": []}
+        mock_load_cfg.return_value = {}
+
+        rc = main(["gapscan", "--market", "US"])
+        captured = capsys.readouterr()
+        assert rc == 0
+        assert "No symbols" in captured.out or "No gap candidates" in captured.out
+
+    def test_gapscan_invalid_market(self, capsys: Any) -> None:
+        rc = main(["gapscan", "--market", "EU"])
+        captured = capsys.readouterr()
+        assert rc == 1
+        assert "Unknown market" in captured.err or "ERROR" in captured.err
+
+    def test_gapscan_invalid_pass(self, capsys: Any) -> None:
+        rc = main(["gapscan", "--pass", "3"])
+        captured = capsys.readouterr()
+        assert rc == 1
+        assert "pass must be 1 or 2" in captured.err or "ERROR" in captured.err
+
+
 class TestJsonGlobalFlag:
     @patch("sam_trader.services.cli._run")
     def test_json_flag_on_status(self, mock_run: Any, capsys: Any) -> None:

@@ -37,8 +37,16 @@ from sam_trader.services.backup import BackupError
 from sam_trader.services.backup import backup as run_backup
 from sam_trader.services.backup import restore as run_restore
 from sam_trader.services.deploy_window import check_window as check_deploy_window
+from sam_trader.services.gap_scanner import (
+    CompositePrevCloseLoader,
+    FutuKLinePrevCloseLoader,
+    GapScannerConfig,
+    PGFillPrevCloseLoader,
+    PreMarketGapScanner,
+)
 from sam_trader.services.pipeline import run_pipeline
-from sam_trader.services.quote import format_quote, get_quote
+from sam_trader.services.quote import _redis_client, format_quote, get_quote
+from sam_trader.services.quote_collector import QuoteCollectionService
 from sam_trader.services.rotate_logs import rotate_logs
 from sam_trader.services.watchlist import (
     build_watchlist,
@@ -588,6 +596,125 @@ def watchlist(ctx: click.Context, market: str | None) -> None:
                 lines.append(f"  {sym}")
             if not symbols:
                 lines.append("  (empty)")
+        click.echo("\n".join(lines))
+
+
+@cli.command()
+@click.option("--market", default="US", help="Market to scan (US or HK).")
+@click.option("--pass", "pass_number", default=1, type=int, help="Scan pass (1 or 2).")
+@click.pass_context
+def gapscan(ctx: click.Context, market: str, pass_number: int) -> None:
+    """Run the pre-market gap scanner."""
+    market = market.upper()
+    if market not in ("US", "HK"):
+        raise click.ClickException(f"Unknown market: {market}")
+    if pass_number not in (1, 2):
+        raise click.ClickException("pass must be 1 or 2")
+
+    # Load watchlist
+    try:
+        wl_cfg = load_watchlist_config("config/premarket_watchlist.yaml")
+        universe = build_watchlist(wl_cfg)
+    except Exception as exc:
+        raise click.ClickException(f"Failed to load watchlist: {exc}")
+
+    symbols = universe.get(market, [])
+    if not symbols:
+        msg = f"No symbols in watchlist for market={market}"
+        if ctx.obj.get("json"):
+            _out(
+                ctx,
+                {
+                    "command": "gapscan",
+                    "market": market,
+                    "pass": pass_number,
+                    "error": msg,
+                },
+            )
+        else:
+            click.echo(msg)
+        return
+
+    # Build scanner infrastructure
+    market_config = wl_cfg.get(market)
+    min_gap = market_config.min_gap_pct if market_config else 2.0
+
+    scanner_cfg = GapScannerConfig(
+        market=market,
+        min_gap_pct=min_gap,
+        collection_period_secs=30,
+    )
+
+    quote_svc = QuoteCollectionService(
+        broker="FUTU",
+        host=os.getenv("FUTU_OPEND_HOST", "sam-futu-opend"),
+        port=int(os.getenv("FUTU_OPEND_PORT", "11111")),
+        watchlist=symbols,
+        collection_period_secs=scanner_cfg.collection_period_secs,
+        connection_timeout_secs=scanner_cfg.connection_timeout_secs,
+    )
+
+    prev_loader = CompositePrevCloseLoader(
+        [
+            PGFillPrevCloseLoader(),
+            FutuKLinePrevCloseLoader(),
+        ]
+    )
+
+    redis = _redis_client()
+    scanner = PreMarketGapScanner(
+        config=scanner_cfg,
+        quote_service=quote_svc,
+        prev_close_loader=prev_loader,
+        redis_client=redis,
+    )
+
+    try:
+        result = asyncio.run(scanner.scan(symbols, pass_number=pass_number))
+    except Exception as exc:
+        raise click.ClickException(f"Gap scan failed: {exc}")
+
+    # Output
+    payload = {
+        "command": "gapscan",
+        "market": market,
+        "pass": pass_number,
+        "symbols_scanned": len(symbols),
+        "candidates_found": len(result),
+        "candidates": [
+            {
+                "instrument_id": c.instrument_id,
+                "prev_close": c.prev_close,
+                "quote_last": c.quote_last,
+                "gap_pct": c.gap_pct,
+                "bid": c.bid,
+                "ask": c.ask,
+                "trend": c.trend,
+            }
+            for c in result
+        ],
+    }
+
+    if ctx.obj.get("json"):
+        _out(ctx, payload)
+    else:
+        lines = [
+            f"Pre-Market Gap Scan — {market} Pass {pass_number}",
+            "=" * 60,
+            f"Symbols scanned: {len(symbols)}",
+            f"Candidates:     {len(result)}",
+            "",
+        ]
+        if not result:
+            lines.append("No gap candidates matched the filters.")
+        else:
+            lines.append(f"{'Symbol':<20} {'Gap%':>10} {'Last':>12} {'Trend':<14}")
+            lines.append("-" * 60)
+            for c in result:
+                lines.append(
+                    f"{c.instrument_id:<20} {c.gap_pct:>10.2f} "
+                    f"{c.quote_last:>12.2f} {c.trend:<14}"
+                )
         click.echo("\n".join(lines))
 
 
