@@ -169,3 +169,4 @@
 {"id":"int-c5684d9d","kind":"field_change","created_at":"2026-05-24T09:12:53.550495Z","actor":"sam.dharma","issue_id":"sam_trader-9z3.10.22","extra":{"field":"status","new_value":"closed","old_value":"in_progress"}}
 {"id":"int-b638257a","kind":"field_change","created_at":"2026-05-24T09:18:52.477026Z","actor":"sam.dharma","issue_id":"sam_trader-9z3.10.23","extra":{"field":"status","new_value":"closed","old_value":"in_progress"}}
 {"id":"int-b117df4e","kind":"field_change","created_at":"2026-05-24T09:24:43.961522Z","actor":"sam.dharma","issue_id":"sam_trader-9z3.10.24","extra":{"field":"status","new_value":"closed","old_value":"in_progress"}}
+{"id":"int-c93729aa","kind":"field_change","created_at":"2026-05-24T09:36:47.876153Z","actor":"sam.dharma","issue_id":"sam_trader-9z3.10.25","extra":{"field":"status","new_value":"closed","old_value":"in_progress"}}
