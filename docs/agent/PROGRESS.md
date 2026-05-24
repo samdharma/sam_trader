@@ -901,3 +901,12 @@
 - **Files Changed**: `src/sam_trader/bundle_loader.py`, `src/sam_trader/bundle_validation.py`, `config/bundles.example.yaml`, `tests/unit/test_bundle_loader.py`, `tests/unit/test_bundle_validation.py`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 57/57 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ready for next Phase 7 ticket or Phase 7 EXIT.
+
+## Iteration 93
+- **Task**: P8: Remove broken deploy/update/rollback/hotfix CLI commands
+- **Task ID**: sam_trader-9z3.9.12
+- **Status**: COMPLETE
+- **Decisions**: Removed architecturally broken `deploy`, `update`, `rollback`, and `hotfix` commands from `services/cli.py`. These commands failed in real deployment because: (1) no `.git` directory exists in sam-services container (source is COPY'd, not cloned), (2) Docker daemon on host cannot access build context inside container, (3) no file watcher in sam-trader means overwritten `.py` files never reload. Added informative hint in module docstring pointing to `./deploy.sh --build start` on host. Kept `_signal_restart()` helper since `sam restart` still uses it. Removed 7 test methods: `TestDeployCommand` (2 tests), `TestUpdateCommand` (1 test), `TestRollbackCommand` (1 test), `TestHotfixCommand` (2 tests) from `test_cli.py`, plus `TestSamHotfix` (1 test) and `TestSamRollback` (1 test) from `test_deploy_decouple.py`. Verified removed commands produce "No such command" from Click. All other CLI commands (status, health, backup, restore, quote, logs, restart, version, validate-bundles, deploy-window, pipeline, performance, rotate-logs, gapscan, watchlist) continue working.
+- **Files Changed**: `src/sam_trader/services/cli.py`, `tests/unit/services/test_cli.py`, `tests/integration/test_deploy_decouple.py`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 42/42 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Phase 8 cleanup complete.

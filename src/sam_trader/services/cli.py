@@ -9,10 +9,9 @@ Usage (inside sam-services container):
     sam restart
     sam quote TSLA.NASDAQ
     sam performance [--strategy <id>] [--days 30]
-    sam deploy [--tag v1.2.3]
-    sam hotfix src/sam_trader/strategies/orb.py
-    sam update
-    sam rollback v1.1.0
+    sam deploy, update, rollback, hotfix → Run deploy.sh on host:
+    ./deploy.sh --build start
+
     sam version
     sam validate-bundles
 
@@ -114,142 +113,8 @@ def cli(ctx: click.Context, output_json: bool) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Deployment commands
+# Deployment commands (removed — use deploy.sh on host instead)
 # ---------------------------------------------------------------------------
-
-
-@cli.command()
-@click.option("--tag", default=None, help="Git tag or branch to deploy.")
-@click.pass_context
-def deploy(ctx: click.Context, tag: str | None) -> None:
-    """Git pull + rebuild + graceful restart."""
-    result: dict[str, Any] = {"command": "deploy", "steps": []}
-
-    # Git fetch
-    r = _run(["git", "fetch", "--tags"], check=False)
-    result["steps"].append({"git_fetch": r.returncode == 0})
-
-    # Checkout tag/branch if provided
-    if tag:
-        r = _run(["git", "checkout", tag])
-        result["steps"].append({"git_checkout": tag})
-    else:
-        r = _run(["git", "pull"])
-        result["steps"].append({"git_pull": r.returncode == 0})
-
-    # Rebuild
-    r = _run(
-        [
-            DOCKER_BINARY,
-            "compose",
-            "-f",
-            "docker/docker-compose.yml",
-            "build",
-            SAM_TRADER_CONTAINER,
-        ],
-        check=False,
-    )
-    result["steps"].append({"docker_build": r.returncode == 0})
-
-    # Graceful restart via Redis state save signal
-    _signal_restart()
-    result["steps"].append({"restart_signal": "sent"})
-
-    _out(ctx, result)
-
-
-@cli.command()
-@click.argument("module_path")
-@click.pass_context
-def hotfix(ctx: click.Context, module_path: str) -> None:
-    """Copy updated module into running container + trigger reload."""
-    src = Path(module_path)
-    if not src.exists():
-        raise click.ClickException(f"File not found: {module_path}")
-
-    # Copy into container at matching path under /opt/sam_trader/src
-    dest = f"{SAM_TRADER_CONTAINER}:/opt/sam_trader/{module_path}"
-    _run([DOCKER_BINARY, "cp", str(src), dest])
-
-    # Touch hotfix trigger file inside container to signal reload watcher
-    _run(
-        [
-            DOCKER_BINARY,
-            "exec",
-            SAM_TRADER_CONTAINER,
-            "touch",
-            "/opt/sam_trader/.hotfix_trigger",
-        ]
-    )
-
-    result = {
-        "command": "hotfix",
-        "source": str(src),
-        "destination": dest,
-        "status": "copied",
-        "trigger": "/opt/sam_trader/.hotfix_trigger",
-    }
-    _out(ctx, result)
-
-
-@cli.command()
-@click.pass_context
-def update(ctx: click.Context) -> None:
-    """Git pull latest + rebuild + restart."""
-    result: dict[str, Any] = {"command": "update", "steps": []}
-
-    r = _run(["git", "pull"], check=False)
-    result["steps"].append({"git_pull": r.returncode == 0})
-
-    r = _run(
-        [
-            DOCKER_BINARY,
-            "compose",
-            "-f",
-            "docker/docker-compose.yml",
-            "build",
-            SAM_TRADER_CONTAINER,
-        ],
-        check=False,
-    )
-    result["steps"].append({"docker_build": r.returncode == 0})
-
-    _signal_restart()
-    result["steps"].append({"restart_signal": "sent"})
-
-    _out(ctx, result)
-
-
-@cli.command()
-@click.argument("tag")
-@click.pass_context
-def rollback(ctx: click.Context, tag: str) -> None:
-    """Git checkout tag + rebuild + restart."""
-    result: dict[str, Any] = {"command": "rollback", "tag": tag, "steps": []}
-
-    r = _run(["git", "fetch", "--tags"], check=False)
-    result["steps"].append({"git_fetch": r.returncode == 0})
-
-    r = _run(["git", "checkout", tag])
-    result["steps"].append({"git_checkout": tag})
-
-    r = _run(
-        [
-            DOCKER_BINARY,
-            "compose",
-            "-f",
-            "docker/docker-compose.yml",
-            "build",
-            SAM_TRADER_CONTAINER,
-        ],
-        check=False,
-    )
-    result["steps"].append({"docker_build": r.returncode == 0})
-
-    _signal_restart()
-    result["steps"].append({"restart_signal": "sent"})
-
-    _out(ctx, result)
 
 
 @cli.command()
