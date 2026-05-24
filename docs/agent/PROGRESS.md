@@ -1106,3 +1106,17 @@
 - **Files Changed**: `src/sam_trader/services/pipeline_executor.py` (new), `tests/unit/services/test_pipeline_executor.py` (new)
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 24/24 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ready for next Phase 9 ticket (sam_trader-9z3.10.25: Bundle YAML Generator).
+
+## Iteration 107
+- **Task**: P9: Bundle YAML Generator
+- **Task ID**: sam_trader-9z3.10.25
+- **Status**: COMPLETE
+- **Decisions**:
+  1. Created `BundleGenerator` in `src/sam_trader/services/bundle_generator.py` with `BundleGeneratorConfig` frozen dataclass.
+  2. Converts approved `PipelineCandidate` objects to valid bundle YAML dicts, validating each against `_validate_bundle_schema` from `bundle_validation.py` before inclusion.
+  3. Bundle fields include: `instrument_id`, `venue` (inferred from suffix, defaults to FUTU), strategy path (default `sam_trader.strategies.orb:OrbStrategy`), `bar_type` derived from instrument + venue aggregation, `trade_size` from `position_size`, bracket config (`stop_loss_ticks`/`take_profit_ticks` computed from entry/stop/target prices), and risk limits (`max_position`, `max_daily_loss`).
+  4. Empty candidates list produces `bundles: []` YAML gracefully.
+  5. High-level `BundleGenerator.run(candidates)` API combines generation + writing for CLI/cron integration in ticket 9z3.10.26 (Readiness Report).
+- **Files Changed**: `src/sam_trader/services/bundle_generator.py` (new), `tests/unit/services/test_bundle_generator.py` (new)
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 28/28 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for next Phase 9 ticket (sam_trader-9z3.10.26: Readiness Report).
