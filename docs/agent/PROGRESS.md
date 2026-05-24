@@ -1089,3 +1089,20 @@
 - **Files Changed**: `src/sam_trader/services/heat_monitor.py` (new), `tests/unit/services/test_heat_monitor.py` (new)
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 20/20 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ready for next Phase 9 ticket (sam_trader-9z3.10.24: Pipeline Sequential Executor).
+
+## Iteration 106
+- **Task**: P9: Pipeline sequential executor
+- **Task ID**: sam_trader-9z3.10.24
+- **Status**: COMPLETE
+- **Decisions**:
+  1. Created `PipelineExecutor` in `src/sam_trader/services/pipeline_executor.py` with `PipelineExecutorConfig`, `PipelineCandidate`, `PipelineResult`, and `PipelineStageRecord` frozen dataclasses.
+  2. Orchestrates 6 sequential stages: AI scoring → position sizing → risk checks → heat monitor → regime detection → merge. Regime detection runs as a parallel track that merges at the final stage.
+  3. `PipelineCandidate` accumulates full metadata across stages: `gap`, `recommendation`, `position_size`, `risk_check`, `heat_entry`, `approved`, `rejection_reason`.
+  4. Fail-fast per candidate: exceptions in AI scoring, sizing, or risk checks are caught, logged as WARNING, and that candidate is skipped. The pipeline continues with remaining candidates.
+  5. Audit trail: every stage produces a `PipelineStageRecord` with ISO timestamp, input/output counts, and error list. Final result contains the complete ordered trail.
+  6. Stage toggles: each stage can be disabled via config (`enable_*` flags) for testing or degraded operation.
+  7. Regime-aware sizing: in the merge stage, if regime detection yields a multiplier (e.g., BEARISH 0.5x), position sizes are adjusted downward proportionally.
+  8. Grade filtering: AI recommendations with `Grade.SKIP` or below `min_grade` threshold are filtered out before sizing.
+- **Files Changed**: `src/sam_trader/services/pipeline_executor.py` (new), `tests/unit/services/test_pipeline_executor.py` (new)
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 24/24 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for next Phase 9 ticket (sam_trader-9z3.10.25: Bundle YAML Generator).
