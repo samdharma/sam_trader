@@ -180,6 +180,52 @@ def _build_features(
     return features, ["log_return", "realized_vol", "volume_ratio"]
 
 
+def bars_from_nautilus_bars(bars: list[Any]) -> list[dict[str, Any]]:
+    """Convert Nautilus ``Bar`` objects to dicts for ``HMMRegimeClassifier``.
+
+    Parameters
+    ----------
+    bars : list[Any]
+        List of ``nautilus_trader.model.data.Bar`` instances.
+
+    Returns
+    -------
+    list[dict[str, Any]]
+        Dicts with ``close`` and ``volume`` keys.
+    """
+    return [
+        {
+            "close": float(b.close.as_double()),
+            "volume": float(b.volume.as_double()),
+        }
+        for b in bars
+    ]
+
+
+def bars_from_quote_ticks(quotes: list[Any]) -> list[dict[str, Any]]:
+    """Convert Nautilus ``QuoteTick`` objects to bar-like dicts using mid price.
+
+    The mid price is used as a proxy for ``close``, and total quoted size
+    (bid + ask) is used as a proxy for ``volume``.
+
+    Parameters
+    ----------
+    quotes : list[Any]
+        List of ``nautilus_trader.model.data.QuoteTick`` instances.
+
+    Returns
+    -------
+    list[dict[str, Any]]
+        Dicts with ``close`` and ``volume`` keys.
+    """
+    result: list[dict[str, Any]] = []
+    for q in quotes:
+        mid = (q.bid_price.as_double() + q.ask_price.as_double()) / 2.0
+        vol = q.bid_size.as_double() + q.ask_size.as_double()
+        result.append({"close": mid, "volume": vol})
+    return result
+
+
 # ── HMM Model Training & Inference ─────────────────────────────────────────
 
 

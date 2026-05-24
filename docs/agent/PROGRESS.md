@@ -1020,3 +1020,15 @@
 - **Files Changed**: `.beads/issues.jsonl` (ticket status update)
 - **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 91/91 tests passed, no lint/type issues)
 - **Blockers / Notes**: None. Ready for next Phase 9 ticket (sam_trader-9z3.10.20: AI Scoring Engine).
+
+## Iteration 101
+- **Task**: P9: Market regime detection — HMM-based classification
+- **Task ID**: sam_trader-9z3.10.19
+- **Status**: COMPLETE
+- **Decisions**:
+  1. Verified existing `HMMRegimeClassifier` and `RegimeAdapter` in `src/sam_trader/services/regime_detection.py` already satisfy 5 of 6 AC (regime labels, output format, parameter adaptation, min bars, stability flag).
+  2. Added `bars_from_nautilus_bars()` and `bars_from_quote_ticks()` conversion helpers to explicitly bridge QuoteCollectionService output → classifier input format, satisfying the "live bar data input" AC.
+  3. Created `tests/unit/services/test_regime.py` with 22 focused tests covering all AC: HMM classification, transition matrix, regime labels, QuoteCollectionService integration (bar/tick conversion), minimum bar history, stability flag, and regime-aware parameter adaptation.
+- **Files Changed**: `src/sam_trader/services/regime_detection.py` (added conversion helpers), `tests/unit/services/test_regime.py` (new)
+- **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 22/22 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for next Phase 9 ticket (sam_trader-9z3.10.20: AI Scoring Engine, or sam_trader-9z3.10.24: Pipeline Sequential Executor).
