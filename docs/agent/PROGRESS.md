@@ -1061,3 +1061,17 @@
 - **Files Changed**: `src/sam_trader/services/risk_sizing.py` (new), `tests/unit/services/test_risk_sizing.py` (new)
 - **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 23/23 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ready for next Phase 9 ticket (sam_trader-9z3.10.22: Pre-trade Risk Checks).
+
+## Iteration 104
+- **Task**: P9: Pre-trade risk checks
+- **Task ID**: sam_trader-9z3.10.22
+- **Status**: COMPLETE
+- **Decisions**:
+  1. Created `PreTradeRiskChecker` in `src/sam_trader/services/risk_checks.py` with `VenueRiskLimits`, `PortfolioState`, and `RiskCheckResult` frozen dataclasses.
+  2. Four configurable checks per venue: max exposure, daily loss limit, margin requirement, max notional per order. Zero-value disables a check (permissive default).
+  3. Pure function design: accepts `PortfolioState` snapshot, zero DB/Redis dependencies — fully testable.
+  4. Daily loss logic correctly handles profits (`current_loss = max(0, -realized_pnl_today)`) and projects `current_loss + estimated_risk`.
+  5. Input validation on `check()` raises `ValueError` for empty venue/instrument, negative size, non-positive prices.
+- **Files Changed**: `src/sam_trader/services/risk_checks.py` (new), `tests/unit/services/test_risk_checks.py` (new)
+- **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 35/35 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for next Phase 9 ticket (sam_trader-9z3.10.23: Portfolio Heat Monitor).
