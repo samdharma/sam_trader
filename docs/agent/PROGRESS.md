@@ -989,3 +989,20 @@
 - **Files Changed**: `src/sam_trader/services/cli.py`, `tests/unit/services/test_cli.py`, `tests/integration/test_phase8_apply.py` (new)
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 49/49 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Phase 8 now has `sam apply` as the operator's one-button pre-market deploy. Ready for next Phase 8 ticket or Phase 9.
+
+## Iteration 99
+- **Task**: [EXIT] P8: Verify CLI fixes — restart, preflight, snapshot, apply, bundle diff
+- **Task ID**: sam_trader-9z3.9.18
+- **Status**: COMPLETE
+- **Decisions**:
+  1. Created `tests/integration/test_phase8_cli_exit.py` with 7 integration tests covering all Phase 8 CLI exit AC.
+  2. `test_restart_graceful_flow` validates Redis pub/sub handshake → docker restart → health check → state_loaded confirmation.
+  3. `test_preflight_catches_issues` validates exit code 2 when deploy window is closed AND services are unhealthy.
+  4. `test_snapshot_roundtrip` validates create → list flow with Redis mocked.
+  5. `test_bundle_diff_shows_changes` validates ADDED, REMOVED, MODIFIED, and VERSION BUMPS categories in one test.
+  6. `test_apply_dry_run` validates `--dry-run` stops after preflight (no snapshot/restart).
+  7. `test_removed_commands_not_found` validates deploy/update/rollback/hotfix return exit code 1 with error, and module docstring mentions deploy.sh.
+  8. `test_existing_commands_still_work` validates status, version, validate-bundles, deploy-window, rotate-logs, pipeline all return 0.
+- **Files Changed**: `tests/integration/test_phase8_cli_exit.py` (new)
+- **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 7/7 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Phase 8 EXIT complete. All 11 Phase 8 tickets closed. Ready for Phase 9.
