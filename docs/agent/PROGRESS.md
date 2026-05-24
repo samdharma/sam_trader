@@ -1191,3 +1191,17 @@
 - **Files Changed**: `tests/integration/test_phase10_exit.py` (new)
 - **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 19/19 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: Phase 10 EXIT complete. All 3 Phase 10 tickets (9z3.11.6, 9z3.11.7, 9z3.11.8) closed. Ready for Phase 11 (Deploy Script & E2E Validation).
+
+## Iteration 113
+- **Task**: P9: Replace pipeline.py placeholder with real PipelineExecutor — fix cron + CLI wiring
+- **Task ID**: sam_trader-9z3.10.28
+- **Status**: COMPLETE
+- **Decisions**:
+  1. Rewrote `run_pipeline()` in `src/sam_trader/services/pipeline.py` as a ~60-line adapter wiring existing components: load watchlist → QuoteCollectionService + PreMarketGapScanner → PipelineExecutor → generate_bundles → ReadinessReportGenerator.
+  2. Added `market` parameter (defaults to `PIPELINE_MARKET` env var) and `--market` CLI arg to `pipeline.py` main().
+  3. `run_pipeline()` returns a result dict with `status`, counts, `bundle_path`, `regime`, `trace_id` for CLI consumption.
+  4. All failures handled gracefully: log + continue, return error dict, no crash.
+  5. Updated `sam pipeline` CLI command in `cli.py` to call real `run_pipeline()` and output its result dict.
+- **Files Changed**: `src/sam_trader/services/pipeline.py`, `src/sam_trader/services/cli.py`, `tests/unit/services/test_pipeline.py`, `tests/unit/services/test_cli.py`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 58/58 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Phase 9 ticket 9z3.10.28 closed. Cron and CLI now run the real pipeline.
