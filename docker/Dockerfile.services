@@ -63,6 +63,6 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
       bash -c 'true > /dev/tcp/localhost/8080' 2>/dev/null && \
       (curl -sf http://localhost:8080/health > /dev/null 2>&1 || true)
 
-# Start cron daemon (requires root) and drop to 'sam' for the HTTP server.
+# Start cron daemon (requires root) and drop to 'sam' for the dashboard HTTP server.
 # Cron jobs execute as user 'sam' because the crontab specifies the user field.
-CMD ["bash", "-c", "env | grep -E '^(POSTGRES|REDIS|BACKUP|FUTU|CONFIG|SAM_|DEPLOY|PIPELINE|LOG_|TZ)' > /opt/sam_trader/.env_cron && cron && su - sam -c 'cd /opt/sam_trader && exec python3 -m http.server 8080'"]
+CMD ["bash", "-c", "env | grep -E '^(POSTGRES|REDIS|BACKUP|FUTU|CONFIG|SAM_|DEPLOY|PIPELINE|LOG_|TZ)' > /opt/sam_trader/.env_cron && cron && su - sam -c 'cd /opt/sam_trader && exec python3 -m sam_trader.services.dashboard'"]
