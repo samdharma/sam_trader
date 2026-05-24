@@ -820,3 +820,22 @@
 - **Files Changed**: `tests/integration/test_phase8_exit.py` (new)
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 6/6 integration tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: Phase 8 exit gate complete. All Phase 8 tickets (9z3.9.1 through 9z3.9.11) are closed. Ready for Phase 9 (Pre-Market Pipeline).
+
+## Iteration 92
+- **Task**: P9: Market regime detection — HMM-based classification, regime-aware adaptation
+- **Task ID**: sam_trader-9z3.10.4
+- **Status**: COMPLETE
+- **Decisions**: 
+  1. Created `src/sam_trader/services/regime_detection.py` with `HMMRegimeClassifier` and `RegimeAdapter`.
+  2. HMM classifier uses `hmmlearn.GaussianHMM` with BIC-based model selection (n_components 3-7, 10 random inits per candidate).
+  3. Feature engineering: log_return, realized_vol (20-day rolling), volume_ratio (20-day MA).
+  4. Forward algorithm via `predict_proba` on full history up to latest bar — no future-information bias.
+  5. Regime labels: TRENDING, RANGING, VOLATILE, BEARISH, UNKNOWN (confidence < 0.6).
+  6. State-to-regime mapping heuristic sorts states by volatility and assigns semantic labels.
+  7. Stability detection: same regime for 3+ consecutive days → stable; unstable defaults to conservative sizing.
+  8. Dual-venue support: separate model persistence per venue (US/HK) via pickle + JSON metadata.
+  9. `RegimeAdapter` provides sizing multipliers (RANGING 1.25x, VOLATILE 0.60x, BEARISH 0.50x), ATR-based stop adjustments, and strategy weights.
+  10. Added `hmmlearn` to `pyproject.toml` dependencies.
+- **Files Changed**: `src/sam_trader/services/regime_detection.py` (new), `tests/unit/services/test_regime_detection.py` (new), `pyproject.toml`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 44/44 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for next Phase 9 ticket (sam_trader-9z3.10.7: Monte Carlo position sizer, or sam_trader-9z3.10.1: PreMarketGapScanner).
