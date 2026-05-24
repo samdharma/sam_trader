@@ -854,3 +854,20 @@
 - **Files Changed**: `config/premarket_watchlist.yaml` (new), `src/sam_trader/services/watchlist.py` (new), `src/sam_trader/services/cli.py` (watchlist command), `tests/unit/services/test_watchlist.py` (new)
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 19/19 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ready for next Phase 9 ticket (sam_trader-9z3.10.17: QuoteCollectionService).
+
+## Iteration 94
+- **Task**: P9: QuoteCollectionService — reusable Nautilus data client wrapper
+- **Task ID**: sam_trader-9z3.10.17
+- **Status**: COMPLETE
+- **Decisions**:
+  1. Created `src/sam_trader/services/quote_collector.py` with `QuoteCollectionService` and `QuoteCollectionResult`.
+  2. Service creates in-process Nautilus infrastructure: `MessageBus` (with `TraderId`), `Cache`, `LiveClock`, `FutuInstrumentProvider`.
+  3. Reuses `FutuLiveDataClient` from Phase 2 with `FutuSubscriptionManager` for quota tracking.
+  4. Registers a msgbus endpoint handler on `"DataEngine.process"` to capture `QuoteTick` objects as they arrive.
+  5. `collect()` lifecycle: setup → connect with timeout → subscribe all (with quota check) → collect loop (sleep) → teardown.
+  6. Handles connection timeout (`ConnectionError`), partial subscription failures (invalid symbols, quota rejection, SDK errors), and zero quotes (empty dict).
+  7. IB broker placeholder raises `NotImplementedError` — architecture is identical, only the factory changes.
+  8. 16 unit tests covering infrastructure, subscribe+collect, quote dict overwrite, cleanup, timeout, partial failures, quota, and result immutability.
+- **Files Changed**: `src/sam_trader/services/quote_collector.py` (new), `tests/unit/services/test_quote_collector.py` (new)
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 16/16 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for next Phase 9 ticket (sam_trader-9z3.10.18: PreMarketGapScanner).
