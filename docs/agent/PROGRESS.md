@@ -1047,3 +1047,17 @@
 - **Files Changed**: `src/sam_trader/services/ai_scoring.py` (new), `tests/unit/services/test_ai_scoring.py` (new)
 - **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 51/51 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ready for next Phase 9 ticket (sam_trader-9z3.10.21: Monte Carlo Position Sizer).
+
+## Iteration 103
+- **Task**: P9: Monte Carlo position sizer
+- **Task ID**: sam_trader-9z3.10.21
+- **Status**: COMPLETE
+- **Decisions**:
+  1. Created `MonteCarloPositionSizer` in `src/sam_trader/services/risk_sizing.py` with `SizerConfig` and `PositionSizeResult` frozen dataclasses.
+  2. Monte Carlo uses geometric Brownian motion (zero drift) with configurable `simulation_count` (default 10,000), `confidence_level`, and `holding_period_days`.
+  3. Sizing logic: `min(naive_shares, var_based_shares, capital_based_shares)` — the most conservative of stop-loss, VaR, and capital limits.
+  4. `entry_price` defaults to 100.0 for back-of-envelope usage; real pipeline usage should pass actual mid/limit price.
+  5. Comprehensive input validation with clear `ValueError` messages.
+- **Files Changed**: `src/sam_trader/services/risk_sizing.py` (new), `tests/unit/services/test_risk_sizing.py` (new)
+- **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 23/23 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for next Phase 9 ticket (sam_trader-9z3.10.22: Pre-trade Risk Checks).
