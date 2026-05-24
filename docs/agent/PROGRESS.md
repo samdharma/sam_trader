@@ -1151,3 +1151,12 @@
 - **Files Changed**: `tests/integration/test_phase9_exit.py` (new)
 - **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 11/11 integration tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: Phase 9 complete. All 12 tickets (10.16–10.27) closed. Phase 10 tickets (11.6, 11.7, 11.8) are unblocked.
+
+## Iteration 110
+- **Task**: P10: Safety controls — kill switch, circuit breakers, emergency halt
+- **Task ID**: sam_trader-9z3.11.6
+- **Status**: COMPLETE
+- **Decisions**: Verified all safety controls were already fully implemented in prior iterations. No code changes required. Kill switch (`sam kill`/`halt`/`resume`) publishes to Redis `sam:kill_switch`; `KillSwitchSubscriber` (wired in main.py) consumes it and updates `LiveRiskEngine.trading_state`. Circuit breakers (`DAILY_PNL`, `REJECTION_STREAK`, `CONNECTIVITY_LOSS`) consume existing Phase 6 actor data (RealizedPnLTrackerActor, RejectionMonitorActor, HealthMonitorActor). All thresholds configurable via env vars. Audit logging with timestamps.
+- **Files Changed**: None (code already complete)
+- **Validation Result**: PASS (20/20 tests passed: 14 in test_safety.py + 6 in test_kill_switch_subscriber.py; black/isort/flake8/mypy all green)
+- **Blockers / Notes**: Phase 9 EXIT (9z3.10.27) is complete. Phase 10 ticket 11.6 closed. Ready for 11.7 (Basic dashboard) or 11.8 (EXIT).
