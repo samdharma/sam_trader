@@ -219,6 +219,54 @@ def _get_bundle_snapshot_data(path: Path) -> dict[str, dict[str, Any]]:
         return {}
 
 
+def _create_snapshot(r: Any) -> dict[str, Any]:
+    """Create a new system-state snapshot in Redis.
+
+    Parameters
+    ----------
+    r : redis.Redis
+        Connected Redis client.
+
+    Returns
+    -------
+    dict[str, Any]
+        Result dict with snapshot metadata.
+    """
+    commit_result = _run(["git", "rev-parse", "--short", "HEAD"], check=False)
+    git_hash = (
+        commit_result.stdout.strip() if commit_result.returncode == 0 else "unknown"
+    )
+
+    bundles_path = DEFAULT_BUNDLES_PATH
+    bundles_hash = ""
+    if bundles_path.exists():
+        bundles_hash = hashlib.sha256(bundles_path.read_bytes()).hexdigest()
+
+    timestamp = datetime.now(timezone.utc).isoformat()
+    active_strategies = _get_active_bundle_ids(bundles_path)
+
+    payload = {
+        "git_hash": git_hash,
+        "bundles_hash": bundles_hash,
+        "timestamp": timestamp,
+        "active_strategies": active_strategies,
+        "bundles": _get_bundle_snapshot_data(bundles_path),
+    }
+
+    key = f"sam:snapshot:{timestamp}"
+    r.set(key, json.dumps(payload), ex=SNAPSHOT_TTL_SECONDS)
+
+    return {
+        "command": "snapshot",
+        "status": "created",
+        "key": key,
+        "git_hash": git_hash,
+        "bundles_hash": bundles_hash,
+        "timestamp": timestamp,
+        "active_strategies": active_strategies,
+    }
+
+
 @cli.command()
 @click.option("--list", "list_flag", is_flag=True, help="Show last 10 snapshots.")
 @click.option(
@@ -252,40 +300,7 @@ def snapshot(ctx: click.Context, list_flag: bool, show: int | None) -> None:
         _snapshot_show(ctx, r, show)
         return
 
-    # Create new snapshot
-    commit_result = _run(["git", "rev-parse", "--short", "HEAD"], check=False)
-    git_hash = (
-        commit_result.stdout.strip() if commit_result.returncode == 0 else "unknown"
-    )
-
-    bundles_path = DEFAULT_BUNDLES_PATH
-    bundles_hash = ""
-    if bundles_path.exists():
-        bundles_hash = hashlib.sha256(bundles_path.read_bytes()).hexdigest()
-
-    timestamp = datetime.now(timezone.utc).isoformat()
-    active_strategies = _get_active_bundle_ids(bundles_path)
-
-    payload = {
-        "git_hash": git_hash,
-        "bundles_hash": bundles_hash,
-        "timestamp": timestamp,
-        "active_strategies": active_strategies,
-        "bundles": _get_bundle_snapshot_data(bundles_path),
-    }
-
-    key = f"sam:snapshot:{timestamp}"
-    r.set(key, json.dumps(payload), ex=SNAPSHOT_TTL_SECONDS)
-
-    result = {
-        "command": "snapshot",
-        "status": "created",
-        "key": key,
-        "git_hash": git_hash,
-        "bundles_hash": bundles_hash,
-        "timestamp": timestamp,
-        "active_strategies": active_strategies,
-    }
+    result = _create_snapshot(r)
     _out(ctx, result)
 
 
@@ -510,19 +525,13 @@ def health(ctx: click.Context) -> None:
     _out(ctx, result)
 
 
-@cli.command()
-@click.option(
-    "--skip-window",
-    is_flag=True,
-    help="Bypass deploy-window check (for testing).",
-)
-@click.pass_context
-def preflight(ctx: click.Context, skip_window: bool) -> None:
-    """Pre-update validation — dry-run, read-only.
+def _run_preflight(skip_window: bool) -> tuple[dict[str, Any], int, list[str]]:
+    """Run preflight checks and return (result_dict, exit_code, blocking_issues).
 
-    Checks deploy window, bundle validity, service health, git status,
-    and pending bundle changes.  Exit code: 0=all-clear, 1=warnings,
-    2=blocking issues.
+    Returns
+    -------
+    tuple[dict, int, list[str]]
+        Result dict, exit code (0=pass, 1=warn, 2=fail), list of blocking issue IDs.
     """
     checks: dict[str, Any] = {}
     blocking_issues: list[str] = []
@@ -691,6 +700,24 @@ def preflight(ctx: click.Context, skip_window: bool) -> None:
         "exit_code": exit_code,
         "checks": checks,
     }
+    return result, exit_code, blocking_issues
+
+
+@cli.command()
+@click.option(
+    "--skip-window",
+    is_flag=True,
+    help="Bypass deploy-window check (for testing).",
+)
+@click.pass_context
+def preflight(ctx: click.Context, skip_window: bool) -> None:
+    """Pre-update validation — dry-run, read-only.
+
+    Checks deploy window, bundle validity, service health, git status,
+    and pending bundle changes.  Exit code: 0=all-clear, 1=warnings,
+    2=blocking issues.
+    """
+    result, exit_code, _blocking = _run_preflight(skip_window)
     _out(ctx, result)
     return exit_code  # type: ignore[return-value]
 
@@ -772,6 +799,222 @@ def restart(ctx: click.Context, force: bool) -> None:
     result = _signal_restart(force=force)
     if result.get("status") in ("error", "aborted"):
         raise click.ClickException(result.get("detail", "Restart failed"))
+    _out(ctx, result)
+
+
+def _run_verify() -> dict[str, Any]:
+    """Post-restart verification: health checks + state-loaded confirmation.
+
+    Returns
+    -------
+    dict[str, Any]
+        Result with ``status``, ``health``, and ``state_loaded`` keys.
+    """
+    health_checks = _run_health_checks()
+    all_up = all(c["status"] == "UP" for c in health_checks.values())
+
+    state_loaded = False
+    if _redis_cli is not None:
+        try:
+            r = _redis_cli.Redis(
+                host=REDIS_HOST,
+                port=int(REDIS_PORT),
+                password=REDIS_PASSWORD or None,
+                decode_responses=True,
+                socket_connect_timeout=5,
+            )
+            state_loaded = bool(r.exists("sam:state_loaded"))
+        except Exception as exc:
+            logger.warning("Could not verify state_loaded in Redis: %s", exc)
+
+    if all_up and state_loaded:
+        status = "PASS"
+        detail = "All services healthy and state loaded"
+    elif all_up:
+        status = "WARN"
+        detail = "All services healthy but state_loaded not confirmed"
+    else:
+        status = "FAIL"
+        down = [k for k, v in health_checks.items() if v["status"] != "UP"]
+        detail = f"Services DOWN: {', '.join(down)}"
+
+    return {
+        "status": status,
+        "detail": detail,
+        "health": health_checks,
+        "state_loaded": state_loaded,
+    }
+
+
+@cli.command()
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    help="Run preflight only — no snapshot or restart.",
+)
+@click.option(
+    "--skip-window",
+    is_flag=True,
+    help="Bypass deploy-window check.",
+)
+@click.pass_context
+def apply(ctx: click.Context, dry_run: bool, skip_window: bool) -> None:
+    """Orchestrated preflight → snapshot → restart → verify pipeline.
+
+    The operator's one-button pre-market deploy.  Each step is logged
+    with a timestamp.  Blocking preflight issues abort the pipeline
+    before any mutating action.
+    """
+    steps: list[dict[str, Any]] = []
+    start_time = datetime.now(timezone.utc)
+
+    def _log_step(name: str, status: str, detail: str = "") -> None:
+        ts = datetime.now(timezone.utc).isoformat()
+        entry = {"step": name, "status": status, "timestamp": ts, "detail": detail}
+        steps.append(entry)
+        if status == "FAIL":
+            logger.critical("apply step %s FAILED at %s: %s", name, ts, detail)
+        else:
+            logger.info("apply step %s %s at %s", name, status, ts)
+
+    def _emit_progress(label: str, emoji: str = "▶") -> None:
+        if not ctx.obj.get("json"):
+            click.echo(f"{emoji}  {label}")
+
+    # ------------------------------------------------------------------
+    # 1. Preflight
+    # ------------------------------------------------------------------
+    _emit_progress("Preflight checks…", emoji="[1/4]")
+    preflight_result, preflight_code, blocking = _run_preflight(skip_window)
+    if preflight_code == 0:
+        _log_step("preflight", "PASS", "All checks passed")
+    elif preflight_code == 1:
+        _log_step(
+            "preflight", "WARN", f"Warnings: {list(preflight_result['checks'].keys())}"
+        )
+    else:
+        _log_step("preflight", "FAIL", f"Blocking: {blocking}")
+        result = {
+            "command": "apply",
+            "overall": "ABORTED",
+            "reason": "preflight blocked",
+            "blocking_issues": blocking,
+            "steps": steps,
+            "started_at": start_time.isoformat(),
+            "finished_at": datetime.now(timezone.utc).isoformat(),
+        }
+        _out(ctx, result)
+        raise click.ClickException(
+            f"Preflight blocked — aborting apply. Blocking issues: {blocking}"
+        )
+
+    if dry_run:
+        _log_step("dry-run", "PASS", "Preflight passed — no mutating actions taken")
+        result = {
+            "command": "apply",
+            "overall": "PASS",
+            "mode": "dry-run",
+            "steps": steps,
+            "started_at": start_time.isoformat(),
+            "finished_at": datetime.now(timezone.utc).isoformat(),
+        }
+        _out(ctx, result)
+        return
+
+    # ------------------------------------------------------------------
+    # 2. Snapshot
+    # ------------------------------------------------------------------
+    _emit_progress("Capturing snapshot…", emoji="[2/4]")
+    if _redis_cli is None:
+        _log_step("snapshot", "FAIL", "redis package not available")
+        result = {
+            "command": "apply",
+            "overall": "FAIL",
+            "failed_step": "snapshot",
+            "steps": steps,
+            "started_at": start_time.isoformat(),
+            "finished_at": datetime.now(timezone.utc).isoformat(),
+        }
+        _out(ctx, result)
+        raise click.ClickException("Snapshot failed: redis package not available")
+
+    try:
+        r = _redis_cli.Redis(
+            host=REDIS_HOST,
+            port=int(REDIS_PORT),
+            password=REDIS_PASSWORD or None,
+            decode_responses=True,
+            socket_connect_timeout=5,
+        )
+        r.ping()
+    except Exception as exc:
+        _log_step("snapshot", "FAIL", f"Redis connection failed: {exc}")
+        result = {
+            "command": "apply",
+            "overall": "FAIL",
+            "failed_step": "snapshot",
+            "steps": steps,
+            "started_at": start_time.isoformat(),
+            "finished_at": datetime.now(timezone.utc).isoformat(),
+        }
+        _out(ctx, result)
+        raise click.ClickException(f"Snapshot failed: Redis connection failed: {exc}")
+
+    snap = _create_snapshot(r)
+    _log_step("snapshot", "PASS", f"Created {snap['key']}")
+
+    # ------------------------------------------------------------------
+    # 3. Restart
+    # ------------------------------------------------------------------
+    _emit_progress("Graceful restart…", emoji="[3/4]")
+    restart_result = _signal_restart(force=False)
+    if restart_result.get("status") in ("error", "aborted"):
+        _log_step("restart", "FAIL", restart_result.get("detail", "Restart failed"))
+        result = {
+            "command": "apply",
+            "overall": "FAIL",
+            "failed_step": "restart",
+            "steps": steps,
+            "started_at": start_time.isoformat(),
+            "finished_at": datetime.now(timezone.utc).isoformat(),
+        }
+        _out(ctx, result)
+        raise click.ClickException(
+            f"Restart failed: {restart_result.get('detail', 'Unknown error')}"
+        )
+    _log_step("restart", "PASS", restart_result.get("detail", "Restarted successfully"))
+
+    # ------------------------------------------------------------------
+    # 4. Verify
+    # ------------------------------------------------------------------
+    _emit_progress("Post-restart verification…", emoji="[4/4]")
+    verify_result = _run_verify()
+    if verify_result["status"] == "PASS":
+        _log_step("verify", "PASS", verify_result["detail"])
+    elif verify_result["status"] == "WARN":
+        _log_step("verify", "WARN", verify_result["detail"])
+    else:
+        _log_step("verify", "FAIL", verify_result["detail"])
+        result = {
+            "command": "apply",
+            "overall": "FAIL",
+            "failed_step": "verify",
+            "steps": steps,
+            "started_at": start_time.isoformat(),
+            "finished_at": datetime.now(timezone.utc).isoformat(),
+        }
+        _out(ctx, result)
+        raise click.ClickException(
+            f"Post-restart verification failed: {verify_result['detail']}"
+        )
+
+    result = {
+        "command": "apply",
+        "overall": "PASS",
+        "steps": steps,
+        "started_at": start_time.isoformat(),
+        "finished_at": datetime.now(timezone.utc).isoformat(),
+    }
     _out(ctx, result)
 
 

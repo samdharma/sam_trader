@@ -1033,6 +1033,208 @@ class TestBundleDiffCommand:
         assert data["version_bumps"][0]["id"] == "existing"
 
 
+class TestApplyCommand:
+    @patch("sam_trader.services.cli._signal_restart")
+    @patch("sam_trader.services.cli._redis_cli")
+    @patch("sam_trader.services.cli._run_health_checks")
+    @patch("sam_trader.services.cli.validate_bundles")
+    @patch("sam_trader.services.cli.is_in_window")
+    @patch("sam_trader.services.cli.subprocess.run")
+    def test_apply_dry_run(
+        self,
+        mock_subproc: Any,
+        mock_window: Any,
+        mock_validate: Any,
+        mock_health: Any,
+        mock_redis_mod: Any,
+        mock_restart: Any,
+        capsys: Any,
+        tmp_path: pathlib.Path,
+    ) -> None:
+        """--dry-run stops after preflight; snapshot/restart never called."""
+        mock_window.return_value = True
+        result = MagicMock()
+        result.all_passed = True
+        result.summary = "2/2 bundles passed validation"
+        mock_validate.return_value = result
+        mock_health.return_value = {
+            "postgres": {"status": "UP"},
+            "redis": {"status": "UP"},
+            "futu_opend": {"status": "UP", "health": "healthy"},
+            "sam_trader": {"status": "UP", "health": "healthy"},
+        }
+        mock_subproc.return_value = MagicMock(returncode=0, stdout="")
+
+        mock_r = MagicMock()
+        mock_redis_mod.Redis.return_value = mock_r
+
+        bundles_file = tmp_path / "bundles.yaml"
+        bundles_file.write_text("bundles:\n  - id: test\n")
+        with patch(
+            "sam_trader.services.cli.DEFAULT_BUNDLES_PATH",
+            bundles_file,
+        ):
+            rc = main(["apply", "--dry-run"])
+
+        captured = capsys.readouterr()
+        assert rc == 0
+        assert "dry-run" in captured.out.lower() or "PASS" in captured.out
+        mock_restart.assert_not_called()
+        mock_r.set.assert_not_called()
+
+    @patch("sam_trader.services.cli._signal_restart")
+    @patch("sam_trader.services.cli._redis_cli")
+    @patch("sam_trader.services.cli._run_health_checks")
+    @patch("sam_trader.services.cli.validate_bundles")
+    @patch("sam_trader.services.cli.is_in_window")
+    @patch("sam_trader.services.cli.subprocess.run")
+    def test_apply_full_flow(
+        self,
+        mock_subproc: Any,
+        mock_window: Any,
+        mock_validate: Any,
+        mock_health: Any,
+        mock_redis_mod: Any,
+        mock_restart: Any,
+        capsys: Any,
+        tmp_path: pathlib.Path,
+    ) -> None:
+        """Full pipeline: preflight → snapshot → restart → verify."""
+        mock_window.return_value = True
+        result = MagicMock()
+        result.all_passed = True
+        result.summary = "2/2 bundles passed validation"
+        mock_validate.return_value = result
+        mock_health.return_value = {
+            "postgres": {"status": "UP"},
+            "redis": {"status": "UP"},
+            "futu_opend": {"status": "UP", "health": "healthy"},
+            "sam_trader": {"status": "UP", "health": "healthy"},
+        }
+        mock_subproc.return_value = MagicMock(returncode=0, stdout="")
+        mock_restart.return_value = {
+            "status": "success",
+            "detail": "Graceful restart completed",
+        }
+
+        mock_r = MagicMock()
+        mock_r.exists.return_value = True
+        mock_redis_mod.Redis.return_value = mock_r
+
+        bundles_file = tmp_path / "bundles.yaml"
+        bundles_file.write_text("bundles:\n  - id: test\n")
+        with patch(
+            "sam_trader.services.cli.DEFAULT_BUNDLES_PATH",
+            bundles_file,
+        ):
+            rc = main(["apply"])
+
+        captured = capsys.readouterr()
+        assert rc == 0
+        assert "PASS" in captured.out
+        mock_restart.assert_called_once()
+        mock_r.set.assert_called_once()
+
+    @patch("sam_trader.services.cli._signal_restart")
+    @patch("sam_trader.services.cli._redis_cli")
+    @patch("sam_trader.services.cli._run_health_checks")
+    @patch("sam_trader.services.cli.validate_bundles")
+    @patch("sam_trader.services.cli.is_in_window")
+    @patch("sam_trader.services.cli.subprocess.run")
+    def test_apply_preflight_blocks(
+        self,
+        mock_subproc: Any,
+        mock_window: Any,
+        mock_validate: Any,
+        mock_health: Any,
+        mock_redis_mod: Any,
+        mock_restart: Any,
+        capsys: Any,
+        tmp_path: pathlib.Path,
+    ) -> None:
+        """Blocking preflight issue aborts before snapshot/restart."""
+        mock_window.return_value = False  # outside deploy window
+        result = MagicMock()
+        result.all_passed = True
+        result.summary = "2/2 bundles passed validation"
+        mock_validate.return_value = result
+        mock_health.return_value = {
+            "postgres": {"status": "UP"},
+            "redis": {"status": "UP"},
+            "futu_opend": {"status": "UP", "health": "healthy"},
+            "sam_trader": {"status": "UP", "health": "healthy"},
+        }
+        mock_subproc.return_value = MagicMock(returncode=0, stdout="")
+
+        mock_r = MagicMock()
+        mock_redis_mod.Redis.return_value = mock_r
+
+        bundles_file = tmp_path / "bundles.yaml"
+        bundles_file.write_text("bundles:\n  - id: test\n")
+        with patch(
+            "sam_trader.services.cli.DEFAULT_BUNDLES_PATH",
+            bundles_file,
+        ):
+            rc = main(["apply"])
+
+        captured = capsys.readouterr()
+        assert rc == 1
+        assert "ABORTED" in captured.out or "blocked" in captured.err.lower()
+        mock_restart.assert_not_called()
+        mock_r.set.assert_not_called()
+
+    @patch("sam_trader.services.cli._signal_restart")
+    @patch("sam_trader.services.cli._redis_cli")
+    @patch("sam_trader.services.cli._run_health_checks")
+    @patch("sam_trader.services.cli.validate_bundles")
+    @patch("sam_trader.services.cli.is_in_window")
+    @patch("sam_trader.services.cli.subprocess.run")
+    def test_apply_restart_failure(
+        self,
+        mock_subproc: Any,
+        mock_window: Any,
+        mock_validate: Any,
+        mock_health: Any,
+        mock_redis_mod: Any,
+        mock_restart: Any,
+        capsys: Any,
+        tmp_path: pathlib.Path,
+    ) -> None:
+        """Restart failure aborts pipeline after snapshot."""
+        mock_window.return_value = True
+        result = MagicMock()
+        result.all_passed = True
+        result.summary = "2/2 bundles passed validation"
+        mock_validate.return_value = result
+        mock_health.return_value = {
+            "postgres": {"status": "UP"},
+            "redis": {"status": "UP"},
+            "futu_opend": {"status": "UP", "health": "healthy"},
+            "sam_trader": {"status": "UP", "health": "healthy"},
+        }
+        mock_subproc.return_value = MagicMock(returncode=0, stdout="")
+        mock_restart.return_value = {
+            "status": "error",
+            "detail": "Docker restart failed",
+        }
+
+        mock_r = MagicMock()
+        mock_redis_mod.Redis.return_value = mock_r
+
+        bundles_file = tmp_path / "bundles.yaml"
+        bundles_file.write_text("bundles:\n  - id: test\n")
+        with patch(
+            "sam_trader.services.cli.DEFAULT_BUNDLES_PATH",
+            bundles_file,
+        ):
+            rc = main(["apply"])
+
+        captured = capsys.readouterr()
+        assert rc == 1
+        assert "Restart failed" in captured.err or "error" in captured.err.lower()
+        mock_restart.assert_called_once()
+
+
 class TestJsonGlobalFlag:
     @patch("sam_trader.services.cli._run")
     def test_json_flag_on_status(self, mock_run: Any, capsys: Any) -> None:

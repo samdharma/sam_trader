@@ -971,3 +971,21 @@
 - **Files Changed**: `src/sam_trader/services/cli.py`, `tests/unit/services/test_cli.py`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 44/44 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ready for next Phase 8 ticket or Phase 9.
+
+## Iteration 98
+- **Task**: P8: Add sam apply — orchestrated preflight→snapshot→restart→verify
+- **Task ID**: sam_trader-9z3.9.17
+- **Status**: COMPLETE
+- **Decisions**:
+  1. Added `sam apply` CLI command with `--dry-run` (preflight only) and `--skip-window` flags.
+  2. Extracted `_run_preflight()` helper from existing `preflight` command so both `preflight` and `apply` share the same validation logic.
+  3. Extracted `_create_snapshot()` helper from existing `snapshot` command so `apply` can create snapshots programmatically without invoking the click command.
+  4. Added `_run_verify()` helper that runs deep health checks (`_run_health_checks`) and confirms `sam:state_loaded` exists in Redis.
+  5. Pipeline steps: [1/4] preflight → aborts on blocking issues (exit 1, CRITICAL log); [2/4] snapshot → creates Redis checkpoint; [3/4] restart → calls `_signal_restart(force=False)` for graceful state-save handshake; [4/4] verify → health + state_loaded confirmation.
+  6. Friendly progress output: `[N/4]  Step name…` for human operators (suppressed in `--json` mode).
+  7. Each step logs timestamp + status; failures log CRITICAL via `logger.critical`.
+  8. Four unit tests: `test_apply_dry_run` (no snapshot/restart called), `test_apply_full_flow` (all 4 steps PASS), `test_apply_preflight_blocks` (aborts before mutating actions), `test_apply_restart_failure` (snapshot created, restart fails, pipeline aborts).
+  9. One integration test: `test_apply_end_to_end_mocked` validates full pipeline with all subcomponents mocked, confirms 4 steps and JSON output structure.
+- **Files Changed**: `src/sam_trader/services/cli.py`, `tests/unit/services/test_cli.py`, `tests/integration/test_phase8_apply.py` (new)
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 49/49 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Phase 8 now has `sam apply` as the operator's one-button pre-market deploy. Ready for next Phase 8 ticket or Phase 9.
