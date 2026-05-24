@@ -910,3 +910,18 @@
 - **Files Changed**: `src/sam_trader/services/cli.py`, `tests/unit/services/test_cli.py`, `tests/integration/test_deploy_decouple.py`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 42/42 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Phase 8 cleanup complete.
+
+## Iteration 94
+- **Task**: P8: Fix sam restart to follow graceful save_state→stop→run→restore
+- **Task ID**: sam_trader-9z3.9.13
+- **Status**: COMPLETE
+- **Decisions**: 
+  1. Rewrote `_signal_restart()` in `services/cli.py` to implement full graceful restart handshake: subscribe to `sam:state_saved` → publish `sam:restart_request graceful` → poll for confirmation (timeout 30s, configurable via `STATE_SAVE_HANDSHAKE_TIMEOUT`) → docker compose restart → wait for health check (timeout 60s) → verify `sam:state_loaded`. Returns structured result dict; raises `click.ClickException` on `error`/`aborted` statuses.
+  2. Added `sam restart --force` flag to skip the state-save wait (emergency use only).
+  3. Added CRITICAL log and abort when state-save handshake times out — docker restart is NOT performed, preserving unsaved state.
+  4. Added `_notify_state_loaded()` in `main.py` (called after `node.build()`) so the restarted node publishes `sam:state_loaded` and sets a Redis key for the CLI to verify.
+  5. Updated unit tests: `test_restart_waits_for_state_saved`, `test_restart_timeout_aborts`, `test_restart_force_skips_wait`.
+  6. Updated integration tests in `test_deploy_decouple.py` for new Redis-client-based flow.
+- **Files Changed**: `src/sam_trader/services/cli.py`, `src/sam_trader/main.py`, `tests/unit/services/test_cli.py`, `tests/integration/test_deploy_decouple.py`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 46/46 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for next Phase 8 ticket or Phase 9.

@@ -25,6 +25,7 @@ import logging
 import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -52,6 +53,15 @@ from sam_trader.services.watchlist import (
     load_watchlist_config,
 )
 
+# Optional redis import — graceful degradation if package is missing
+_redis_cli: Any = None
+try:
+    import redis as _redis_mod_cli  # type: ignore[import-untyped]
+
+    _redis_cli = _redis_mod_cli
+except ImportError:  # pragma: no cover
+    pass
+
 logger = logging.getLogger(__name__)
 
 # Environment-driven defaults
@@ -73,6 +83,9 @@ SAM_SERVICES_CONTAINER = "sam-services"
 SAM_POSTGRES_CONTAINER = "sam-postgres"
 SAM_REDIS_CONTAINER = "sam-redis"
 SAM_IB_GATEWAY_CONTAINER = "sam-ib-gateway"
+
+STATE_SAVE_HANDSHAKE_TIMEOUT = int(os.getenv("STATE_SAVE_HANDSHAKE_TIMEOUT", "30"))
+RESTART_HEALTH_TIMEOUT = int(os.getenv("RESTART_HEALTH_TIMEOUT", "60"))
 
 
 def _out(ctx: click.Context, data: dict[str, Any]) -> None:
@@ -368,16 +381,17 @@ def logs(ctx: click.Context, service: str) -> None:
 
 
 @cli.command()
+@click.option(
+    "--force",
+    is_flag=True,
+    help="Skip state-save wait (emergency use only).",
+)
 @click.pass_context
-def restart(ctx: click.Context) -> None:
+def restart(ctx: click.Context, force: bool) -> None:
     """Graceful restart of sam-trader via Redis state."""
-    # Signal via Redis that a graceful restart is requested
-    _signal_restart()
-    result = {
-        "command": "restart",
-        "status": "signal_sent",
-        "detail": "sam-trader will save state and restart",
-    }
+    result = _signal_restart(force=force)
+    if result.get("status") in ("error", "aborted"):
+        raise click.ClickException(result.get("detail", "Restart failed"))
     _out(ctx, result)
 
 
@@ -725,36 +739,120 @@ def validate_bundles_cmd(ctx: click.Context, path: Path, no_backtest: bool) -> N
 # ---------------------------------------------------------------------------
 
 
-def _signal_restart() -> None:
-    """Signal sam-trader to gracefully restart via Redis, then docker restart."""
-    # 1. Publish restart request to Redis so Nautilus can save state
-    redis_cmd = [
-        "redis-cli",
-        "-h",
-        REDIS_HOST,
-        "-p",
-        REDIS_PORT,
-        "PUBLISH",
-        "sam:restart_request",
-        "graceful",
-    ]
-    if REDIS_PASSWORD:
-        redis_cmd = [
-            "redis-cli",
-            "-h",
-            REDIS_HOST,
-            "-p",
-            REDIS_PORT,
-            "-a",
-            REDIS_PASSWORD,
-            "PUBLISH",
-            "sam:restart_request",
-            "graceful",
-        ]
-    subprocess.run(redis_cmd, capture_output=True, check=False)
+def _signal_restart(force: bool = False) -> dict[str, Any]:
+    """Signal sam-trader to gracefully restart via Redis, then docker restart.
 
-    # 2. Trigger docker compose restart
-    subprocess.run(
+    Parameters
+    ----------
+    force : bool
+        If *True*, skip the state-save handshake and restart immediately.
+
+    Returns
+    -------
+    dict
+        Result dict with ``status`` and ``detail`` keys.
+
+    """
+    result: dict[str, Any] = {
+        "command": "restart",
+        "status": "unknown",
+        "detail": "",
+    }
+
+    if _redis_cli is None:
+        logger.critical(
+            "redis package not available — cannot perform graceful restart handshake"
+        )
+        result["status"] = "error"
+        result["detail"] = "redis package not available"
+        return result
+
+    try:
+        r = _redis_cli.Redis(
+            host=REDIS_HOST,
+            port=int(REDIS_PORT),
+            password=REDIS_PASSWORD or None,
+            decode_responses=True,
+            socket_connect_timeout=5,
+        )
+        r.ping()
+    except Exception as exc:
+        logger.critical("Cannot connect to Redis for restart handshake: %s", exc)
+        result["status"] = "error"
+        result["detail"] = f"Redis connection failed: {exc}"
+        return result
+
+    if not force:
+        # Subscribe BEFORE publishing so we don't miss the confirmation
+        pubsub = r.pubsub()
+        try:
+            pubsub.subscribe("sam:state_saved")
+        except Exception as exc:
+            logger.critical("Failed to subscribe to sam:state_saved: %s", exc)
+            result["status"] = "error"
+            result["detail"] = f"Redis subscribe failed: {exc}"
+            return result
+
+        # Publish restart request
+        try:
+            r.publish("sam:restart_request", "graceful")
+        except Exception as exc:
+            logger.critical("Failed to publish restart request: %s", exc)
+            pubsub.unsubscribe()
+            pubsub.close()
+            result["status"] = "error"
+            result["detail"] = f"Redis publish failed: {exc}"
+            return result
+
+        # Wait for confirmation with timeout
+        start = time.time()
+        confirmed = False
+        while time.time() - start < STATE_SAVE_HANDSHAKE_TIMEOUT:
+            message = pubsub.get_message(timeout=1.0)
+            if message and message.get("type") == "message":
+                data = message.get("data", "")
+                try:
+                    payload = json.loads(data)
+                    if payload.get("status") == "saved":
+                        confirmed = True
+                        break
+                except json.JSONDecodeError:
+                    if data == "saved":
+                        confirmed = True
+                        break
+            time.sleep(0.1)
+
+        try:
+            pubsub.unsubscribe()
+            pubsub.close()
+        except Exception:
+            pass
+
+        if not confirmed:
+            logger.critical(
+                "State-save handshake timed out after %ds. "
+                "Aborting restart to prevent data loss.",
+                STATE_SAVE_HANDSHAKE_TIMEOUT,
+            )
+            result["status"] = "aborted"
+            result["detail"] = (
+                f"State-save timeout ({STATE_SAVE_HANDSHAKE_TIMEOUT}s) — "
+                "restart aborted to prevent unsaved state loss"
+            )
+            return result
+    else:
+        # Force mode: skip wait, just publish
+        try:
+            r.publish("sam:restart_request", "graceful")
+        except Exception as exc:
+            logger.critical("Failed to publish restart request: %s", exc)
+            result["status"] = "error"
+            result["detail"] = f"Redis publish failed: {exc}"
+            return result
+        result["detail"] = "Force restart — skipped state-save wait"
+
+    # Docker compose restart
+    docker_result = subprocess.run(
         [
             DOCKER_BINARY,
             "compose",
@@ -764,8 +862,88 @@ def _signal_restart() -> None:
             SAM_TRADER_CONTAINER,
         ],
         capture_output=True,
+        text=True,
         check=False,
     )
+    if docker_result.returncode != 0:
+        logger.critical("Docker restart failed: %s", docker_result.stderr)
+        result["status"] = "error"
+        result["detail"] = f"Docker restart failed: {docker_result.stderr}"
+        return result
+
+    # Wait for health check
+    health_ok = False
+    health_start = time.time()
+    while time.time() - health_start < RESTART_HEALTH_TIMEOUT:
+        health_r = subprocess.run(
+            [
+                DOCKER_BINARY,
+                "inspect",
+                "--format",
+                "{{.State.Health.Status}}",
+                SAM_TRADER_CONTAINER,
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if health_r.stdout.strip() == "healthy":
+            health_ok = True
+            break
+        time.sleep(2)
+
+    if not health_ok:
+        logger.critical(
+            "sam-trader health check did not pass within %ds after restart.",
+            RESTART_HEALTH_TIMEOUT,
+        )
+        result["status"] = "error"
+        result["detail"] = (
+            f"Health check timeout ({RESTART_HEALTH_TIMEOUT}s) after restart"
+        )
+        return result
+
+    # Verify sam:state_loaded published by restarted node
+    state_loaded = False
+    try:
+        if r.exists("sam:state_loaded"):
+            state_loaded = True
+        else:
+            # Brief pub/sub listen in case node just published
+            pubsub2 = r.pubsub()
+            pubsub2.subscribe("sam:state_loaded")
+            # Consume subscription confirmation message
+            pubsub2.get_message(timeout=1)
+            # Wait for actual message
+            msg = pubsub2.get_message(timeout=3)
+            if msg and msg.get("type") == "message":
+                state_loaded = True
+            pubsub2.unsubscribe()
+            pubsub2.close()
+    except Exception as exc:
+        logger.warning("Could not verify sam:state_loaded: %s", exc)
+
+    if state_loaded:
+        result["status"] = "success"
+        if force:
+            result["detail"] = (
+                "Force restart completed: container restarted, health OK, state loaded"
+            )
+        else:
+            result["detail"] = (
+                "Graceful restart completed: state saved, container restarted, "
+                "health OK, state loaded"
+            )
+    else:
+        result["status"] = "warning"
+        if force:
+            result["detail"] = (
+                "Force restart completed but sam:state_loaded not confirmed"
+            )
+        else:
+            result["detail"] = "Restart completed but sam:state_loaded not confirmed"
+
+    return result
 
 
 def main(argv: list[str] | None = None) -> int:

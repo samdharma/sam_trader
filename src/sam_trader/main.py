@@ -388,12 +388,33 @@ def build_trading_node() -> TradingNode:
     return node
 
 
+def _notify_state_loaded(cfg: SamTraderConfig) -> None:
+    """Publish ``sam:state_loaded`` so the ops CLI knows the node is ready."""
+    try:
+        import redis  # type: ignore[import-untyped]
+
+        r = redis.Redis(
+            host=cfg.redis_host,
+            port=cfg.redis_port,
+            password=cfg.redis_password or None,
+            decode_responses=True,
+            socket_connect_timeout=5,
+        )
+        payload = json.dumps({"status": "loaded", "trader_id": cfg.trader_id})
+        r.publish("sam:state_loaded", payload)
+        r.setex("sam:state_loaded", 60, "1")
+    except Exception:
+        pass
+
+
 def main() -> None:
     """Main entry point for SAM Trader."""
     node = build_trading_node()
     node.build()
 
     cfg = SamTraderConfig.from_env()
+    _notify_state_loaded(cfg)
+
     subscriber = RestartSubscriber(node, cfg)
     subscriber.start()
 

@@ -142,19 +142,98 @@ class TestSamStatusShowsContainers:
 
 @pytest.mark.integration
 class TestSamRestartPreservesRedis:
+    @patch("sam_trader.services.cli._redis_cli")
     @patch("sam_trader.services.cli.subprocess.run")
-    def test_restart_publishes_redis_graceful(self, mock_subproc: Any) -> None:
+    def test_restart_publishes_redis_graceful(
+        self, mock_subproc: Any, mock_redis_mod: Any
+    ) -> None:
         """sam restart must publish graceful restart request to Redis."""
-        mock_subproc.return_value = MagicMock(returncode=0, stdout="")
+        mock_r = MagicMock()
+        mock_pubsub = MagicMock()
+        mock_pubsub.get_message.side_effect = [
+            {"type": "subscribe"},
+            {"type": "message", "data": '{"status": "saved"}'},
+        ]
+        mock_r.pubsub.return_value = mock_pubsub
+        mock_r.exists.return_value = True
+        mock_redis_mod.Redis.return_value = mock_r
+
+        def _docker_side_effect(cmd: list[str], **kwargs: Any) -> MagicMock:
+            m = MagicMock()
+            if "restart" in cmd and "sam-trader" in cmd:
+                m.returncode = 0
+                m.stdout = ""
+            elif "inspect" in cmd and "Health.Status" in str(cmd):
+                m.returncode = 0
+                m.stdout = "healthy\n"
+            else:
+                m.returncode = 0
+                m.stdout = ""
+            return m
+
+        mock_subproc.side_effect = _docker_side_effect
+
         rc = main(["restart"])
         assert rc == 0
 
-        calls = [c[0][0] for c in mock_subproc.call_args_list]
-        redis_calls = [c for c in calls if "PUBLISH" in str(c)]
-        assert len(redis_calls) >= 1
-        assert any("sam:restart_request" in str(c) for c in redis_calls)
-        assert any("graceful" in str(c) for c in redis_calls)
+        # Verify Redis publish was called via Python client
+        mock_r.publish.assert_any_call("sam:restart_request", "graceful")
 
         # Also verify docker compose restart is triggered
+        calls = [c[0][0] for c in mock_subproc.call_args_list]
         docker_calls = [c for c in calls if "restart" in str(c).lower()]
         assert any("sam-trader" in str(c) for c in docker_calls)
+
+    @patch("sam_trader.services.cli._redis_cli")
+    @patch("sam_trader.services.cli.subprocess.run")
+    def test_restart_aborts_on_timeout(
+        self, mock_subproc: Any, mock_redis_mod: Any
+    ) -> None:
+        """sam restart must abort if state-save confirmation times out."""
+        mock_r = MagicMock()
+        mock_pubsub = MagicMock()
+        mock_pubsub.get_message.return_value = None
+        mock_r.pubsub.return_value = mock_pubsub
+        mock_redis_mod.Redis.return_value = mock_r
+
+        rc = main(["restart"])
+        assert rc == 1
+
+        # Docker restart must NOT have been called
+        calls = [c[0][0] for c in mock_subproc.call_args_list]
+        assert not any("restart" in str(c) and "sam-trader" in str(c) for c in calls)
+
+    @patch("sam_trader.services.cli._redis_cli")
+    @patch("sam_trader.services.cli.subprocess.run")
+    def test_restart_force_skips_state_save_wait(
+        self, mock_subproc: Any, mock_redis_mod: Any
+    ) -> None:
+        """sam restart --force must skip the state-save handshake."""
+        mock_r = MagicMock()
+        mock_redis_mod.Redis.return_value = mock_r
+
+        def _docker_side_effect(cmd: list[str], **kwargs: Any) -> MagicMock:
+            m = MagicMock()
+            if "restart" in cmd and "sam-trader" in cmd:
+                m.returncode = 0
+                m.stdout = ""
+            elif "inspect" in cmd and "Health.Status" in str(cmd):
+                m.returncode = 0
+                m.stdout = "healthy\n"
+            else:
+                m.returncode = 0
+                m.stdout = ""
+            return m
+
+        mock_subproc.side_effect = _docker_side_effect
+
+        rc = main(["restart", "--force"])
+        assert rc == 0
+
+        # Publish must have been called, but pubsub subscribe must NOT
+        mock_r.publish.assert_any_call("sam:restart_request", "graceful")
+        mock_r.pubsub.assert_not_called()
+
+        # Docker restart MUST have been called
+        calls = [c[0][0] for c in mock_subproc.call_args_list]
+        assert any("sam-trader" in str(c) for c in calls)
