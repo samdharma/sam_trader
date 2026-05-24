@@ -1,0 +1,19 @@
+# SAM Trader V3 — Pre-market watchlist configuration
+#
+# Defines the symbol universe scanned by the pre-market pipeline.
+# Static symbols override dynamic bundle extraction when non-empty.
+
+watchlist:
+  US:
+    # Static symbol list — leave empty to auto-generate from active bundles
+    symbols: []
+    min_gap_pct: 2.0
+    max_candidates: 50
+    premarket_only: true
+
+  HK:
+    # Static symbol list — leave empty to auto-generate from active bundles
+    symbols: []
+    min_gap_pct: 1.5
+    max_candidates: 30
+    premarket_only: true

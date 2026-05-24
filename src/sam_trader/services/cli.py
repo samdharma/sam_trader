@@ -40,6 +40,10 @@ from sam_trader.services.deploy_window import check_window as check_deploy_windo
 from sam_trader.services.pipeline import run_pipeline
 from sam_trader.services.quote import format_quote, get_quote
 from sam_trader.services.rotate_logs import rotate_logs
+from sam_trader.services.watchlist import (
+    build_watchlist,
+    load_watchlist_config,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -553,6 +557,38 @@ def quote(ctx: click.Context, symbol: str) -> None:
         _out(ctx, result)
     else:
         click.echo(format_quote(result))
+
+
+@cli.command()
+@click.option("--market", default=None, help="Filter by market (US or HK).")
+@click.pass_context
+def watchlist(ctx: click.Context, market: str | None) -> None:
+    """Show the current pre-market watchlist universe."""
+    try:
+        cfg = load_watchlist_config("config/premarket_watchlist.yaml")
+        universe = build_watchlist(cfg)
+    except Exception as exc:
+        raise click.ClickException(f"Failed to load watchlist: {exc}")
+
+    if market:
+        market = market.upper()
+        if market not in universe:
+            raise click.ClickException(f"Unknown market: {market}")
+        universe = {market: universe[market]}
+
+    if ctx.obj.get("json"):
+        _out(ctx, {"command": "watchlist", "universe": universe})
+    else:
+        lines: list[str] = ["Pre-Market Watchlist Universe"]
+        lines.append("=" * 40)
+        for mkt, symbols in universe.items():
+            lines.append(f"\n{mkt}: {len(symbols)} symbols")
+            lines.append("-" * 40)
+            for sym in symbols:
+                lines.append(f"  {sym}")
+            if not symbols:
+                lines.append("  (empty)")
+        click.echo("\n".join(lines))
 
 
 @cli.command()
