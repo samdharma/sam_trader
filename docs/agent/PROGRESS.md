@@ -1032,3 +1032,18 @@
 - **Files Changed**: `src/sam_trader/services/regime_detection.py` (added conversion helpers), `tests/unit/services/test_regime.py` (new)
 - **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 22/22 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ready for next Phase 9 ticket (sam_trader-9z3.10.20: AI Scoring Engine, or sam_trader-9z3.10.24: Pipeline Sequential Executor).
+
+## Iteration 102
+- **Task**: P9: AI scoring engine — LLM candidate evaluation
+- **Task ID**: sam_trader-9z3.10.20
+- **Status**: COMPLETE
+- **Decisions**:
+  1. Created `AIScoringEngine` in `src/sam_trader/services/ai_scoring.py` with 6-dimension deterministic scoring (Gap Quality 0-25, Technical Setup 0-20, Sentiment 0-20, Liquidity 0-15, Risk 0-10, Market Context 0-10).
+  2. Grades: STRONG_BUY (score>=80, conf>=0.7), BUY (score>=60, conf>=0.5), HOLD (score>=40 or conf>=0.3), SKIP (default).
+  3. LLM clients: `DeepSeekClient` and `KimiClient` using stdlib `urllib` (no extra deps). Both require API keys via env vars or constructor.
+  4. Rule-based fallback always available when LLM fails or is unconfigured; flagged with `llm_used="RuleBased"`.
+  5. Trade parameters enforce min 1.5:1 risk-reward; stop uses ATR*1.5 or PML (whichever is more conservative); entry within 1% of mid.
+  6. Confidence base = 0.25, with bonuses for cross-validation, pass-2, ATR/PMH/PML context, sentiment, and relative volume (capped at 1.0).
+- **Files Changed**: `src/sam_trader/services/ai_scoring.py` (new), `tests/unit/services/test_ai_scoring.py` (new)
+- **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 51/51 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for next Phase 9 ticket (sam_trader-9z3.10.21: Monte Carlo Position Sizer).
