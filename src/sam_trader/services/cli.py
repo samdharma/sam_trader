@@ -1066,13 +1066,8 @@ def deploy_window_cmd(ctx: click.Context) -> None:
 @cli.command()
 @click.pass_context
 def pipeline(ctx: click.Context) -> None:
-    """Trigger the pre-market pipeline slot (Phase 9 placeholder)."""
-    run_pipeline()
-    result = {
-        "command": "pipeline",
-        "status": "triggered",
-        "note": "Phase 9 placeholder",
-    }
+    """Trigger the pre-market pipeline (gap scan → AI scoring → bundles → report)."""
+    result = run_pipeline()
     _out(ctx, result)
 
 

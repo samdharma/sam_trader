@@ -403,11 +403,26 @@ class TestDeployWindowCommand:
 
 class TestPipelineCommand:
     @patch("sam_trader.services.cli.run_pipeline")
-    def test_pipeline_placeholder(self, mock_run: Any, capsys: Any) -> None:
+    def test_pipeline_cli_runs_full_pipeline(self, mock_run: Any, capsys: Any) -> None:
+        mock_run.return_value = {
+            "command": "pipeline",
+            "status": "success",
+            "market": "US",
+            "schedule": "08:30",
+            "candidate_count": 2,
+            "approved_count": 1,
+            "rejected_count": 0,
+            "bundles_generated": 1,
+            "bundle_path": "/path/to/bundles.yaml",
+            "regime": "NEUTRAL",
+            "trace_id": "test-trace",
+        }
         rc = main(["pipeline"])
         captured = capsys.readouterr()
         assert rc == 0
-        assert "triggered" in captured.out or "placeholder" in captured.out
+        assert "success" in captured.out
+        assert "US" in captured.out
+        mock_run.assert_called_once()
 
 
 class TestPerformanceCommand:
