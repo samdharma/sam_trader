@@ -1221,3 +1221,19 @@
 - **Files Changed**: `src/sam_trader/services/pipeline.py`, `src/sam_trader/services/cli.py`, `tests/unit/services/test_pipeline.py`, `tests/unit/services/test_cli.py`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 58/58 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Phase 9 ticket 9z3.10.28 closed. Cron and CLI now run the real pipeline.
+
+## Iteration 114
+- **Task**: P9: Add IB broker support to QuoteCollectionService — remove NotImplementedError
+- **Task ID**: sam_trader-9z3.10.29
+- **Status**: COMPLETE
+- **Decisions**:
+  1. Added `_setup_ib()` method mirroring `_setup_futu()`: creates `InteractiveBrokersDataClientConfig` with host/port/client_id, creates `InteractiveBrokersInstrumentProviderConfig` with watchlist symbols mapped to `InstrumentId`s, wires `InteractiveBrokersLiveDataClientFactory.create()` to produce the data client + provider, registers msgbus handler for `"DataEngine.process"`.
+  2. Added `client_id: int = 1` parameter to `QuoteCollectionService.__init__()` and promoted `watchlist` to appear before optional `host`/`port` to satisfy Python default-parameter ordering.
+  3. Made `host` and `port` optional (`None` defaults) with env-var-driven fallbacks: `IB_GATEWAY_HOST`/`IB_GATEWAY_PORT` for IB, `FUTU_OPEND_HOST`/`FUTU_OPEND_PORT` for FUTU.
+  4. Graceful import error handling: `_setup_ib()` catches `ImportError` from missing `ibapi`, logs WARNING, and raises a clear `RuntimeError` with install instructions.
+  5. Updated `_subscribe_all()` to use dynamic `ClientId` (`"FUTU-1"` or `"IB"`) based on broker.
+  6. Changed `self._data_client` type from `FutuLiveDataClient | None` to `Any | None` to accommodate both Futu and IB clients without requiring ibapi at import time.
+  7. Updated `docs/reference/BUILD_PHASE_9.md` §3.2 to document IB support.
+- **Files Changed**: `src/sam_trader/services/quote_collector.py`, `tests/unit/services/test_quote_collector.py`, `docs/reference/BUILD_PHASE_9.md`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 18/18 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Phase 9 ticket 9z3.10.29 closed. All Phase 9 tickets (9z3.10.16 through 9z3.10.29) are now complete.

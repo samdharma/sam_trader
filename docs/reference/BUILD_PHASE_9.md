@@ -137,16 +137,22 @@ class QuoteCollectionService:
     def __init__(
         self,
         broker: str,  # "FUTU" or "IB"
-        host: str,
-        port: int,
         watchlist: list[str],
+        host: str | None = None,   # defaults to FUTU_OPEND_HOST or IB_GATEWAY_HOST
+        port: int | None = None,   # defaults to FUTU_OPEND_PORT or IB_GATEWAY_PORT
         collection_period_secs: int = 60,
+        connection_timeout_secs: int = 10,
+        client_id: int = 1,        # IB session ID
     ) -> None: ...
 
     async def collect(self) -> QuoteCollectionResult:
         """Connect, subscribe, collect, disconnect, return."""
         ...
 ```
+
+**IB data client supported** — `broker="IB"` wires `InteractiveBrokersLiveDataClientFactory`
+with `InteractiveBrokersDataClientConfig` + `InteractiveBrokersInstrumentProviderConfig`.
+Graceful `RuntimeError` if `ibapi` is not installed.
 
 ### 3.3 Key Nautilus Types
 

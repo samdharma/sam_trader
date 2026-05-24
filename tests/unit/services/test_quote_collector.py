@@ -10,6 +10,7 @@ from nautilus_trader.model.data import QuoteTick
 from nautilus_trader.model.identifiers import InstrumentId
 from nautilus_trader.model.objects import Price, Quantity
 
+from sam_trader.adapters.futu.data import FutuLiveDataClient
 from sam_trader.services.quote_collector import (
     QuoteCollectionResult,
     QuoteCollectionService,
@@ -68,17 +69,83 @@ class TestInfrastructure:
         with pytest.raises(RuntimeError, match="Unsupported broker"):
             event_loop.run_until_complete(svc.collect())
 
-    def test_ib_not_implemented(self, event_loop):
-        """IB broker raises NotImplementedError."""
+    def test_setup_ib_creates_client(self, event_loop):
+        """IB broker path creates an InteractiveBrokersDataClient via factory."""
         svc = QuoteCollectionService(
             broker="IB",
-            host="test-host",
-            port=4004,
+            host="test-ib-host",
+            port=4001,
+            watchlist=["TSLA.NASDAQ"],
+            client_id=42,
+            collection_period_secs=0,
+        )
+
+        mock_client = MagicMock()
+        mock_client.instrument_provider = MagicMock()
+
+        with patch(
+            "nautilus_trader.adapters.interactive_brokers.factories."
+            "InteractiveBrokersLiveDataClientFactory.create"
+        ) as mock_create:
+            mock_create.return_value = mock_client
+
+            async def _run():
+                await svc._setup()
+                assert svc._data_client is mock_client
+                assert svc._instrument_provider is mock_client.instrument_provider
+                assert svc._msgbus is not None
+                assert svc._cache is not None
+                assert svc._clock is not None
+                await svc._teardown()
+
+            event_loop.run_until_complete(_run())
+
+        mock_create.assert_called_once()
+        call_kwargs = mock_create.call_args.kwargs
+        assert call_kwargs["name"] == "IB"
+        assert call_kwargs["config"].ibg_host == "test-ib-host"
+        assert call_kwargs["config"].ibg_port == 4001
+        assert call_kwargs["config"].ibg_client_id == 42
+
+    def test_setup_ib_import_error_graceful(self, event_loop):
+        """If ibapi is missing, IB setup raises a clear RuntimeError."""
+        svc = QuoteCollectionService(
+            broker="IB",
+            host="test-ib-host",
+            port=4001,
             watchlist=["TSLA.NASDAQ"],
         )
 
-        with pytest.raises(NotImplementedError):
-            event_loop.run_until_complete(svc.collect())
+        import builtins
+
+        real_import = builtins.__import__
+
+        def fake_import(name, *args, **kwargs):
+            if "interactive_brokers" in name:
+                raise ImportError("No module named 'ibapi'")
+            return real_import(name, *args, **kwargs)
+
+        with patch("builtins.__import__", side_effect=fake_import):
+            with pytest.raises(RuntimeError, match="nautilus-ibapi"):
+                event_loop.run_until_complete(svc._setup())
+
+    def test_broker_futu_still_works(self, event_loop):
+        """Futu path is unchanged after adding IB support."""
+        svc = QuoteCollectionService(
+            broker="FUTU",
+            host="test-host",
+            port=11111,
+            watchlist=["TSLA.NASDAQ"],
+            collection_period_secs=0,
+        )
+
+        async def _run():
+            await svc._setup()
+            assert isinstance(svc._data_client, FutuLiveDataClient)
+            assert svc._subscription_manager is not None
+            await svc._teardown()
+
+        event_loop.run_until_complete(_run())
 
 
 class TestSubscribeAndCollect:

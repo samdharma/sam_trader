@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import time
 from dataclasses import dataclass, field
 from typing import Any
@@ -20,7 +21,13 @@ from nautilus_trader.common.providers import InstrumentProvider
 from nautilus_trader.core.uuid import UUID4
 from nautilus_trader.data.messages import SubscribeQuoteTicks
 from nautilus_trader.model.data import QuoteTick
-from nautilus_trader.model.identifiers import ClientId, InstrumentId, TraderId
+from nautilus_trader.model.identifiers import (
+    ClientId,
+    InstrumentId,
+    Symbol,
+    TraderId,
+    Venue,
+)
 
 from sam_trader.adapters.futu.config import FutuDataClientConfig
 from sam_trader.adapters.futu.connection import get_cached_futu_quote_context
@@ -50,41 +57,62 @@ class QuoteCollectionService:
     ----------
     broker : str
         ``"FUTU"`` or ``"IB"``.
-    host : str
-        Broker gateway host.
-    port : int
-        Broker gateway port.
+    host : str, optional
+        Broker gateway host. Defaults to ``FUTU_OPEND_HOST`` (Futu) or
+        ``IB_GATEWAY_HOST`` (IB) env vars.
+    port : int, optional
+        Broker gateway port. Defaults to ``FUTU_OPEND_PORT`` (Futu) or
+        ``IB_GATEWAY_PORT`` (IB) env vars.
     watchlist : list[str]
         Nautilus instrument ID strings (e.g. ``["TSLA.NASDAQ", "AAPL.NASDAQ"]``).
     collection_period_secs : int, default 60
         How long to collect quotes after successful subscription.
     connection_timeout_secs : int, default 10
         Maximum seconds to wait for the broker connection.
+    client_id : int, default 1
+        Broker client/session ID (used by IB).
 
     """
 
     def __init__(
         self,
         broker: str,
-        host: str,
-        port: int,
         watchlist: list[str],
+        host: str | None = None,
+        port: int | None = None,
         collection_period_secs: int = 60,
         connection_timeout_secs: int = 10,
+        client_id: int = 1,
     ) -> None:
         self._broker = broker.upper()
+        self._watchlist = list(watchlist)
+
+        # Env-var-driven defaults
+        if host is None:
+            host = os.environ.get(
+                "IB_GATEWAY_HOST" if self._broker == "IB" else "FUTU_OPEND_HOST",
+                "sam-ib-gateway" if self._broker == "IB" else "sam-futu-opend",
+            )
+        if port is None:
+            port = int(
+                os.environ.get(
+                    "IB_GATEWAY_PORT" if self._broker == "IB" else "FUTU_OPEND_PORT",
+                    "4004" if self._broker == "IB" else "11111",
+                )
+            )
+
         self._host = host
         self._port = port
-        self._watchlist = list(watchlist)
         self._collection_period_secs = collection_period_secs
         self._connection_timeout_secs = connection_timeout_secs
+        self._client_id = client_id
 
         # Lightweight in-process infrastructure
         self._msgbus: MessageBus | None = None
         self._cache: Cache | None = None
         self._clock: LiveClock | None = None
         self._instrument_provider: InstrumentProvider | None = None
-        self._data_client: FutuLiveDataClient | None = None
+        self._data_client: Any | None = None
         self._subscription_manager: FutuSubscriptionManager | None = None
 
         # Collection state
@@ -105,7 +133,7 @@ class QuoteCollectionService:
         Raises
         ------
         RuntimeError
-            If the broker is not supported.
+            If the broker is not supported or IB adapter is unavailable.
         ConnectionError
             If the client cannot connect within *connection_timeout_secs*.
 
@@ -145,12 +173,7 @@ class QuoteCollectionService:
         if self._broker == "FUTU":
             self._setup_futu()
         else:
-            # IB support deferred — no IB data client wrapper exists yet in
-            # sam-services.  The architecture is identical; only the client
-            # factory changes.
-            raise NotImplementedError(
-                "IB broker not yet supported by QuoteCollectionService"
-            )
+            self._setup_ib()
 
     def _setup_futu(self) -> None:
         """Create Futu-specific client and provider."""
@@ -192,6 +215,67 @@ class QuoteCollectionService:
             handler=self._on_data,
         )
 
+    def _setup_ib(self) -> None:
+        """Create IB-specific client and provider."""
+        try:
+            from nautilus_trader.adapters.interactive_brokers.config import (
+                InteractiveBrokersDataClientConfig,
+                InteractiveBrokersInstrumentProviderConfig,
+                SymbologyMethod,
+            )
+            from nautilus_trader.adapters.interactive_brokers.factories import (
+                InteractiveBrokersLiveDataClientFactory,
+            )
+        except ImportError as exc:
+            logger.warning("ibapi not installed; IB data client unavailable")
+            raise RuntimeError(
+                "IB data client requires nautilus-ibapi. "
+                "Install with: pip install nautilus-ibapi"
+            ) from exc
+
+        # Convert watchlist symbols to InstrumentIds for eager loading
+        ids: list[InstrumentId] = []
+        for s in self._watchlist:
+            if "." in s:
+                try:
+                    sym, venue = s.split(".", 1)
+                    ids.append(InstrumentId(Symbol(sym), Venue(venue)))
+                except Exception:  # noqa: BLE001
+                    pass
+        load_ids = frozenset(ids) if ids else None
+
+        provider_config = InteractiveBrokersInstrumentProviderConfig(
+            symbology_method=SymbologyMethod.IB_SIMPLIFIED,
+            load_ids=load_ids,
+        )
+
+        config = InteractiveBrokersDataClientConfig(
+            ibg_host=self._host,
+            ibg_port=self._port,
+            ibg_client_id=self._client_id,
+            instrument_provider=provider_config,
+        )
+
+        loop = asyncio.get_running_loop()
+        self._data_client = InteractiveBrokersLiveDataClientFactory.create(
+            loop=loop,
+            name="IB",
+            config=config,
+            msgbus=self._msgbus,
+            cache=self._cache,
+            clock=self._clock,
+        )
+
+        self._instrument_provider = self._data_client.instrument_provider
+
+        # Register our collector on the message bus so QuoteTicks
+        # dispatched by the client are captured.
+        assert self._msgbus is not None
+        self._msgbus.register(
+            endpoint="DataEngine.process",
+            handler=self._on_data,
+        )
+
     async def _connect_with_timeout(self) -> None:
         """Connect the data client with a timeout."""
         if self._data_client is None:
@@ -213,6 +297,8 @@ class QuoteCollectionService:
         if self._data_client is None:
             return
 
+        client_id_str = "FUTU-1" if self._broker == "FUTU" else "IB"
+
         for symbol in self._watchlist:
             try:
                 instrument_id = InstrumentId.from_str(symbol)
@@ -233,7 +319,7 @@ class QuoteCollectionService:
 
             cmd = SubscribeQuoteTicks(
                 instrument_id=instrument_id,
-                client_id=ClientId("FUTU-1"),
+                client_id=ClientId(client_id_str),
                 venue=None,
                 command_id=UUID4(),
                 ts_init=0,
