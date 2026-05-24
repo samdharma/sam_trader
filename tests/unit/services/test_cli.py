@@ -716,6 +716,106 @@ class TestPreflightCommand:
         assert "bundles_valid" in captured.out.lower()
 
 
+class TestSnapshotCommand:
+    @patch("sam_trader.services.cli._redis_cli")
+    @patch("sam_trader.services.cli._run")
+    def test_snapshot_creates_redis_key(
+        self, mock_run: Any, mock_redis_mod: Any, capsys: Any
+    ) -> None:
+        mock_run.return_value = MagicMock(returncode=0, stdout="abc1234\n")
+
+        mock_r = MagicMock()
+        mock_redis_mod.Redis.return_value = mock_r
+
+        bundles_file = pathlib.Path("config/bundles.yaml")
+        # Ensure bundles.yaml exists for the test
+        bundles_file.parent.mkdir(parents=True, exist_ok=True)
+        original_text = bundles_file.read_text() if bundles_file.exists() else ""
+        bundles_file.write_text("bundles:\n  - id: test-bundle\n    enabled: true\n")
+
+        try:
+            rc = main(["snapshot"])
+        finally:
+            if original_text:
+                bundles_file.write_text(original_text)
+            else:
+                bundles_file.write_text("bundles: []\n")
+
+        captured = capsys.readouterr()
+        assert rc == 0
+        assert "created" in captured.out
+        assert "abc1234" in captured.out
+        assert "test-bundle" in captured.out
+        mock_r.set.assert_called_once()
+        call_args = mock_r.set.call_args
+        assert call_args[0][0].startswith("sam:snapshot:")
+        assert "ex" in call_args[1]
+        assert call_args[1]["ex"] == 30 * 24 * 60 * 60
+
+    @patch("sam_trader.services.cli._redis_cli")
+    def test_snapshot_list_shows_entries(
+        self, mock_redis_mod: Any, capsys: Any
+    ) -> None:
+        mock_r = MagicMock()
+        mock_r.keys.return_value = [
+            "sam:snapshot:2026-05-24T10:00:00+00:00",
+            "sam:snapshot:2026-05-24T09:00:00+00:00",
+        ]
+        mock_r.get.side_effect = [
+            json.dumps(
+                {
+                    "git_hash": "abc1234",
+                    "bundles_hash": "sha256_a",
+                    "timestamp": "2026-05-24T10:00:00+00:00",
+                    "active_strategies": ["bundle-a"],
+                }
+            ),
+            json.dumps(
+                {
+                    "git_hash": "def5678",
+                    "bundles_hash": "sha256_b",
+                    "timestamp": "2026-05-24T09:00:00+00:00",
+                    "active_strategies": ["bundle-b"],
+                }
+            ),
+        ]
+        mock_redis_mod.Redis.return_value = mock_r
+
+        rc = main(["snapshot", "--list"])
+        captured = capsys.readouterr()
+        assert rc == 0
+        assert "abc1234" in captured.out
+        assert "def5678" in captured.out
+        assert "2026-05-24T10:00:00+00:00" in captured.out
+        mock_r.keys.assert_called_once_with("sam:snapshot:*")
+
+    @patch("sam_trader.services.cli._redis_cli")
+    def test_snapshot_show_details(self, mock_redis_mod: Any, capsys: Any) -> None:
+        mock_r = MagicMock()
+        mock_r.keys.return_value = [
+            "sam:snapshot:2026-05-24T10:00:00+00:00",
+            "sam:snapshot:2026-05-24T09:00:00+00:00",
+        ]
+        mock_r.get.return_value = json.dumps(
+            {
+                "git_hash": "def5678",
+                "bundles_hash": "sha256_b",
+                "timestamp": "2026-05-24T09:00:00+00:00",
+                "active_strategies": ["bundle-b", "bundle-c"],
+            }
+        )
+        mock_redis_mod.Redis.return_value = mock_r
+
+        rc = main(["snapshot", "--show", "2"])
+        captured = capsys.readouterr()
+        assert rc == 0
+        assert "def5678" in captured.out
+        assert "sha256_b" in captured.out
+        assert "bundle-b" in captured.out
+        assert "bundle-c" in captured.out
+        assert "2026-05-24T09:00:00+00:00" in captured.out
+
+
 class TestJsonGlobalFlag:
     @patch("sam_trader.services.cli._run")
     def test_json_flag_on_status(self, mock_run: Any, capsys: Any) -> None:

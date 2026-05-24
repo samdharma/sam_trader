@@ -27,11 +27,13 @@ import os
 import subprocess
 import sys
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 import asyncpg
 import click
+import yaml
 
 from sam_trader.bundle_validation import validate_bundles
 from sam_trader.services.backup import BackupError
@@ -88,6 +90,7 @@ SAM_IB_GATEWAY_CONTAINER = "sam-ib-gateway"
 
 STATE_SAVE_HANDSHAKE_TIMEOUT = int(os.getenv("STATE_SAVE_HANDSHAKE_TIMEOUT", "30"))
 RESTART_HEALTH_TIMEOUT = int(os.getenv("RESTART_HEALTH_TIMEOUT", "60"))
+SNAPSHOT_TTL_SECONDS = 30 * 24 * 60 * 60  # 30 days
 
 
 def _out(ctx: click.Context, data: dict[str, Any]) -> None:
@@ -162,6 +165,157 @@ def version(ctx: click.Context) -> None:
             if build_time_result.returncode == 0
             else "unknown"
         ),
+    }
+    _out(ctx, result)
+
+
+# ---------------------------------------------------------------------------
+# Snapshot commands
+# ---------------------------------------------------------------------------
+
+
+def _get_active_bundle_ids(path: Path) -> list[str]:
+    """Return bundle IDs with enabled=True from bundles YAML."""
+    if not path.exists():
+        return []
+    try:
+        raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+        if not isinstance(raw, dict):
+            return []
+        bundles = raw.get("bundles", [])
+        if not isinstance(bundles, list):
+            return []
+        return [
+            str(b.get("id", "unknown"))
+            for b in bundles
+            if isinstance(b, dict) and b.get("enabled", True)
+        ]
+    except Exception:
+        return []
+
+
+@cli.command()
+@click.option("--list", "list_flag", is_flag=True, help="Show last 10 snapshots.")
+@click.option(
+    "--show",
+    type=int,
+    help="Show full details of snapshot N (1-based, newest first).",
+)
+@click.pass_context
+def snapshot(ctx: click.Context, list_flag: bool, show: int | None) -> None:
+    """Capture or inspect system state checkpoints in Redis."""
+    if _redis_cli is None:
+        raise click.ClickException("redis package not available")
+
+    try:
+        r = _redis_cli.Redis(
+            host=REDIS_HOST,
+            port=int(REDIS_PORT),
+            password=REDIS_PASSWORD or None,
+            decode_responses=True,
+            socket_connect_timeout=5,
+        )
+        r.ping()
+    except Exception as exc:
+        raise click.ClickException(f"Redis connection failed: {exc}")
+
+    if list_flag:
+        _snapshot_list(ctx, r)
+        return
+
+    if show is not None:
+        _snapshot_show(ctx, r, show)
+        return
+
+    # Create new snapshot
+    commit_result = _run(["git", "rev-parse", "--short", "HEAD"], check=False)
+    git_hash = (
+        commit_result.stdout.strip() if commit_result.returncode == 0 else "unknown"
+    )
+
+    bundles_path = DEFAULT_BUNDLES_PATH
+    bundles_hash = ""
+    if bundles_path.exists():
+        bundles_hash = hashlib.sha256(bundles_path.read_bytes()).hexdigest()
+
+    timestamp = datetime.now(timezone.utc).isoformat()
+    active_strategies = _get_active_bundle_ids(bundles_path)
+
+    payload = {
+        "git_hash": git_hash,
+        "bundles_hash": bundles_hash,
+        "timestamp": timestamp,
+        "active_strategies": active_strategies,
+    }
+
+    key = f"sam:snapshot:{timestamp}"
+    r.set(key, json.dumps(payload), ex=SNAPSHOT_TTL_SECONDS)
+
+    result = {
+        "command": "snapshot",
+        "status": "created",
+        "key": key,
+        "git_hash": git_hash,
+        "bundles_hash": bundles_hash,
+        "timestamp": timestamp,
+        "active_strategies": active_strategies,
+    }
+    _out(ctx, result)
+
+
+def _snapshot_list(ctx: click.Context, r: Any) -> None:
+    """List last 10 snapshots."""
+    keys = sorted(r.keys("sam:snapshot:*"), reverse=True)
+    entries = []
+    for key in keys[:10]:
+        raw = r.get(key)
+        if not raw:
+            continue
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+        entries.append(
+            {
+                "timestamp": data.get("timestamp", ""),
+                "git_hash": data.get("git_hash", ""),
+            }
+        )
+
+    result = {
+        "command": "snapshot",
+        "action": "list",
+        "count": len(entries),
+        "entries": entries,
+    }
+    _out(ctx, result)
+
+
+def _snapshot_show(ctx: click.Context, r: Any, n: int) -> None:
+    """Show full details of snapshot N (1-based, newest first)."""
+    keys = sorted(r.keys("sam:snapshot:*"), reverse=True)
+    if n < 1 or n > len(keys):
+        raise click.ClickException(f"Snapshot {n} not found (total: {len(keys)})")
+
+    key = keys[n - 1]
+    raw = r.get(key)
+    if not raw:
+        raise click.ClickException(f"Snapshot {n} data missing")
+
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise click.ClickException(f"Corrupt snapshot data: {exc}")
+
+    result = {
+        "command": "snapshot",
+        "action": "show",
+        "index": n,
+        "key": key,
+        "git_hash": data.get("git_hash", ""),
+        "bundles_hash": data.get("bundles_hash", ""),
+        "timestamp": data.get("timestamp", ""),
+        "active_strategies": data.get("active_strategies", []),
     }
     _out(ctx, result)
 

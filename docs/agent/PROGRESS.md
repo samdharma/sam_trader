@@ -940,3 +940,18 @@
 - **Files Changed**: `src/sam_trader/services/cli.py`, `tests/unit/services/test_cli.py`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 35/35 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ready for next Phase 8 ticket or Phase 9.
+
+## Iteration 96
+- **Task**: P8: Add sam snapshot — capture state checkpoint for rollback
+- **Task ID**: sam_trader-9z3.9.15
+- **Status**: COMPLETE
+- **Decisions**:
+  1. Added `sam snapshot` CLI command with `--list` and `--show {n}` options.
+  2. Snapshot payload includes: git hash (`git rev-parse --short HEAD`), bundles.yaml SHA256, ISO timestamp, and active strategy list (enabled bundle IDs parsed from YAML).
+  3. Redis key format: `sam:snapshot:{timestamp}` with 30-day TTL (`ex=SNAPSHOT_TTL_SECONDS`).
+  4. `--list` sorts keys reverse-chronologically and shows last 10 entries with timestamp + git hash.
+  5. `--show {n}` uses 1-based indexing from newest snapshot; displays full details including active_strategies.
+  6. Zero new infrastructure — reuses existing `_redis_cli` module-level import and Redis connection constants.
+- **Files Changed**: `src/sam_trader/services/cli.py`, `tests/unit/services/test_cli.py`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 38/38 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for next Phase 8 ticket or Phase 9.
