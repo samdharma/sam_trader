@@ -1075,3 +1075,17 @@
 - **Files Changed**: `src/sam_trader/services/risk_checks.py` (new), `tests/unit/services/test_risk_checks.py` (new)
 - **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 35/35 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ready for next Phase 9 ticket (sam_trader-9z3.10.23: Portfolio Heat Monitor).
+
+## Iteration 105
+- **Task**: P9: Portfolio heat monitor
+- **Task ID**: sam_trader-9z3.10.23
+- **Status**: COMPLETE
+- **Decisions**:
+  1. Created `PortfolioHeatMonitor` in `src/sam_trader/services/heat_monitor.py` with `HeatMonitorConfig`, `ProposedPosition`, `HeatMapEntry`, and `HeatMonitorResult` dataclasses.
+  2. Computes aggregate portfolio heat (`total_risk / NAV`) and emits warnings when `heat_threshold_pct` is exceeded.
+  3. Enforces per-symbol concentration limit (`notional / NAV`) and per-sector concentration limit (`sector_notional / NAV`), populating `warning` on the relevant `HeatMapEntry` when breached.
+  4. Output `heat_map` is a `dict[str, HeatMapEntry]` with per-symbol risk contribution, notional, and concentration percentage.
+  5. Pure function design — zero DB/Redis dependencies, fully testable. Accepts `list[ProposedPosition]` and returns `HeatMonitorResult`.
+- **Files Changed**: `src/sam_trader/services/heat_monitor.py` (new), `tests/unit/services/test_heat_monitor.py` (new)
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 20/20 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for next Phase 9 ticket (sam_trader-9z3.10.24: Pipeline Sequential Executor).
