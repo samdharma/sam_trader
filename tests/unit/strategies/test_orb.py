@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from nautilus_trader.model.data import Bar, BarType
 from nautilus_trader.model.enums import OrderSide, OrderType
@@ -249,7 +249,9 @@ class TestRangeEstablishment:
 
 class TestBreakoutAndConfirmation:
     def test_long_breakout_with_one_bar_confirmation(self) -> None:
-        strategy = OrbStrategy(_make_config(confirmation_bars=1, first_candle_minutes=10))
+        strategy = OrbStrategy(
+            _make_config(confirmation_bars=1, first_candle_minutes=10)
+        )
         _register_strategy(strategy)
         _mock_instrument(strategy)
         strategy.on_start()
@@ -268,7 +270,9 @@ class TestBreakoutAndConfirmation:
         assert len(call_kwargs.orders) == 3
 
     def test_long_breakout_with_two_bar_confirmation(self) -> None:
-        strategy = OrbStrategy(_make_config(confirmation_bars=2, first_candle_minutes=10))
+        strategy = OrbStrategy(
+            _make_config(confirmation_bars=2, first_candle_minutes=10)
+        )
         _register_strategy(strategy)
         _mock_instrument(strategy)
         strategy.on_start()
@@ -288,7 +292,9 @@ class TestBreakoutAndConfirmation:
         strategy.submit_order_list.assert_called_once()
 
     def test_confirmation_fails_on_pullback(self) -> None:
-        strategy = OrbStrategy(_make_config(confirmation_bars=2, first_candle_minutes=10))
+        strategy = OrbStrategy(
+            _make_config(confirmation_bars=2, first_candle_minutes=10)
+        )
         _register_strategy(strategy)
         _mock_instrument(strategy)
         strategy.on_start()
@@ -308,7 +314,9 @@ class TestBreakoutAndConfirmation:
         assert strategy._confirmation_direction is None
 
     def test_short_breakout(self) -> None:
-        strategy = OrbStrategy(_make_config(confirmation_bars=1, first_candle_minutes=10))
+        strategy = OrbStrategy(
+            _make_config(confirmation_bars=1, first_candle_minutes=10)
+        )
         _register_strategy(strategy)
         _mock_instrument(strategy)
         strategy.on_start()
@@ -333,7 +341,9 @@ class TestBreakoutAndConfirmation:
 
 class TestEntryOrderTypes:
     def test_market_entry_bracket(self) -> None:
-        strategy = OrbStrategy(_make_config(entry_order_type="MARKET", first_candle_minutes=10))
+        strategy = OrbStrategy(
+            _make_config(entry_order_type="MARKET", first_candle_minutes=10)
+        )
         _register_strategy(strategy)
         _mock_instrument(strategy)
         strategy.on_start()
@@ -349,7 +359,9 @@ class TestEntryOrderTypes:
         assert entry_order.order_type == OrderType.MARKET
 
     def test_limit_entry_bracket(self) -> None:
-        strategy = OrbStrategy(_make_config(entry_order_type="LIMIT", first_candle_minutes=10))
+        strategy = OrbStrategy(
+            _make_config(entry_order_type="LIMIT", first_candle_minutes=10)
+        )
         _register_strategy(strategy)
         _mock_instrument(strategy)
         strategy.on_start()
@@ -366,7 +378,9 @@ class TestEntryOrderTypes:
         assert float(entry_order.price) == 102.0  # range high
 
     def test_stop_market_entry(self) -> None:
-        strategy = OrbStrategy(_make_config(entry_order_type="STOP_MARKET", first_candle_minutes=10))
+        strategy = OrbStrategy(
+            _make_config(entry_order_type="STOP_MARKET", first_candle_minutes=10)
+        )
         _register_strategy(strategy)
         _mock_instrument(strategy)
         strategy.on_start()
@@ -419,7 +433,11 @@ class TestVenueAwareRouting:
         assert tp_order.is_post_only is True
 
     def test_stop_market_ib_venue_sets_post_only_false_on_tp(self) -> None:
-        strategy = OrbStrategy(_make_config(venue="IB", entry_order_type="STOP_MARKET", first_candle_minutes=10))
+        strategy = OrbStrategy(
+            _make_config(
+                venue="IB", entry_order_type="STOP_MARKET", first_candle_minutes=10
+            )
+        )
         _register_strategy(strategy)
         _mock_instrument(strategy)
         strategy.on_start()
@@ -453,6 +471,78 @@ class TestVenueAwareRouting:
 # ---------------------------------------------------------------------------
 
 
+class TestDynamicSizing:
+    def test_dynamic_sizing_risk_based(self) -> None:
+        strategy = OrbStrategy(
+            _make_config(
+                first_candle_minutes=10,
+                trade_size=100,
+                risk_per_trade_pct=0.02,
+                account_risk_currency=100_000,
+                stop_loss_ticks=10,
+                max_position=5000,
+            )
+        )
+        _register_strategy(strategy)
+        _mock_instrument(strategy)
+        strategy.on_start()
+
+        # SL distance = 10 ticks * 0.01 = 0.10
+        # risk_dollars = 100_000 * 0.02 = 2_000
+        # size = int(2_000 / 0.10) = 20_000 → clamped to max_position=5000
+        size = strategy._compute_trade_size(1, entry_price=100.0)
+        assert size == 5000
+
+    def test_dynamic_sizing_fixed_fallback(self) -> None:
+        strategy = OrbStrategy(_make_config(first_candle_minutes=10, trade_size=100))
+        _register_strategy(strategy)
+        _mock_instrument(strategy)
+        strategy.on_start()
+
+        size = strategy._compute_trade_size(1, entry_price=100.0)
+        assert size == 100
+
+    def test_dynamic_sizing_clamps_at_max_position(self) -> None:
+        strategy = OrbStrategy(
+            _make_config(
+                first_candle_minutes=10,
+                trade_size=100,
+                risk_per_trade_pct=0.02,
+                account_risk_currency=1_000_000,
+                stop_loss_ticks=5,
+                max_position=200,
+            )
+        )
+        _register_strategy(strategy)
+        _mock_instrument(strategy)
+        strategy.on_start()
+
+        size = strategy._compute_trade_size(1, entry_price=100.0)
+        assert size == 200
+
+    def test_dynamic_sizing_atr_adjustment(self) -> None:
+        strategy = OrbStrategy(
+            _make_config(
+                first_candle_minutes=10,
+                trade_size=100,
+                risk_per_trade_pct=0.02,
+                account_risk_currency=100_000,
+                stop_loss_ticks=10,
+                max_position=5000,
+            )
+        )
+        _register_strategy(strategy)
+        _mock_instrument(strategy)
+        strategy.on_start()
+        strategy._cached_atr = 2.0
+
+        base_size = strategy._compute_trade_size(1, entry_price=100.0)
+        strategy._cached_atr = 5.0
+        adjusted_size = strategy._compute_trade_size(1, entry_price=100.0)
+
+        assert adjusted_size < base_size
+
+
 class TestRiskLimits:
     def test_max_daily_loss_blocks_entry(self) -> None:
         strategy = OrbStrategy(_make_config(max_daily_loss=100))
@@ -478,7 +568,9 @@ class TestRiskLimits:
         strategy.submit_order_list = MagicMock()  # type: ignore[method-assign]
 
         # Simulate already at max position — _position_allowed returns False
-        strategy._position_allowed = MagicMock(return_value=False)  # type: ignore[method-assign]
+        strategy._position_allowed = MagicMock(  # type: ignore[method-assign]
+            return_value=False
+        )
 
         strategy.on_bar(_make_bar("100.00", "101.00", "99.00", "100.00"))
         strategy.on_bar(_make_bar("100.50", "102.00", "100.00", "101.00"))
@@ -569,7 +661,9 @@ class TestFillHandling:
         assert strategy._daily_loss == 1002.0  # (150-140)*100 + 2.0 commission
 
     def test_stop_market_entry_triggers_protective_orders(self) -> None:
-        strategy = OrbStrategy(_make_config(entry_order_type="STOP_MARKET", first_candle_minutes=10))
+        strategy = OrbStrategy(
+            _make_config(entry_order_type="STOP_MARKET", first_candle_minutes=10)
+        )
         _register_strategy(strategy)
         _mock_instrument(strategy)
         strategy.on_start()

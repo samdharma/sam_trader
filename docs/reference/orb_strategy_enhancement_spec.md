@@ -50,7 +50,7 @@ class OrbConfig(StrategyConfig, frozen=True):
     max_range_atr_multiple: float = 0.0            # 0 = disabled
     max_breakout_bar_atr_multiple: float = 0.0     # 0 = disabled
 
-    # Dynamic position sizing
+    # Dynamic position sizing (implemented in ticket 9z3.8.8)
     risk_per_trade_pct: float = 0.0                # 0 = use fixed trade_size
     account_risk_currency: float = 0.0
     max_trades_per_day: PositiveInt = 0            # 0 = unlimited
@@ -156,9 +156,10 @@ self._premarket_volume: float = 0.0
 
 ---
 
-### 3.6 Dynamic Position Sizing & Max Trades (`csam_trader-84r`)
+### 3.6 Dynamic Position Sizing & Max Trades (`csam_trader-84r`) — ✅ Implemented
 
 **Where to hook:** `_enter_long()`, `_enter_short()`  
+**Implementation:** `OrbStrategy._compute_trade_size()` and `MomentumStrategy._compute_trade_size()`
 **Logic:**
 1. **Max trades:**
    - Increment `_trades_today` on each successful entry.
@@ -166,13 +167,12 @@ self._premarket_volume: float = 0.0
      - Log: `"Max trades per day reached; skipping entry"`
      - Return without entering.
 2. **Dynamic sizing:**
-   - If `account_risk_currency > 0` and stop-loss distance is known:
-     - `trade_size = account_risk_currency / sl_distance`
-     - Round down to whole shares/lots.
-   - If `risk_per_trade_pct > 0`:
-     - Requires account equity lookup → `account_risk_currency = equity * risk_per_trade_pct / 100`.
-     - Then compute size as above.
-   - Apply `max_position` cap after dynamic sizing.
+   - If `risk_per_trade_pct > 0` and `account_risk_currency > 0`:
+     - `risk_dollars = account_risk_currency * risk_per_trade_pct`
+     - `size = int(risk_dollars / max(sl_distance, tick_size))`
+     - Clamp to `[1, max_position]`.
+   - If ATR is available, scale size inversely with ATR/price ratio (higher volatility → smaller size).
+   - Fallback to fixed `trade_size` when dynamic sizing is disabled.
 
 **Reset:** `_trades_today` resets in `on_reset()` (new day).
 
@@ -249,7 +249,7 @@ presets:
 | Session guard | trade before cutoff allowed, trade after cutoff blocked, hard stop closes position, disabled guards pass through |
 | Context bias | off mode no effect, bias mode scales size correctly, filter mode skips counter-bias trades |
 | Anomaly detection | upper bound stops strategy, stop-run bar blocked, disabled mode no effect |
-| Dynamic sizing | fixed size default, risk-normalized size computed correctly, max trades blocks after limit, counter resets |
+| Dynamic sizing | fixed size default, risk-normalized size computed correctly, max trades blocks after limit, counter resets — ✅ Implemented in 9z3.8.8 |
 | Presets | preset loads correctly, overrides take precedence, missing preset raises error |
 | Integration | all features together with no regressions in existing tests |
 

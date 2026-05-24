@@ -72,6 +72,70 @@ def make_bracket(
     return order_factory.bracket(instrument_id=instrument_id, **kwargs)
 
 
+def compute_risk_based_size(
+    *,
+    risk_per_trade_pct: float,
+    account_risk_currency: float,
+    sl_distance: float,
+    tick_size: float,
+    max_position: int,
+    trade_size: int,
+    atr: float | None = None,
+    entry_price: float | None = None,
+) -> int:
+    """Compute position size from risk parameters.
+
+    If ``risk_per_trade_pct <= 0`` or ``account_risk_currency <= 0``,
+    returns the fixed ``trade_size`` (backward-compatible default).
+
+    Formula::
+
+        risk_dollars = account_risk_currency * risk_per_trade_pct
+        size = int(risk_dollars / max(sl_distance, tick_size))
+        size = max(1, min(size, max_position))
+
+    When *atr* and *entry_price* are provided, the size is scaled inversely
+    by the ATR/price ratio (higher volatility → smaller size).
+
+    Parameters
+    ----------
+    risk_per_trade_pct : float
+        Fraction of capital to risk per trade (e.g. 0.02 for 2 %%).
+    account_risk_currency : float
+        Account capital available for risk calculation.
+    sl_distance : float
+        Stop-loss distance in price units.
+    tick_size : float
+        Minimum price increment (prevents division by zero).
+    max_position : int
+        Hard cap on absolute position size.
+    trade_size : int
+        Fallback fixed size when risk-based sizing is disabled.
+    atr : float | None, optional
+        Latest ATR value for volatility adjustment.
+    entry_price : float | None, optional
+        Entry price for ATR/price ratio computation.
+
+    Returns
+    -------
+    int
+        The computed position size.
+
+    """
+    if risk_per_trade_pct <= 0 or account_risk_currency <= 0 or sl_distance <= 0:
+        return int(trade_size)
+
+    risk_dollars = account_risk_currency * risk_per_trade_pct
+    size = int(risk_dollars / max(sl_distance, tick_size))
+
+    if atr is not None and entry_price is not None and entry_price > 0:
+        atr_price_ratio = atr / entry_price
+        if atr_price_ratio > 0:
+            size = int(size / max(1.0, atr_price_ratio * 100))
+
+    return max(1, min(size, max_position))
+
+
 def make_limit(
     order_factory: Any,
     *,

@@ -54,6 +54,11 @@ class OrbStrategyConfig(StrategyConfig, frozen=True):  # type: ignore[call-arg]
         Stop looking for new breakouts after this time. Empty string disables.
     session_hard_stop : str, default ""
         Close any open position at this time. Empty string disables.
+    risk_per_trade_pct : float, default 0.0
+        Fraction of account capital to risk per trade. 0.0 disables
+        dynamic sizing and uses fixed ``trade_size``.
+    account_risk_currency : float, default 0.0
+        Account capital available for risk calculation.
     venue : str, default ""
         Target venue (``"FUTU"`` or ``"IB"``) injected by the bundle loader.
     bundle_id : str, default "unknown"
@@ -80,6 +85,8 @@ class OrbStrategyConfig(StrategyConfig, frozen=True):  # type: ignore[call-arg]
     session_start: str = ""
     max_trade_time: str = ""
     session_hard_stop: str = ""
+    risk_per_trade_pct: float = 0.0
+    account_risk_currency: float = 0.0
     venue: str = ""
     bundle_id: str = "unknown"
     exchange: str = ""
@@ -209,9 +216,30 @@ class OrbStrategy(Strategy):
             return False
         return True
 
-    def _compute_trade_size(self, direction: int) -> int:
-        """Compute the trade size (placeholder for future dynamic sizing)."""
-        return int(self.config.trade_size)
+    def _compute_trade_size(
+        self, direction: int, entry_price: float | None = None
+    ) -> int:
+        """Compute the trade size from risk parameters."""
+        from sam_trader.strategies.common import compute_risk_based_size
+
+        if self.config.risk_per_trade_pct <= 0:
+            return int(self.config.trade_size)
+
+        sl_distance = self._get_sl_distance()
+        if sl_distance is None or sl_distance <= 0:
+            return int(self.config.trade_size)
+
+        tick_size = float(self.instrument.price_increment) if self.instrument else 0.01
+        return compute_risk_based_size(
+            risk_per_trade_pct=self.config.risk_per_trade_pct,
+            account_risk_currency=self.config.account_risk_currency,
+            sl_distance=sl_distance,
+            tick_size=tick_size,
+            max_position=self.config.max_position,
+            trade_size=self.config.trade_size,
+            atr=self._cached_atr,
+            entry_price=entry_price,
+        )
 
     def _get_sl_distance(self) -> float | None:
         """Return the stop-loss distance in price terms."""
@@ -391,12 +419,14 @@ class OrbStrategy(Strategy):
                     self._reset_confirmation()
                 else:
                     self.log.info(
-                        f"Waiting for confirmation: "
-                        f"count={self._confirmation_count}/{self.config.confirmation_bars}"
+                        "Waiting for confirmation: "
+                        f"count={self._confirmation_count}/"
+                        f"{self.config.confirmation_bars}"
                     )
             else:
                 self.log.info(
-                    f"Confirmation failed, resetting: bar.low={float(bar.low):.5f} <= "
+                    "Confirmation failed, resetting: "
+                    f"bar.low={float(bar.low):.5f} <= "
                     f"prev_low={self._confirmation_prev_low:.5f}"
                 )
                 self._reset_confirmation()
@@ -409,12 +439,14 @@ class OrbStrategy(Strategy):
                     self._reset_confirmation()
                 else:
                     self.log.info(
-                        f"Waiting for confirmation: "
-                        f"count={self._confirmation_count}/{self.config.confirmation_bars}"
+                        "Waiting for confirmation: "
+                        f"count={self._confirmation_count}/"
+                        f"{self.config.confirmation_bars}"
                     )
             else:
                 self.log.info(
-                    f"Confirmation failed, resetting: bar.high={float(bar.high):.5f} >= "
+                    "Confirmation failed, resetting: "
+                    f"bar.high={float(bar.high):.5f} >= "
                     f"prev_high={self._confirmation_prev_high:.5f}"
                 )
                 self._reset_confirmation()
@@ -439,8 +471,8 @@ class OrbStrategy(Strategy):
         if self._max_daily_loss_exceeded():
             return
 
-        trade_size = self._compute_trade_size(1)
         entry_price = float(bar.close)
+        trade_size = self._compute_trade_size(1, entry_price)
 
         if not self._position_allowed(entry_price, trade_size):
             return
@@ -489,8 +521,8 @@ class OrbStrategy(Strategy):
         if self._max_daily_loss_exceeded():
             return
 
-        trade_size = self._compute_trade_size(-1)
         entry_price = float(bar.close)
+        trade_size = self._compute_trade_size(-1, entry_price)
 
         if not self._position_allowed(entry_price, trade_size):
             return

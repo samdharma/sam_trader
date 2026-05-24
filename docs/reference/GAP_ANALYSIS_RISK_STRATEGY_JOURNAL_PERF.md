@@ -68,7 +68,7 @@ The `LiveRiskEngine` sits in the order pipeline between strategy and execution. 
 | **`LiveRiskEngine` integration** | 🔴 HIGH | The pre-trade risk filter is the correct home for circuit breakers, kill switches, and notional limits. Our Phase 10 safety controls should integrate with it, not sit beside it. |
 | **Order rate limiting** | 🔴 HIGH | No protection against strategy bugs firing hundreds of orders. Nautilus has this built-in. |
 | **Per-order notional limits** | 🟡 MEDIUM | Especially important for small accounts or high-priced instruments (e.g., one BRK.A order = $700K). |
-| **Dynamic position sizing** (volatility-based) | 🟡 MEDIUM | Both strategies use static `trade_size`. OrbStrategy already computes ATR — it could use it for Kelly/vol-target sizing. |
+| ~~**Dynamic position sizing** (volatility-based)~~ | ✅ RESOLVED | Implemented in ticket 9z3.8.8. Both `OrbStrategy` and `MomentumStrategy` now support `risk_per_trade_pct` + `account_risk_currency` with ATR-based volatility adjustment. |
 | **Correlation risk** | 🟡 MEDIUM | No visibility into whether two strategies are both long the same sector. Multi-strategy portfolio needs correlation awareness. |
 | **Gap risk / overnight risk** | 🟡 MEDIUM | No mechanism to reduce position size before market close or avoid holding through earnings. |
 | **Margin / buying power check** | 🟢 LOW | Phase 9 adds pre-trade margin check. Broker-level margin is the authoritative source. |
@@ -383,7 +383,7 @@ The following should be added to the roadmap (new tickets or scope expansion):
 | P1 | Strategy | Strategy warm-up / bar priming configuration |
 | P1 | Performance | Rolling performance windows + dashboard integration |
 | P1 | Journal | Slippage tracking in fills |
-| P2 | Risk | Dynamic position sizing (ATR/Kelly-based) |
+| P2 | Risk | ~~Dynamic position sizing (ATR/Kelly-based)~~ — ✅ Implemented in 9z3.8.8 |
 | P2 | Performance | MAE/MFE tracking |
 | P2 | Strategy | HK-market strategy variant |
 | P2 | Journal | Trade tags (jsonb column) |

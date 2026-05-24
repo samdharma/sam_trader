@@ -27,7 +27,7 @@
 │  │ 2. QuoteCollectionService (10.17) — REUSABLE                        │ │
 │  │    └── Wraps Nautilus data infrastructure for sam-services          │ │
 │  │    └── Reuses: FutuLiveDataClient (Phase 2)                         │ │
-│  │    └── Optional: IB data client for cross-validation                │ │
+│  │    └── IB data client supported for cross-validation (Phase 5)      │ │
 │  │    └── Returns: dict[InstrumentId, QuoteTick]                       │ │
 │  └──────────────────────────────┬──────────────────────────────────────┘ │
 │                                 │                                         │

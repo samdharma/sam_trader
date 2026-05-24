@@ -7,13 +7,108 @@ from unittest.mock import MagicMock
 import pytest
 from nautilus_trader.model.identifiers import InstrumentId, Venue
 
-from sam_trader.strategies.common import make_bracket, make_limit
+from sam_trader.strategies.common import (
+    compute_risk_based_size,
+    make_bracket,
+    make_limit,
+)
 
 
 @pytest.fixture
 def mock_factory() -> MagicMock:
     """Return a mock order factory."""
     return MagicMock()
+
+
+class TestComputeRiskBasedSize:
+    def test_disabled_returns_fixed_trade_size(self) -> None:
+        assert (
+            compute_risk_based_size(
+                risk_per_trade_pct=0.0,
+                account_risk_currency=100_000,
+                sl_distance=1.0,
+                tick_size=0.01,
+                max_position=500,
+                trade_size=100,
+            )
+            == 100
+        )
+
+    def test_risk_based_formula(self) -> None:
+        # 2% of 100k = 2k risk. SL distance = 2.0. size = 2000 / 2 = 1000
+        assert (
+            compute_risk_based_size(
+                risk_per_trade_pct=0.02,
+                account_risk_currency=100_000,
+                sl_distance=2.0,
+                tick_size=0.01,
+                max_position=5000,
+                trade_size=100,
+            )
+            == 1000
+        )
+
+    def test_clamps_at_max_position(self) -> None:
+        assert (
+            compute_risk_based_size(
+                risk_per_trade_pct=0.02,
+                account_risk_currency=1_000_000,
+                sl_distance=0.5,
+                tick_size=0.01,
+                max_position=100,
+                trade_size=100,
+            )
+            == 100
+        )
+
+    def test_minimum_size_is_one(self) -> None:
+        assert (
+            compute_risk_based_size(
+                risk_per_trade_pct=0.0001,
+                account_risk_currency=100,
+                sl_distance=10.0,
+                tick_size=0.01,
+                max_position=500,
+                trade_size=100,
+            )
+            == 1
+        )
+
+    def test_atr_adjustment_reduces_size(self) -> None:
+        base = compute_risk_based_size(
+            risk_per_trade_pct=0.02,
+            account_risk_currency=100_000,
+            sl_distance=2.0,
+            tick_size=0.01,
+            max_position=5000,
+            trade_size=100,
+            atr=None,
+            entry_price=100.0,
+        )
+        adjusted = compute_risk_based_size(
+            risk_per_trade_pct=0.02,
+            account_risk_currency=100_000,
+            sl_distance=2.0,
+            tick_size=0.01,
+            max_position=5000,
+            trade_size=100,
+            atr=2.0,
+            entry_price=100.0,
+        )
+        assert adjusted < base
+
+    def test_zero_sl_distance_returns_fixed_size(self) -> None:
+        assert (
+            compute_risk_based_size(
+                risk_per_trade_pct=0.02,
+                account_risk_currency=100_000,
+                sl_distance=0.0,
+                tick_size=0.01,
+                max_position=500,
+                trade_size=100,
+            )
+            == 100
+        )
 
 
 class TestMakeBracket:

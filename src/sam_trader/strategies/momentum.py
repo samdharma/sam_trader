@@ -48,6 +48,11 @@ class MomentumStrategyConfig(StrategyConfig, frozen=True):  # type: ignore[call-
         Maximum absolute position size.
     max_daily_loss : int, default 1000
         Maximum allowed loss for the day.
+    risk_per_trade_pct : float, default 0.0
+        Fraction of account capital to risk per trade. 0.0 disables
+        dynamic sizing and uses fixed ``trade_size``.
+    account_risk_currency : float, default 0.0
+        Account capital available for risk calculation.
     venue : str, default ""
         Target venue (``"FUTU"`` or ``"IB"``) injected by the bundle loader.
     bundle_id : str, default "unknown"
@@ -71,6 +76,8 @@ class MomentumStrategyConfig(StrategyConfig, frozen=True):  # type: ignore[call-
     take_profit_ticks: int = 30
     max_position: int = 500
     max_daily_loss: int = 1000
+    risk_per_trade_pct: float = 0.0
+    account_risk_currency: float = 0.0
     venue: str = ""
     bundle_id: str = "unknown"
     exchange: str = ""
@@ -178,6 +185,38 @@ class MomentumStrategy(Strategy):
             return False
         return True
 
+    def _get_sl_distance(self) -> float | None:
+        """Return the stop-loss distance in price terms."""
+        if self.instrument is None:
+            return None
+        tick_size = float(self.instrument.price_increment)
+        return int(self.config.stop_loss_ticks) * tick_size
+
+    def _compute_trade_size(
+        self, direction: int, entry_price: float | None = None
+    ) -> int:
+        """Compute the trade size from risk parameters."""
+        from sam_trader.strategies.common import compute_risk_based_size
+
+        if self.config.risk_per_trade_pct <= 0:
+            return int(self.config.trade_size)
+
+        sl_distance = self._get_sl_distance()
+        if sl_distance is None or sl_distance <= 0:
+            return int(self.config.trade_size)
+
+        tick_size = float(self.instrument.price_increment) if self.instrument else 0.01
+        return compute_risk_based_size(
+            risk_per_trade_pct=self.config.risk_per_trade_pct,
+            account_risk_currency=self.config.account_risk_currency,
+            sl_distance=sl_distance,
+            tick_size=tick_size,
+            max_position=self.config.max_position,
+            trade_size=self.config.trade_size,
+            atr=None,
+            entry_price=entry_price,
+        )
+
     # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------
@@ -244,8 +283,8 @@ class MomentumStrategy(Strategy):
         if self._max_daily_loss_exceeded():
             return
 
-        trade_size = self.config.trade_size
         entry_price = float(last_bar.close)
+        trade_size = self._compute_trade_size(1, entry_price)
 
         if not self._position_allowed(entry_price, trade_size):
             return
@@ -293,8 +332,8 @@ class MomentumStrategy(Strategy):
         if self._max_daily_loss_exceeded():
             return
 
-        trade_size = self.config.trade_size
         entry_price = float(last_bar.close)
+        trade_size = self._compute_trade_size(-1, entry_price)
 
         if not self._position_allowed(entry_price, trade_size):
             return

@@ -435,6 +435,53 @@ class TestVenueAwareRouting:
 # ---------------------------------------------------------------------------
 
 
+class TestDynamicSizing:
+    def test_dynamic_sizing_risk_based(self) -> None:
+        strategy = MomentumStrategy(
+            _make_config(
+                window=5,
+                trade_size=100,
+                risk_per_trade_pct=0.02,
+                account_risk_currency=100_000,
+                stop_loss_ticks=10,
+                max_position=5000,
+            )
+        )
+        _register_strategy(strategy)
+        _mock_instrument(strategy)
+        strategy.on_start()
+
+        size = strategy._compute_trade_size(1, entry_price=100.0)
+        assert size == 5000
+
+    def test_fixed_sizing_backward_compat(self) -> None:
+        strategy = MomentumStrategy(_make_config(window=5, trade_size=100))
+        _register_strategy(strategy)
+        _mock_instrument(strategy)
+        strategy.on_start()
+
+        size = strategy._compute_trade_size(1, entry_price=100.0)
+        assert size == 100
+
+    def test_dynamic_sizing_clamps_at_max_position(self) -> None:
+        strategy = MomentumStrategy(
+            _make_config(
+                window=5,
+                trade_size=100,
+                risk_per_trade_pct=0.02,
+                account_risk_currency=1_000_000,
+                stop_loss_ticks=5,
+                max_position=200,
+            )
+        )
+        _register_strategy(strategy)
+        _mock_instrument(strategy)
+        strategy.on_start()
+
+        size = strategy._compute_trade_size(1, entry_price=100.0)
+        assert size == 200
+
+
 class TestRiskLimits:
     def test_max_daily_loss_blocks_entry(self) -> None:
         strategy = MomentumStrategy(_make_config(window=5, max_daily_loss=100))
