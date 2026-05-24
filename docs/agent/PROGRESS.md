@@ -1160,3 +1160,18 @@
 - **Files Changed**: None (code already complete)
 - **Validation Result**: PASS (20/20 tests passed: 14 in test_safety.py + 6 in test_kill_switch_subscriber.py; black/isort/flake8/mypy all green)
 - **Blockers / Notes**: Phase 9 EXIT (9z3.10.27) is complete. Phase 10 ticket 11.6 closed. Ready for 11.7 (Basic dashboard) or 11.8 (EXIT).
+
+## Iteration 111
+- **Task**: P10: Basic dashboard — single HTML page with fills, positions, P&L, health
+- **Task ID**: sam_trader-9z3.11.7
+- **Status**: COMPLETE
+- **Decisions**: 
+  1. Created `src/sam_trader/services/dashboard.py` with a simple Python `http.server` backend (no FastAPI). Serves dark terminal-themed `dashboard.html` with 30-second auto-refresh via HTML meta tag.
+  2. Endpoints: `GET /health` returns JSON `{status, services}`; `GET /api/dashboard` returns JSON `{fills, positions, pnl, health}`; `GET /` returns rendered HTML.
+  3. Health checks use asyncpg `SELECT 1` for PostgreSQL, Redis client `ping()` for Redis, and `docker inspect` for Futu OpenD and sam-trader containers.
+  4. Fills query reads last 20 rows from PG `fills` table for today, sorted by `ts_event DESC`. Positions query reads non-zero rows from PG `positions` table. P&L query scans Redis `sam:pnl:{strategy}:{date}` keys written by `RealizedPnLTrackerActor` (Phase 6).
+  5. Updated `docker/Dockerfile.services` CMD to run `python3 -m sam_trader.services.dashboard` instead of `python3 -m http.server 8080`.
+  6. HTML template uses CSS custom properties for dark theme, responsive grid for health indicators, and color-coded rows (green BUY, red SELL, green positive P&L, red negative P&L).
+- **Files Changed**: `src/sam_trader/services/dashboard.py` (new), `tests/unit/services/test_dashboard.py` (new), `docker/Dockerfile.services`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 10/10 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Phase 10 ticket 11.7 closed. Ready for 11.8 (EXIT: Verify safety controls + dashboard).
