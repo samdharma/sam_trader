@@ -1237,3 +1237,21 @@
 - **Files Changed**: `src/sam_trader/services/quote_collector.py`, `tests/unit/services/test_quote_collector.py`, `docs/reference/BUILD_PHASE_9.md`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 18/18 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Phase 9 ticket 9z3.10.29 closed. All Phase 9 tickets (9z3.10.16 through 9z3.10.29) are now complete.
+
+## Iteration 94
+- **Task**: P11: deploy.sh — thin wrapper delegating to sam-services
+- **Task ID**: sam_trader-9z3.12.1
+- **Status**: COMPLETE
+- **Decisions**: 
+  - Rewrote deploy.sh as ~190-line host-side orchestrator (down from 250 lines). Removed restart action (delegated to sam CLI inside sam-services). 
+  - Added --build flag: git pull → docker compose build. Combined with start action: git pull → build → health-gated start.
+  - Added --tag flag: git fetch --tags → checkout tag → build.
+  - Added --setup flag: triggers scripts/wizard.py to regenerate .env.
+  - First-run trigger: when .env is missing, runs wizard.py and exits with instructions instead of copying .env.example.
+  - Sequential startup with health gating: postgres → redis → futu-opend → sam-trader → sam-services (if profiles enabled).
+  - Prints sam CLI hint on every start: `docker exec sam-services sam <command>`.
+  - Prints daily update workflow hint in usage: `./deploy.sh --build && docker exec sam-services sam apply`.
+  - Created scripts/wizard.py: interactive first-run wizard prompting for trader_id, env, Futu/IB credentials, PostgreSQL/Redis passwords. Writes .env with 600 permissions.
+- **Files Changed**: deploy.sh (rewritten), scripts/wizard.py (new), tests/integration/test_deploy_decouple.py (rewritten)
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 22/22 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for next Phase 11 ticket (sam_trader-9z3.12.2: First-run wizard refinement, or sam_trader-9z3.12.3: Documentation, or sam_trader-9z3.12.4: E2E gate).
