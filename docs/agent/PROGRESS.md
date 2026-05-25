@@ -1285,3 +1285,18 @@
 - **Files Changed**: `tests/integration/test_phase11_exit.py` (new)
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 21/21 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: Phase 11 EXIT complete. All 4 Phase 11 tickets (9z3.12.1–9z3.12.4) closed. Phases 0–11 are now fully implemented and tested. The actual 1-hour live Futu soak test and fresh macOS deploy remain operator-manual steps documented in DEPLOY_GUIDE.md and OPERATOR_GUIDE.md.
+
+## Iteration 117
+- **Task**: P11: patch.object breaks Path.exists() on importlib-loaded modules
+- **Task ID**: sam_trader-9z3.12.5
+- **Status**: COMPLETE
+- **Decisions**:
+  - Created `tests/helpers.py` with `patch_path_attrs` contextmanager that uses direct `setattr`/`getattr` instead of `unittest.mock.patch.object`.
+  - Documented the root cause in the helper docstring: `module_from_spec` + `patch.object` (`__dict__` manipulation) causes `Path` objects to lose filesystem binding.
+  - Added module-level comment in `tests/unit/test_wizard.py` next to the `importlib.util` load block.
+  - Replaced all 4 remaining `patch.object(wizard, "ENV_PATH", ...)` / `patch.object(wizard, "TEMPLATE_PATH", ...)` calls with `patch_path_attrs`.
+  - Simplified `test_returns_1_when_user_denies_overwrite` by removing the inline manual setattr workaround in favor of the shared helper.
+  - Added `tests/__init__.py` so `from tests.helpers import patch_path_attrs` resolves when pytest is run via `python -m pytest` (RALPH harness mode).
+- **Files Changed**: `tests/helpers.py` (new), `tests/__init__.py` (new), `tests/unit/test_wizard.py` (modified)
+- **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 25/25 wizard tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for next available ticket.

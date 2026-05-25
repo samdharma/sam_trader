@@ -15,10 +15,17 @@ from unittest.mock import patch
 
 import pytest
 
+from tests.helpers import patch_path_attrs
+
 WIZARD_PATH = Path(__file__).resolve().parents[2] / "scripts" / "wizard.py"
 spec = importlib.util.spec_from_file_location("wizard", WIZARD_PATH)
 wizard = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
 spec.loader.exec_module(wizard)  # type: ignore[union-attr]
+
+# NOTE: patch.object breaks Path.exists() on importlib-loaded modules.
+# When patching Path attributes (ENV_PATH, TEMPLATE_PATH) on `wizard`,
+# always use `patch_path_attrs` from tests.helpers instead of
+# `unittest.mock.patch.object`.  See tests/helpers.py for details.
 
 
 # ── Template parsing (core data layer) ────────────────────────────────────────
@@ -255,9 +262,10 @@ class TestMain:
         inputs = ["my_trader", "paper", "n", "n", "pgpass", "", ""]
         with patch("builtins.input", side_effect=inputs):
             with patch.object(getpass, "getpass", side_effect=["pgpass", ""]):
-                with patch.object(wizard, "ENV_PATH", env_path):
-                    with patch.object(wizard, "TEMPLATE_PATH", template):
-                        assert wizard.main() == 0
+                with patch_path_attrs(
+                    wizard, ENV_PATH=env_path, TEMPLATE_PATH=template
+                ):
+                    assert wizard.main() == 0
         assert "TRADER_ID=my_trader" in env_path.read_text()
 
     def test_returns_1_when_user_denies_overwrite(self, tmp_path: Path) -> None:
@@ -268,19 +276,12 @@ class TestMain:
         env_path = tmp_path / ".env"
         env_path.write_text("existing")
         inputs = ["my_trader", "paper", "n", "n", "pgpass", "", "n"]
-        # Direct assignment: patch.object breaks Path.exists() on
-        # modules loaded via importlib.util.spec_from_file_location
-        _orig_env = wizard.ENV_PATH  # type: ignore[attr-defined]
-        _orig_tmpl = wizard.TEMPLATE_PATH  # type: ignore[attr-defined]
-        wizard.ENV_PATH = env_path  # type: ignore[attr-defined]
-        wizard.TEMPLATE_PATH = template  # type: ignore[attr-defined]
-        try:
-            with patch("builtins.input", side_effect=inputs):
-                with patch.object(getpass, "getpass", side_effect=["pgpass", ""]):
+        with patch("builtins.input", side_effect=inputs):
+            with patch.object(getpass, "getpass", side_effect=["pgpass", ""]):
+                with patch_path_attrs(
+                    wizard, ENV_PATH=env_path, TEMPLATE_PATH=template
+                ):
                     assert wizard.main() == 1
-        finally:
-            wizard.ENV_PATH = _orig_env  # type: ignore[attr-defined]
-            wizard.TEMPLATE_PATH = _orig_tmpl  # type: ignore[attr-defined]
         assert env_path.read_text() == "existing"
 
     def test_returns_1_on_keyboard_interrupt(self, tmp_path: Path) -> None:
@@ -288,6 +289,5 @@ class TestMain:
         template.write_text("TRADER_ID=sam\nSAM_ENV=paper\n")
         env_path = tmp_path / ".env"
         with patch("builtins.input", side_effect=KeyboardInterrupt):
-            with patch.object(wizard, "ENV_PATH", env_path):
-                with patch.object(wizard, "TEMPLATE_PATH", template):
-                    assert wizard.main() == 1
+            with patch_path_attrs(wizard, ENV_PATH=env_path, TEMPLATE_PATH=template):
+                assert wizard.main() == 1
