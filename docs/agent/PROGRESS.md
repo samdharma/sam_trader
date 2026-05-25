@@ -1300,3 +1300,19 @@
 - **Files Changed**: `tests/helpers.py` (new), `tests/__init__.py` (new), `tests/unit/test_wizard.py` (modified)
 - **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 25/25 wizard tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ready for next available ticket.
+
+## Iteration 118
+- **Task**: P11: Missing deploy-structure validation — docker-compose + .env cross-reference
+- **Task ID**: sam_trader-9z3.12.6
+- **Status**: COMPLETE
+- **Decisions**:
+  - Created `tests/integration/test_phase11_deploy_structure.py` with 54 pure file-parsing structural tests covering three missing validation categories.
+  - `TestDockerComposeStructure` (5 tests): validates all 6 services defined, all on sam-net, named volumes use local driver, sam-trader depends_on postgres+redis with service_healthy, sam-services mounts docker.sock:ro.
+  - `TestHealthCheckPattern` (10 tests): parametrized across all 6 services for healthcheck presence, interval=30s, timeout=10s, retries=3, start_period correct (futu=120s, others=60s); plus explicit L1/L2/L3 assertions for postgres, redis, ib-gateway, services, trader.
+  - `TestProfileGating` (4 tests): core infra has no profiles, futu has `futu`, ib has `ib`, services has `services`.
+  - `TestDeployE2EFlow` (3 tests): deploy.sh references docker/docker-compose.yml, passes --profile args, starts core infra before trader.
+  - `TestEnvConsistency` (4 tests): all compose vars without :-default exist in .env.example, mandatory 4 keys present, NEVER commit warning, wizard writes keys without defaults.
+  - `TestPortability` (3 tests): sam-net uses bridge driver, no hardcoded host paths (docker.sock exempt), compose file is valid YAML with services/volumes/networks top keys.
+- **Files Changed**: `tests/integration/test_phase11_deploy_structure.py` (new)
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 54/54 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. All Phase 11 tickets complete.
