@@ -229,6 +229,12 @@ def build_trading_node() -> TradingNode:
             len(strategies),
             cfg.bundles_path,
         )
+        if not strategies and cfg.futu_enabled:
+            logger.critical(
+                "ZERO strategies loaded but FUTU is enabled. "
+                "Check %s — copy from bundles.example.yaml if empty.",
+                cfg.bundles_path,
+            )
     except (BundleLoaderError, BundleValidationError) as exc:
         logger.warning(
             "Failed to load bundles from %s: %s. Running with no strategies.",

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import pathlib
 
 import pytest
@@ -448,10 +449,7 @@ class TestPositionSnapshotActorWiring:
             actors = node._config.actors
             actor_paths = [a.actor_path for a in actors]
             assert len(actors) == 2
-            assert (
-                "sam_trader.actors.trade_journal:TradeJournalActor"
-                in actor_paths
-            )
+            assert "sam_trader.actors.trade_journal:TradeJournalActor" in actor_paths
             assert (
                 "sam_trader.actors.position_snapshot:PositionSnapshotActor"
                 in actor_paths
@@ -572,6 +570,86 @@ class TestLiveRiskEngineWiring:
             risk_cfg = node._config.risk_engine
             assert risk_cfg is not None
             assert risk_cfg.max_notional_per_order == {}
+        finally:
+            loop.close()
+            asyncio.set_event_loop(None)
+
+
+class TestEmptyBundlesWarning:
+    """Tests for CRITICAL log when bundles.yaml is empty and FUTU is enabled."""
+
+    def test_critical_log_when_empty_bundles_and_futu_enabled(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: pathlib.Path,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """A CRITICAL log is emitted when zero bundles are loaded but
+        FUTU_ENABLED=true.
+        """
+        empty_bundles = tmp_path / "empty_bundles.yaml"
+        empty_bundles.write_text("bundles: []\n")
+
+        monkeypatch.setenv("FUTU_ENABLED", "true")
+        monkeypatch.setenv("FUTU_OPEND_HOST", "test-futu-host")
+        monkeypatch.setenv("FUTU_OPEND_PORT", "22222")
+        monkeypatch.setenv("FUTU_TRD_ENV", "SIMULATE")
+        monkeypatch.setenv("FUTU_TRD_MARKET", "US")
+        monkeypatch.setenv("FUTU_UNLOCK_PWD_MD5", "deadbeef")
+        monkeypatch.setenv("IB_ENABLED", "false")
+        monkeypatch.setenv("BUNDLES_PATH", str(empty_bundles))
+        monkeypatch.setenv("STATE_SAVE_ENABLED", "false")
+        monkeypatch.setenv("STATE_LOAD_ENABLED", "false")
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            with caplog.at_level(logging.CRITICAL):
+                node = build_trading_node()
+
+            assert isinstance(node, TradingNode)
+            assert node._config.strategies == []
+
+            critical_records = [
+                r for r in caplog.records if r.levelno == logging.CRITICAL
+            ]
+            assert len(critical_records) == 1
+            assert (
+                "ZERO strategies loaded but FUTU is enabled"
+                in critical_records[0].message
+            )
+            assert "bundles.example.yaml" in critical_records[0].message
+        finally:
+            loop.close()
+            asyncio.set_event_loop(None)
+
+    def test_no_critical_log_when_empty_bundles_and_futu_disabled(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: pathlib.Path,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """No CRITICAL log when zero bundles are loaded and FUTU_ENABLED=false."""
+        empty_bundles = tmp_path / "empty_bundles.yaml"
+        empty_bundles.write_text("bundles: []\n")
+
+        monkeypatch.setenv("FUTU_ENABLED", "false")
+        monkeypatch.setenv("IB_ENABLED", "false")
+        monkeypatch.setenv("BUNDLES_PATH", str(empty_bundles))
+        monkeypatch.setenv("STATE_SAVE_ENABLED", "false")
+        monkeypatch.setenv("STATE_LOAD_ENABLED", "false")
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            with caplog.at_level(logging.CRITICAL):
+                node = build_trading_node()
+
+            assert isinstance(node, TradingNode)
+            critical_records = [
+                r for r in caplog.records if r.levelno == logging.CRITICAL
+            ]
+            assert len(critical_records) == 0
         finally:
             loop.close()
             asyncio.set_event_loop(None)

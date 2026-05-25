@@ -1341,3 +1341,15 @@
 - **Files Changed**: `src/sam_trader/adapters/futu/data.py`, `tests/unit/adapters/futu/test_data.py`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 20/20 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None.
+
+## Iteration 121
+- **Task**: BUG: config/bundles.yaml is empty — zero strategies loaded at runtime
+- **Task ID**: sam_trader-on6
+- **Status**: COMPLETE
+- **Decisions**:
+  - Populated `config/bundles.yaml` with an enabled Futu bundle (`tsla-orb-15m-futu`, `enabled: true`) copied from `bundles.example.yaml`. File is gitignored so operators can customize locally without drift.
+  - Added CRITICAL log in `build_trading_node()` when zero strategies are loaded but `futu_enabled=true`, directing operators to check `bundles.yaml` and copy from `bundles.example.yaml`.
+  - Added `TestEmptyBundlesWarning` class with two tests: `test_critical_log_when_empty_bundles_and_futu_enabled` verifies CRITICAL record is emitted, and `test_no_critical_log_when_empty_bundles_and_futu_disabled` verifies no CRITICAL record when Futu is disabled.
+- **Files Changed**: `config/bundles.yaml`, `src/sam_trader/main.py`, `tests/unit/test_main.py`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 16/16 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None.
