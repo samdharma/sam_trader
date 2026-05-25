@@ -1255,3 +1255,16 @@
 - **Files Changed**: deploy.sh (rewritten), scripts/wizard.py (new), tests/integration/test_deploy_decouple.py (rewritten)
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 22/22 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ready for next Phase 11 ticket (sam_trader-9z3.12.2: First-run wizard refinement, or sam_trader-9z3.12.3: Documentation, or sam_trader-9z3.12.4: E2E gate).
+
+## Iteration 115
+- **Task**: P11: User documentation — deploy guide, bundle guide, operator guide
+- **Task ID**: sam_trader-9z3.12.3
+- **Status**: COMPLETE
+- **Decisions**: 
+  - Created `docs/user/DEPLOY_GUIDE.md` (~340 lines) covering prerequisites (hardware/software/broker accounts/network), first-time installation with wizard and deploy.sh, daily update workflow, and comprehensive troubleshooting section with 8 common scenarios.
+  - Created `docs/user/BUNDLE_GUIDE.md` (~390 lines) covering bundle schema reference (all fields including family/version/variant metadata), symbology rules (InstrumentId, BarType, venue routing), versioned bundle examples (ORB_aggressive_v1.0, ORB_bearish_v1.3, Momentum_long_v2.0), validation workflow, and `sam validate-bundles` reference.
+  - Created `docs/user/OPERATOR_GUIDE.md` (~410 lines) covering full daily workflow: pre-market (git pull, preflight, build, apply, verify), market hours (dashboard, health, logs, safety monitor), post-market (snapshot, P&L review, bundle adjustments, backup), and incident response (kill/halt/resume/rollback, severity levels, force restart).
+  - All guides reference real commands: `deploy.sh --with-futu --with-services --build start`, `sam status/health/preflight/apply/snapshot/bundle-diff/validate-bundles/performance/kill/halt/resume/safety-monitor/rotate-logs/deploy-window/readiness/gapscan/watchlist/quote/backup/restore/logs/restart/version`.
+- **Files Changed**: `docs/user/DEPLOY_GUIDE.md` (new), `docs/user/BUNDLE_GUIDE.md` (new), `docs/user/OPERATOR_GUIDE.md` (new)
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; no code changes, docs-only)
+- **Blockers / Notes**: None. Ready for Phase 11 EXIT ticket (sam_trader-9z3.12.4: Full E2E validation).
