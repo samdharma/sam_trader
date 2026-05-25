@@ -1316,3 +1316,19 @@
 - **Files Changed**: `tests/integration/test_phase11_deploy_structure.py` (new)
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 54/54 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. All Phase 11 tickets complete.
+
+## Iteration 119
+- **Task**: BUG: BUILD_PHASE_9/10/11/12 docs say Not Started but all tickets are closed and code exists
+- **Task ID**: sam_trader-2pm
+- **Status**: COMPLETE
+- **Decisions**: Documentation drift fix only. No code changes.
+  1. Updated AGENTS.md build phase table: Phase 9/10/11 → ✅ Complete.
+  2. Updated BUILD_PHASE_9.md status line → ✅ Complete (all 12 tickets closed incl EXIT 9z3.10.27).
+  3. Updated BUILD_PHASE_10.md status line → ✅ Complete (all 3 tickets closed incl EXIT 9z3.11.8).
+  4. Updated BUILD_PHASE_11.md status line → ✅ Complete (all 4 tickets closed incl EXIT 9z3.12.4).
+  5. Updated SAM_TRADER_V3_PLAN.md top status and §6 roadmap for Phases 9–11 → ✅ Complete.
+  6. Updated TICKET_PLAN_V3.md top status, Phase 9/10/11 sections, and dependency summary diagram → all ✅ Complete.
+  7. BUILD_PHASE_12_FUTURE.md left unchanged (already correctly tagged "Planning / Reference Only — NOT for current build").
+- **Files Changed**: `AGENTS.md`, `docs/reference/BUILD_PHASE_9.md`, `docs/reference/BUILD_PHASE_10.md`, `docs/reference/BUILD_PHASE_11.md`, `docs/reference/SAM_TRADER_V3_PLAN.md`, `docs/agent/TICKET_PLAN_V3.md`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; docs-only, no code changes)
+- **Blockers / Notes**: None. All documentation now reflects completed build state.

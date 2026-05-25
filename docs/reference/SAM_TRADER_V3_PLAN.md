@@ -1,6 +1,6 @@
 # SAM Trader V3 - Architecture & Build Plan
 
-> **Status:** Active (Phases 0–8 complete; Phases 9–11 pending)
+> **Status:** Active (Phases 0–11 complete)
 > **Last Updated:** 2026-05-24
 > **Purpose:** Single source of truth for SAM Trader V3. Written for AI agents and humans.
 > **Repo:** `github.com/samdharma/sam_trader`
@@ -406,17 +406,17 @@ sam_trader/
 
 ### Phase 9: Pre-Market Pipeline
 > **Goal:** Gap scanner → AI analysis → risk manager → bundle generator → readiness report.
-> **Status:** Not Started (revamped 2026-05-24 — Nautilus-native broker feeds replace web scraping)
+> **Status:** ✅ Complete (all 12 tickets closed incl EXIT 9z3.10.27)
 > **Depends on:** Phase 8
 
 ### Phase 10: Safety & Dashboard
-> **Goal:** Kill switch, circuit breakers, FastAPI backend, dashboard UI.
-> **Status:** Not Started  
+> **Goal:** Kill switch, circuit breakers, basic read-only dashboard showing existing Phase 6/8 data.
+> **Status:** ✅ Complete (all 3 tickets closed incl EXIT 9z3.11.8)  
 > **Depends on:** Phase 9
 
 ### Phase 11: Deploy Script & E2E Validation
 > **Goal:** Single-script deploy. First-run wizard. All profiles work. Full E2E gate passes.
-> **Status:** Not Started  
+> **Status:** ✅ Complete (all 4 tickets closed incl EXIT 9z3.12.4)  
 > **Depends on:** Phase 10
 
 ---

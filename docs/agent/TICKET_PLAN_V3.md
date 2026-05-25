@@ -1,6 +1,6 @@
 # SAM Trader V3 - Ticket Plan & Dependency Hierarchy
 
-> **Status:** Active (Phases 0–8 complete; Phase 9–11 pending)
+> **Status:** Active (Phases 0–11 complete)
 > **Date:** 2026-05-24 (Phase 0–8 complete; Phase 9 revamped with Nautilus-native architecture)
 > **Source:** `docs/reference/SAM_TRADER_V3_PLAN.md` §6
 > **Repo:** `github.com/samdharma/sam_trader`
@@ -391,7 +391,7 @@ Phase 11 ───────────────────────�
 ### Phase 9: Pre-Market Pipeline
 
 > **Goal:** Nautilus-native pre-market pipeline using broker real-time data feeds (Futu + IB). Gap scanner → AI analysis → risk manager → regime detection → bundle generator → readiness report.
-> **Status:** Not Started (renumbered 2026-05-24 — 12 sequential tickets 10.16–10.27)
+> **Status:** ✅ Complete (all 12 tickets closed incl EXIT 9z3.10.27)
 > **Build ref:** [BUILD_PHASE_9.md](../reference/BUILD_PHASE_9.md)
 > **Build order:** Tickets numbered sequentially matching build order. Two parallel tracks converge at executor — Track A: watchlist → quote collector → gap scanner → AI → MC → pre-trade → heat → executor. Track B: regime → executor. Then: executor → bundle-gen → report → EXIT.
 
@@ -415,7 +415,7 @@ Phase 11 ───────────────────────�
 ### Phase 10: Safety & Dashboard
 
 > **Goal:** Operator safety controls (kill switch, circuit breakers) + basic read-only dashboard showing existing Phase 6/8 data. No new tables, no FastAPI.
-> **Status:** Not Started (simplified 2026-05-24 — 3 tickets from 5)
+> **Status:** ✅ Complete (all 3 tickets closed incl EXIT 9z3.11.8)
 > **Build ref:** [BUILD_PHASE_10.md](../reference/BUILD_PHASE_10.md)
 > **Build order:** Safety (11.6) and Dashboard (11.7) are parallel roots after Phase 9 EXIT. EXIT (11.8) depends on both.
 
@@ -437,6 +437,7 @@ Phase 11 ───────────────────────�
 ### Phase 11: Deploy Script & E2E Validation
 
 > **Goal:** Single-script deploy. First-run wizard. All profiles work. Full E2E gate passes.
+> **Status:** ✅ Complete (all 4 tickets closed incl EXIT 9z3.12.4)
 > **Build order:** Linear chain - deploy.sh → wizard → docs → E2E. No cross-phase dependencies. Final phase, EXIT has no downstream blocks.
 
 | # | Ticket ID | Title | Type | AC Highlights |
@@ -451,12 +452,12 @@ Phase 11 ───────────────────────�
 ## 6. Phase Dependency Summary
 
 ```
-Phase 0 ───► Phase 1 ───► Phase 2 ───► Phase 3 ───► Phase 4 ───┬──► Phase 5 ───► Phase 6 ✅ ───► Phase 7
-                                                                │
-                                                                └──► Phase 8 ✅ ───► Phase 9 ───► Phase 10
-                                                                                                         │
-                                                                                                         ▼
-                                                                                                   Phase 11
+Phase 0 ✅ ───► Phase 1 ✅ ───► Phase 2 ✅ ───► Phase 3 ✅ ───► Phase 4 ✅ ───┬──► Phase 5 ✅ ───► Phase 6 ✅ ───► Phase 7 ✅
+                                                                                 │
+                                                                                 └──► Phase 8 ✅ ───► Phase 9 ✅ ───► Phase 10 ✅
+                                                                                                                              │
+                                                                                                                              ▼
+                                                                                                                        Phase 11 ✅
 ```
 
 **Parallel tracks:**

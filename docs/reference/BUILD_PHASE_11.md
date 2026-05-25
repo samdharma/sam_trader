@@ -1,6 +1,6 @@
 # Build Phase 11 — Deploy Script & E2E Validation
 
-> **Status:** Not Started  
+> **Status:** ✅ Complete (all 4 tickets closed incl EXIT 9z3.12.4)  
 > **Goal:** Single-script deploy. First-run wizard. All profiles work. Full E2E gate passes.  
 > **Prev Phase:** [BUILD_PHASE_10.md](./BUILD_PHASE_10.md) — Safety & Dashboard
 

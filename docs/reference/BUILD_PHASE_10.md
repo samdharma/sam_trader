@@ -1,6 +1,6 @@
 # Build Phase 10 — Safety & Dashboard
 
-> **Status:** Not Started (simplified 2026-05-24 — 3 tickets, no new tables, no FastAPI)  
+> **Status:** ✅ Complete (all 3 tickets closed incl EXIT 9z3.11.8)  
 > **Goal:** Operator safety controls (kill switch, circuit breakers) + basic read-only dashboard showing existing Phase 6/8 data.  
 > **Prev Phase:** [BUILD_PHASE_9.md](./BUILD_PHASE_9.md) — Pre-Market Pipeline  
 > **Next Phase:** [BUILD_PHASE_11.md](./BUILD_PHASE_11.md) — Deploy Script & E2E Validation
