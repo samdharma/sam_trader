@@ -39,6 +39,7 @@ logger = logging.getLogger("sam_trader.pipeline")
 def run_pipeline(
     market: str | None = None,
     schedule: str = PIPELINE_SCHEDULE,
+    pass_number: int = 1,
 ) -> dict[str, Any]:
     """Run the full pre-market pipeline.
 
@@ -48,6 +49,8 @@ def run_pipeline(
         Market to scan (``"US"`` or ``"HK"``).  Defaults to ``PIPELINE_MARKET`` env var.
     schedule
         Schedule label (HH:MM).  Defaults to ``PIPELINE_SCHEDULE`` env var.
+    pass_number
+        Scan pass (1=early gap, 2=trended, 3=final).  Default 1.
 
     Returns
     -------
@@ -121,7 +124,7 @@ def run_pipeline(
     )
 
     try:
-        candidates = asyncio.run(scanner.scan(symbols, pass_number=1))
+        candidates = asyncio.run(scanner.scan(symbols, pass_number=pass_number))
     except Exception as exc:
         logger.error("Gap scan failed: %s", exc)
         return {
@@ -200,8 +203,19 @@ def main() -> int:
         default=PIPELINE_MARKET,
         help="Market to scan (US or HK)",
     )
+    parser.add_argument(
+        "--pass",
+        type=int,
+        default=1,
+        dest="pass_number",
+        help="Scan pass number (1=early gap, 2=trended, 3=final)",
+    )
     args = parser.parse_args()
-    result = run_pipeline(market=args.market, schedule=args.schedule)
+    result = run_pipeline(
+        market=args.market,
+        schedule=args.schedule,
+        pass_number=args.pass_number,
+    )
     print(
         f"pipeline_status={result['status']} "
         f"market={result['market']} "

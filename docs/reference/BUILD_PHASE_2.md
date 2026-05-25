@@ -295,4 +295,77 @@ from sam_trader.adapters.futu.subscription_manager import FutuSubscriptionManage
 
 ---
 
-*Last updated: 2026-05-24 — Created from gap audit; Phase 2 implemented 2026-05-20*
+---
+
+## 10. Post-Deployment Fixes (2026-05-25)
+
+> **Discovered during sandbox paper-trading deployment.** Three gaps found in the Futu
+> adapter → TradingNode integration that prevented strategies from finding instruments
+> and routing subscriptions correctly.
+
+### 10.1 `FutuDataClientConfig.load_ids` Missing
+
+**Problem:** `FutuLiveDataClientFactory` created `InstrumentProviderConfig()` with no
+`load_ids`, so instruments were never pre-loaded from Futu. Strategies failed with
+`Could not find instrument for TSLA.NASDAQ` on start.
+
+**Fix — `config.py`:** Added `load_ids: frozenset | None = None` field:
+
+```python
+class FutuDataClientConfig(LiveDataClientConfig, frozen=True):
+    # ...
+    load_ids: frozenset | None = None
+```
+
+**Fix — `factories.py`:** Pass `load_ids` through to `InstrumentProviderConfig`:
+
+```python
+load_ids = getattr(config, "load_ids", None)
+instrument_provider = FutuInstrumentProvider(
+    quote_context=quote_ctx,
+    config=InstrumentProviderConfig(load_ids=load_ids),
+)
+```
+
+### 10.2 Instruments Not Pushed to Nautilus Cache
+
+**Problem:** Even with `load_ids` set, `InstrumentProvider.add()` only stores
+instruments in the provider's local dict — they are never pushed to the Nautilus
+cache. Strategies still fail because `cache.instrument(id)` returns `None`.
+
+**Fix — `data.py`:** In `FutuLiveDataClient._connect()`, after `load_ids_async()`
+completes, push each instrument via `self._handle_data(instrument)` to route it
+through the data pipeline (MessageBus → DataEngine → Cache):
+
+```python
+async def _connect(self) -> None:
+    # ... existing connection code ...
+    if self._instrument_provider is not None:
+        load_ids = getattr(self._config, "load_ids", None)
+        if load_ids:
+            await self._instrument_provider.load_ids_async(list(load_ids))
+            for iid in load_ids:
+                instrument = self._instrument_provider.find(iid)
+                if instrument is not None:
+                    self._handle_data(instrument)  # Push to Nautilus cache
+```
+
+### 10.3 Venue Routing — `NASDAQ` Not Mapped to `FUTU` Client
+
+**Problem:** The `FutuLiveDataClient` is registered with `venue=FUTU_VENUE` ("FUTU"),
+but strategies request data for exchange venues like `NASDAQ`. The DataEngine returned
+`Cannot execute command: no data client configured for NASDAQ`.
+
+**Fix — `main.py`:** Add explicit venue routing on the `FutuDataClientConfig` so the
+DataEngine maps NASDAQ/NYSE/HKEX requests to the Futu client:
+
+```python
+data_clients["FUTU"] = FutuDataClientConfig(
+    # ...
+    routing=RoutingConfig(venues={"NASDAQ", "NYSE", "HKEX"}),
+)
+```
+
+---
+
+*Last updated: 2026-05-25 — Added Post-Deployment Fixes from sandbox paper-trading*

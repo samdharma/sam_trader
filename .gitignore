@@ -63,3 +63,5 @@ htmlcov/
 downloads/
 logs/monitor*.log
 logs/readiness/
+logs/deploy_window.log
+logs/safety.log

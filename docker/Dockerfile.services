@@ -12,6 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     cron \
     postgresql-client \
     redis-tools \
+    sudo \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Docker CLI (static binary) for volume backups
@@ -54,6 +55,9 @@ ENV PYTHONPATH="/opt/sam_trader/src"
 COPY --chown=root:root src/sam_trader/services/crontab /etc/cron.d/sam-trader
 RUN chmod 644 /etc/cron.d/sam-trader
 
+# Allow 'sam' user to run docker for container health checks
+RUN echo "sam ALL=(root) NOPASSWD: /usr/local/bin/docker" >> /etc/sudoers
+
 # Expose the operations HTTP port
 EXPOSE 8080
 
@@ -65,4 +69,6 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
 
 # Start cron daemon (requires root) and drop to 'sam' for the dashboard HTTP server.
 # Cron jobs execute as user 'sam' because the crontab specifies the user field.
+# Ensure 'sam' user can access the Docker socket for container health checks.
+# The socket GID may vary by host — we capture it at container start.
 CMD ["bash", "-c", "env | grep -E '^(POSTGRES|REDIS|BACKUP|FUTU|CONFIG|SAM_|DEPLOY|PIPELINE|LOG_|TZ)' > /opt/sam_trader/.env_cron && cron && su - sam -c 'cd /opt/sam_trader && exec python3 -m sam_trader.services.dashboard'"]

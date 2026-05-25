@@ -246,4 +246,38 @@ from sam_trader.adapters.futu.config import FutuDataClientConfig, FutuExecClient
 
 ---
 
-*Last updated: 2026-05-24 — Status updated to Complete during gap audit; ticket summary added*
+---
+
+## 8. Post-Deployment Fixes (2026-05-25)
+
+### 8.1 Bundle Loading Must Precede Futu Config Creation
+
+**Problem:** `build_trading_node()` created `FutuDataClientConfig` BEFORE calling
+`load_bundles()`. Since `load_ids` (from bundle instrument IDs) was needed by the
+Futu config to pre-load instruments, the `load_ids` field was always `None`.
+
+**Fix:** Move the `load_bundles()` call and `instrument_ids` extraction to run BEFORE
+the Futu config block. Compute `futu_load_ids = _make_load_ids(instrument_ids)` and
+pass it to `FutuDataClientConfig(load_ids=futu_load_ids)`.
+
+**Before (broken):**
+```
+FutuDataClientConfig(...)  ← created first, no load_ids
+load_bundles(...)           ← instrument IDs extracted too late
+```
+
+**After (fixed):**
+```
+load_bundles(...)           ← extract instrument_ids first
+_make_load_ids(...)          ← build frozenset[InstrumentId]
+FutuDataClientConfig(        ← now has load_ids = futu_load_ids
+    load_ids=futu_load_ids,
+    routing=RoutingConfig(venues={"NASDAQ", "NYSE", "HKEX"}),
+)
+```
+
+**Files changed:** `src/sam_trader/main.py` — `build_trading_node()` restructured.
+
+---
+
+*Last updated: 2026-05-25 — Added Post-Deployment Fixes from sandbox paper-trading*

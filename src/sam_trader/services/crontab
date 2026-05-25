@@ -23,10 +23,24 @@ TZ=Asia/Hong_Kong
 */30 4-9 * * * sam . /opt/sam_trader/.env_cron && cd /opt/sam_trader && /usr/local/bin/python3 -m sam_trader.services.deploy_window >> /opt/sam_trader/logs/deploy_window.log 2>&1
 
 # ---------------------------------------------------------------------------
-# Phase 9 pre-market pipeline slot (configurable via PIPELINE_SCHEDULE).
-# Default: 08:00 HKT weekdays (pre-market for HK; evening for US).
+# Pre-market pipeline — HK session
+# Runs at 08:00 HKT weekdays (1h before HK market open at 09:30 HKT).
 # ---------------------------------------------------------------------------
-0 8 * * 1-5 sam . /opt/sam_trader/.env_cron && cd /opt/sam_trader && /usr/local/bin/python3 -m sam_trader.services.pipeline >> /opt/sam_trader/logs/pipeline.log 2>&1
+0 8 * * 1-5 sam . /opt/sam_trader/.env_cron && cd /opt/sam_trader && /usr/local/bin/python3 -m sam_trader.services.pipeline --market HK >> /opt/sam_trader/logs/pipeline_hk.log 2>&1
+
+# ---------------------------------------------------------------------------
+# Pre-market pipeline — US session  (SUMMER HKT = ET+12, Mar–Nov)
+# Pass 1: early gap scan at 16:30 HKT (04:30 ET, US pre-market opens 04:00 ET)
+# Pass 2: trended scan at 20:30 HKT (08:30 ET, 1h before US market open 09:30 ET)
+# Pass 3: final AI + risk + bundles + report at 21:00 HKT (09:00 ET)
+#
+# ⚠ DST: When US clocks change (2nd Sun Mar / 1st Sun Nov), manually shift
+#   these HKT times ±1h.  Winter HKT = ET+13:
+#     Pass 1 = 17:30,  Pass 2 = 21:30,  Pass 3 = 22:00
+# ---------------------------------------------------------------------------
+30 16 * * 1-5 sam . /opt/sam_trader/.env_cron && cd /opt/sam_trader && /usr/local/bin/python3 -m sam_trader.services.pipeline --market US --schedule 16:30 --pass 1 >> /opt/sam_trader/logs/pipeline_us.log 2>&1
+30 20 * * 1-5 sam . /opt/sam_trader/.env_cron && cd /opt/sam_trader && /usr/local/bin/python3 -m sam_trader.services.pipeline --market US --schedule 20:30 --pass 2 >> /opt/sam_trader/logs/pipeline_us.log 2>&1
+0 21 * * 1-5 sam . /opt/sam_trader/.env_cron && cd /opt/sam_trader && /usr/local/bin/python3 -m sam_trader.services.pipeline --market US --schedule 21:00 --pass 3 >> /opt/sam_trader/logs/pipeline_us.log 2>&1
 
 # ---------------------------------------------------------------------------
 # Performance analysis — nightly stats computation (02:00 HKT daily).

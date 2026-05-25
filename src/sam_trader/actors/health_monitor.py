@@ -62,6 +62,7 @@ class HealthMonitorActor(Actor):
         self._timer_name = "health_monitor_heartbeat"
         self._last_bar_times: dict[str, datetime] = {}
         self._redis: aioredis.Redis | None = None
+        self._main_loop: asyncio.AbstractEventLoop | None = None
 
     def on_start(self) -> None:
         """Set the first heartbeat alert when the actor starts."""
@@ -72,6 +73,9 @@ class HealthMonitorActor(Actor):
             self._on_heartbeat,
         )
         self.log.info("HealthMonitorActor: heartbeat started")
+        # Capture the event loop in the async context so sync timer
+        # callbacks can still schedule async Redis writes.
+        self._main_loop = asyncio.get_running_loop()
         if self.config.redis_host:
             try:
                 self._redis = aioredis.Redis(
@@ -147,7 +151,11 @@ class HealthMonitorActor(Actor):
             orders = self.cache.orders_total_count(venue=venue)
             positions = self.cache.positions_total_count(venue=venue)
             account = self.cache.account_for_venue(venue=venue)
-            connected = account is not None
+            # In SIMULATE mode account_for_venue may return None even
+            # when the venue is connected.  Fall back to bar activity
+            # as evidence of a live data pipeline.
+            has_any_bars = len(self._last_bar_times) > 0
+            connected = account is not None or (enabled and has_any_bars)
             venue_status[venue_name] = {
                 "orders": orders,
                 "positions": positions,
@@ -177,19 +185,23 @@ class HealthMonitorActor(Actor):
         )
 
     def _write_heartbeat_to_redis(self, timestamp: datetime) -> None:
-        """Persist heartbeat timestamp to Redis for the safety monitor."""
-        if self._redis is None:
+        """Persist heartbeat timestamp to Redis for the safety monitor.
+
+        Uses the event loop captured in ``on_start`` because this method is
+        called from a synchronous timer callback where
+        ``asyncio.get_running_loop()`` raises ``RuntimeError``.
+        """
+        if self._redis is None or self._main_loop is None:
             return
         try:
-            loop = asyncio.get_running_loop()
-            loop.create_task(
+            self._main_loop.create_task(
                 self._redis.set(  # type: ignore[arg-type]
                     "sam:heartbeat:last", timestamp.isoformat()
                 )
             )
         except Exception as exc:  # noqa: BLE001
             self.log.warning(
-                "HealthMonitorActor: Redis write failed for heartbeat: %s", exc
+                f"HealthMonitorActor: Redis write failed for heartbeat: {exc}"
             )
 
     @staticmethod

@@ -57,7 +57,7 @@ services:
       - BUNDLES_PATH=${BUNDLES_PATH:-config/bundles.yaml}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
     healthcheck:
-      test: ["CMD-SHELL", "pgrep python > /dev/null 2>&1 && cat /proc/1/cmdline | grep -qE 'python|sam_trader'"]
+      test: ["CMD-SHELL", "grep -q python /proc/1/cmdline"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -183,6 +183,7 @@ services:
       - ../config:/opt/sam_trader/config:ro
       - ../logs:/opt/sam_trader/logs:rw
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ../docker/futu-opend/futu.pem:/.futu/futu.pem:ro
       - ${BACKUP_HOST_DIR:-~/Documents/ai_agent_docs/backup-sam_trader_v3}:/opt/sam_trader/backups:rw
     environment:
       - PYTHONPATH=/opt/sam_trader/src

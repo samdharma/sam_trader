@@ -19,7 +19,7 @@ if ! true > /dev/tcp/localhost/11111 2>/dev/null; then
 fi
 
 # --- L3: Log scan for login failure patterns ---
-LOG_DIR="/home/futu/.com.futunn.FutuOpenD/log"
+LOG_DIR="/home/futu/.com.futunn.FutuOpenD/Log"
 if [ -d "$LOG_DIR" ]; then
     # Find the most recently modified log files (up to 3)
     RECENT_LOGS=$(find "$LOG_DIR" -maxdepth 1 -type f -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -n 3 | cut -d' ' -f2-)

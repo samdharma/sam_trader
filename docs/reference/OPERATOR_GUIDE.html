@@ -138,7 +138,7 @@
 <div class="meta-header">
   <span>📄 <strong>SAM Trader V3 — Operator's Guide</strong></span>
   <span>🕐 Last updated: <strong>2026-05-25 03:00 HKT</strong></span>
-  <span>📌 Version: <strong>v1.1</strong></span>
+  <span>📌 Version: <strong>v1.2</strong></span>
   <span class="live">● Active</span>
 </div>
 
@@ -148,6 +148,7 @@
 <h2>Revision History</h2>
 <table>
   <tr><th>Version</th><th>Date</th><th>Author</th><th>Description</th></tr>
+  <tr><td>v1.2</td><td>2026-05-25</td><td>sam.dharma</td><td>Sandbox paper-trading deployment validation. Updated §3.3 cron schedule and §6.4 HK pre-market pipeline times (07:00 → 08:00 HKT) to match deployed crontab. Updated §6 pipeline status from PENDING to deployed. Added §18 troubleshooting entries for healthcheck <code>Log/</code> directory casing and HealthMonitorActor TypeError. Added <code>futu.pem</code> mount note for sam-services container in §4.</td></tr>
   <tr><td>v1.1</td><td>2026-05-25</td><td>sam.dharma</td><td>Fixed architecture diagram: Futu OpenD and IB Gateway now correctly shown as broker gateway services (box shape), not databases. Expanded §4 Installation with detailed prerequisites, mandatory info with actual values, project layout, environment options reference, step-by-step deployment with troubleshooting branches, and post-install verification. Content drawn from paper-trading test guide (<code>sam_trader_phase0_3_paper_testing_guide.html</code>).</td></tr>
   <tr><td>v1.0</td><td>2026-05-24</td><td>sam.dharma</td><td>Initial operator's guide covering all 11 build phases, timezone-aware daily schedule, pre-market pipeline, broker operations, bundle management, maintenance, incident response, CLI reference, and troubleshooting.</td></tr>
 </table>
@@ -230,6 +231,7 @@ trading US and HK equities through <strong>Futu OpenD</strong> (primary broker) 
 Phases 0–8 are complete and production-ready. Phase 9 (Pre-Market Pipeline), Phase 10 (Safety &amp; Dashboard),
 and Phase 11 (Deploy &amp; E2E) are planned. Sections covering Phase 9–11 features are marked
 <span class="phase-tag phase-pending">PENDING</span>.
+Phase 9 pipeline code exists and cron is active — see <a href="#premarket-pipeline">§6</a>.
 </div>
 
 <hr>
@@ -356,7 +358,7 @@ HK does not observe DST.
   <tr><td>16:30 (summer) / 17:30 (winter)</td><td>US Pre-Market Pass 1: Gap Scan</td><td>Weekdays</td></tr>
   <tr><td>20:30 (summer) / 21:30 (winter)</td><td>US Pre-Market Pass 2: Trended Scan</td><td>Weekdays</td></tr>
   <tr><td>21:00 (summer) / 22:00 (winter)</td><td>US Pre-Market Pass 3: AI + Risk + Bundles + Report</td><td>Weekdays</td></tr>
-  <tr><td>07:00</td><td>HK Pre-Market Pipeline (all-in-one: scan → AI → risk → bundles)</td><td>Weekdays</td></tr>
+  <tr><td>08:00</td><td>HK Pre-Market Pipeline (all-in-one: scan → AI → risk → bundles)</td><td>Weekdays</td></tr>
 </table>
 
 <div class="callout info">
@@ -388,7 +390,7 @@ This guide assumes deployment on macOS in Hong Kong (HKT).
   <tr><td><strong>Environment file</strong></td><td><code>.env</code> (project root)</td><td>Never committed. Template: <code>.env.example</code></td></tr>
   <tr><td><strong>Deploy script</strong></td><td><code>./deploy.sh</code> (project root)</td><td>Single-script deploy (Phase 11)</td></tr>
   <tr><td><strong>Bundle config</strong></td><td><code>config/bundles.yaml</code></td><td>Versioned in git, volume-mounted</td></tr>
-  <tr><td><strong>RSA key (Futu)</strong></td><td><code>docker/futu-opend/futu.pem</code></td><td>Generate once, gitignored</td></tr>
+  <tr><td><strong>RSA key (Futu)</strong></td><td><code>docker/futu-opend/futu.pem</code></td><td>Generate once, gitignored. Mounted into <code>sam-trader</code> <strong>and</strong> <code>sam-services</code> (pipeline connections require it too).</td></tr>
   <tr><td><strong>Backup destination</strong></td><td><code>~/Documents/ai_agent_docs/backup-sam_trader_v3/</code></td><td>Volume-mounted from host</td></tr>
   <tr><td><strong>Logs (host)</strong></td><td><code>logs/</code> (project root)</td><td>Volume-mounted, auto-rotated</td></tr>
   <tr><td><strong>Parquet catalog</strong></td><td><code>data/catalog/</code> (project root)</td><td>Historical data, volume-mounted</td></tr>
@@ -833,9 +835,9 @@ docker compose -f docker/docker-compose.yml --env-file .env --profile services p
   <li>Check system health (<code>sam health</code>, dashboard)</li>
   <li><strong>HK Pre-Market Prep</strong> (see <a href="#premarket-hk">§6.3</a>):
     <ul>
-      <li>07:00 — HK pipeline runs: gap scan → AI → risk → bundles → report</li>
-      <li>07:30 — <strong>Human Review Gate:</strong> review &amp; approve HK bundles</li>
-      <li>07:50 — Apply approved bundles, graceful restart, verify</li>
+      <li>08:00 — HK pipeline runs: gap scan → AI → risk → bundles → report</li>
+      <li>08:30 — <strong>Human Review Gate:</strong> review &amp; approve HK bundles</li>
+      <li>08:50 — Apply approved bundles, graceful restart, verify</li>
     </ul>
   </li>
   <li>06:00 — CRON: Full system backup</li>
@@ -927,9 +929,9 @@ docker compose -f docker/docker-compose.yml --env-file .env --profile services p
   <li>Check backup completed: <code>sam backup --last</code> shows today 06:00</li>
 </ul>
 
-<h4>HK Pre-Market (~07:00–07:50 HKT)</h4>
+<h4>HK Pre-Market (~08:00–08:50 HKT)</h4>
 <ul class="checklist">
-  <li>Review HK readiness report (generated at 07:00)</li>
+  <li>Review HK readiness report (generated at 08:00)</li>
   <li>Human Review Gate: approve/reject/modify HK bundles</li>
   <li><code>sam validate-bundles</code> — must pass</li>
   <li>Apply bundles + graceful restart + verify healthy</li>
@@ -969,9 +971,10 @@ docker compose -f docker/docker-compose.yml --env-file .env --profile services p
 
 <div class="callout info">
 <strong>ⓘ Phase 9 — Not Yet Deployed</strong>
-The pre-market pipeline is fully designed and ticketed (Phase 9, 12 tickets) but not yet built.
-This section documents the target workflow. Sections marked
-<span class="phase-tag phase-pending">PENDING</span> are planned but not yet available.
+The pre-market pipeline is deployed and cron-active as of 2026-05-25.
+Gap scanner, AI scoring, risk checks, heat monitor, bundle generator, and readiness
+report modules are all operational. The pipeline runs on the deployed schedule in §3.3.
+Human review gates (§7) remain manual until Phase 10 safety automation ships.
 </div>
 
 <h3>6.1 Pipeline Architecture</h3>
@@ -1034,9 +1037,9 @@ flowchart TB
 <h3 id="premarket-hk">6.4 HK Pre-Market Pipeline (Early Morning HKT)</h3>
 <table>
   <tr><th>Time (HKT)</th><th>Stage</th><th>What Happens</th><th>Operator Action</th></tr>
-  <tr><td>07:00</td><td>All-in-one pipeline</td><td>Gap scan + AI scoring + MC sizing + risk checks + heat monitor + bundle generation + readiness report (compressed ~30 min window)</td><td>—</td></tr>
-  <tr><td>07:30</td><td><strong>Human Review Gate</strong></td><td>Readiness report ready</td><td><strong>Approve / reject / modify each bundle</strong></td></tr>
-  <tr><td>07:50</td><td>Apply</td><td>Validated bundles → <code>sam apply</code> → graceful restart</td><td>Confirm restart clean, verify health</td></tr>
+  <tr><td>08:00</td><td>All-in-one pipeline</td><td>Gap scan + AI scoring + MC sizing + risk checks + heat monitor + bundle generation + readiness report (compressed ~30 min window)</td><td>—</td></tr>
+  <tr><td>08:30</td><td><strong>Human Review Gate</strong></td><td>Readiness report ready</td><td><strong>Approve / reject / modify each bundle</strong></td></tr>
+  <tr><td>08:50</td><td>Apply</td><td>Validated bundles → <code>sam apply</code> → graceful restart</td><td>Confirm restart clean, verify health</td></tr>
 </table>
 
 <h3>6.5 AI Scoring Engine</h3>
@@ -1176,6 +1179,46 @@ graph TB
   <tr><td><code>sam performance --days 1</code></td><td>Today's realized P&L per strategy</td><td>Every 2–3 hours</td></tr>
   <tr><td><code>docker logs -f --tail 50 sam-trader</code></td><td>Live TradingNode logs</td><td>When investigating</td></tr>
 </table>
+
+<h3>8.4a End-to-End Verification Chain</h3>
+<p>Before market open, verify all 4 links in the chain are intact:
+<strong>Futu data → Nautilus strategy → Order submission → Fill journal</strong>.</p>
+
+<h4>Pre-Market Quick Check</h4>
+<pre><code># 1. Is Futu OpenD connected and logged in?
+docker exec sam-futu-opend bash -c 'exec 3&lt;&gt;/dev/tcp/127.0.0.1/22222; echo "status" &gt;&amp;3; sleep 1; cat &lt;&amp;3'
+# Expected: "Login successful"
+
+# 2. Are instruments subscribed (bars, quotes, trades)?
+docker exec sam-futu-opend bash -c 'exec 3&lt;&gt;/dev/tcp/127.0.0.1/22222; echo "show_sub_info" &gt;&amp;3; sleep 1; cat &lt;&amp;3'
+# Look for: SubType=K_15M, QUOTE, TICKER for each active instrument
+
+# 3. Is OrbStrategy RUNNING?
+docker logs sam-trader 2&gt;&amp;1 | grep "OrbStrategy.*RUNNING" | tail -1
+# Expected: "OrbStrategy: RUNNING"
+
+# 4. Are all containers healthy?
+docker compose -f docker/docker-compose.yml --env-file .env --profile futu ps
+# All should show (healthy) or (running)</code></pre>
+
+<h4>Live Pulse During Market Hours</h4>
+<p>Watch the full chain in real time — bar arrival → strategy logic → order → fill → journal:</p>
+<pre><code>docker logs -f sam-trader 2&gt;&amp;1 | grep -iE "bar_data|OrbStrategy|SubmitOrder|OrderFilled|Fill|TradeJournal"</code></pre>
+
+<table>
+  <tr><th>Log Pattern</th><th>What It Confirms</th></tr>
+  <tr><td><code>Bar(TSLA.NASDAQ-15-MINUTE...</code></td><td>Futu bar data arriving at Nautilus DataEngine</td></tr>
+  <tr><td><code>OrbStrategy: ...</code></td><td>Strategy processing the bar, calculating range</td></tr>
+  <tr><td><code>[CMD]--&gt; SubmitOrder(...)</code></td><td>Strategy emitted an order to ExecEngine</td></tr>
+  <tr><td><code>ExecClient-FUTU: ... submit</code></td><td>Order routed to Futu OpenD</td></tr>
+  <tr><td><code>OrderFilled(...)</code></td><td>Fill received back from broker</td></tr>
+  <tr><td><code>TradeJournal: ... wrote fill</code></td><td>Fill persisted to PostgreSQL</td></tr>
+</table>
+
+<h4>Verify Fills in PostgreSQL</h4>
+<pre><code># After a trade executes:
+docker exec sam-postgres psql -U sam -d sam_trader -c \
+  "SELECT trade_id, instrument_id, side, qty, price, ts_event FROM fills ORDER BY ts_init DESC LIMIT 10;"</code></pre>
 
 <h3>8.5 Alert Thresholds</h3>
 <table>
@@ -1855,6 +1898,7 @@ sam health                                  # 3. Verify healthy</code></pre>
   <tr><td>Port 11111 in use</td><td>Another service on host port</td><td><code>lsof -i :11111</code>. Change <code>FUTU_OPEND_PORT</code> in <code>.env</code>.</td></tr>
   <tr><td>Slow on Apple Silicon</td><td>x86_64 emulation via Rosetta</td><td>Normal for cold start (~30s extra). Allocate ≥4 GB RAM to Docker.</td></tr>
   <tr><td>RSA encryption error on orders</td><td>RSA key missing or not mounted</td><td>Generate <code>docker/futu-opend/futu.pem</code>. Verify compose mounts it.</td></tr>
+  <tr><td>L3 health check never runs</td><td><code>healthcheck.sh</code> scans <code>log/</code> (lowercase) but actual Futu log directory is <code>Log/</code> (uppercase) on Linux</td><td>Fixed in v1.2: <code>LOG_DIR</code> now points to <code>Log/</code>. Verify with <code>docker exec sam-futu-opend ls /home/futu/.com.futunn.FutuOpenD/Log/</code>.</td></tr>
 </table>
 
 <h3>18.2 sam-trader</h3>
@@ -1866,6 +1910,7 @@ sam health                                  # 3. Verify healthy</code></pre>
   <tr><td>No market data arriving</td><td>Subscription quota exhausted or wrong instrument_id</td><td><code>sam status</code> to check quota. Verify symbology format.</td></tr>
   <tr><td>PermissionError: /opt/sam_trader</td><td>Non-root user sam can't write</td><td>Dockerfile must have <code>chown sam:sam /opt/sam_trader</code> before <code>USER sam</code>.</td></tr>
   <tr><td>High CPU / memory</td><td>Too many strategies or subscriptions</td><td>Reduce bundle count or subscription scope.</td></tr>
+  <tr><td>HealthMonitorActor TypeError</td><td>Nautilus Cython <code>Logger.warning()</code> does not support <code>%s</code> formatting with Exception arguments</td><td>Fixed: use f-strings instead. <code>self.log.warning(f"... {exc}")</code> instead of <code>self.log.warning("... %s", exc)</code>.</td></tr>
 </table>
 
 <h3>18.3 sam-ib-gateway</h3>
@@ -2054,9 +2099,9 @@ The pipeline cron times in HKT shift by 1 hour. Check readiness reports exist fo
 04:00  US MARKET CLOSE                                                  │
 05:00  🔧 MAINTENANCE WINDOW OPENS — operator shift starts              │
 06:00  CRON: System backup                                              │
-07:00  HK Pre-Market Pipeline → report                                  │
-07:30  👤 HUMAN REVIEW: HK bundles                                      │
-07:50  Apply + restart                                                  │
+08:00  HK Pre-Market Pipeline → report                                  │
+08:30  👤 HUMAN REVIEW: HK bundles                                      │
+08:50  Apply + restart                                                  │
 08:00  🔧 MAINTENANCE WINDOW CLOSES                                     │
 09:30  HK MARKET OPEN — active monitoring ──────────────────────────────┤
 16:00  HK MARKET CLOSE                                                  │

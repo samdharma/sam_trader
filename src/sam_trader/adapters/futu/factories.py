@@ -121,9 +121,10 @@ class FutuLiveDataClientFactory(LiveDataClientFactory):
 
         """
         quote_ctx = _get_shared_quote_context(config)
+        load_ids = getattr(config, "load_ids", None)
         instrument_provider = FutuInstrumentProvider(
             quote_context=quote_ctx,
-            config=InstrumentProviderConfig(),
+            config=InstrumentProviderConfig(load_ids=load_ids),
         )
         return FutuLiveDataClient(
             loop=loop,
@@ -172,9 +173,10 @@ class FutuLiveExecClientFactory(LiveExecClientFactory):
         """
         quote_ctx = _get_shared_quote_context(config)
         trade_ctx = _get_shared_trade_context(config)
+        load_ids = getattr(config, "load_ids", None)
         instrument_provider = FutuInstrumentProvider(
             quote_context=quote_ctx,
-            config=InstrumentProviderConfig(),
+            config=InstrumentProviderConfig(load_ids=load_ids),
         )
         account_id = AccountId(f"FUTU-{config.client_id}")
         return FutuLiveExecutionClient(

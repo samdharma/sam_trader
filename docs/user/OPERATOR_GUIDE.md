@@ -396,6 +396,37 @@ docker exec sam-services sam logs sam-futu-opend
 docker exec sam-services sam logs sam-postgres
 ```
 
+### 4.8 False CONNECTIVITY_LOSS in SIMULATE Mode
+
+If the safety monitor (`sam safety-monitor`) reports `CONNECTIVITY_LOSS` but
+bars and quotes are flowing in the trader logs, the likely cause is a Redis
+heartbeat write failure in the HealthMonitorActor.
+
+**Quick check:**
+
+```bash
+# Check if heartbeats are landing in Redis
+docker exec sam-redis redis-cli get sam:heartbeat:last
+
+# If empty, check trader logs for heartbeat errors
+docker logs sam-trader 2>&1 | grep -i "heartbeat\|redis write"
+```
+
+**Common causes in SIMULATE mode:**
+
+1. **"no running event loop"** — async Redis write fails in sync timer callback
+2. **"conn=DOWN" in heartbeat** — `account_for_venue()` returns `None` for
+   simulate accounts
+
+Both are logging-only issues — trading is unaffected. The data and execution
+clients maintain their own independent connections.
+
+**After restarting with the Phase 6 heartbeat patch (2026-05-25):**
+
+- Heartbeat writes succeed via stored event loop reference
+- `conn=DOWN` fallback uses bar activity as a connection signal
+- Safety monitor's `CONNECTIVITY_LOSS` clears within 60s
+
 ---
 
 ## 5. Command Reference
@@ -470,5 +501,5 @@ docker exec sam-services sam <command>
 
 ---
 
-*Last updated: 2026-05-25*  
+*Last updated: 2026-05-25 — Added §4.8 false CONNECTIVITY_LOSS troubleshooting (sandbox readiness)*  
 *See also: [`DEPLOY_GUIDE.md`](./DEPLOY_GUIDE.md), [`BUNDLE_GUIDE.md`](./BUNDLE_GUIDE.md)*

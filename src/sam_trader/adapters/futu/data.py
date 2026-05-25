@@ -144,6 +144,27 @@ class FutuLiveDataClient(LiveMarketDataClient):
                 self._config.trd_env,
             )
 
+        # Pre-load instruments so strategies can find them on start
+        if self._instrument_provider is not None:
+            load_ids = getattr(self._config, "load_ids", None)
+            if load_ids:
+                self._log.info(
+                    f"Loading {len(load_ids)} instrument(s): {load_ids}"
+                )
+                await self._instrument_provider.load_ids_async(
+                    list(load_ids)
+                )
+                # Push instruments to the Nautilus cache via data pipeline
+                for iid in load_ids:
+                    instrument = self._instrument_provider.find(iid)
+                    if instrument is not None:
+                        self._handle_data(instrument)
+                        self._log.info(f"Pushed instrument {iid} to cache")
+                    else:
+                        self._log.warning(
+                            f"Instrument {iid} not found in provider after loading"
+                        )
+
         self._setup_handlers()
         self._push_task = self._loop.create_task(
             self._run_push_loop(),

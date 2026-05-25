@@ -265,4 +265,39 @@ All Phase 8 features are now implemented. Key interactions with Phase 6 actors:
 
 ---
 
-*Last updated: 2026-05-24 — Phase 6 EXIT validated; all actors wired into main.py; integration tests created; Phase 8 cross-connections documented*
+---
+
+## 10. Known Issues
+
+### 10.1 HealthMonitorActor — TypeError in Redis Heartbeat Write
+
+**Symptom:** `TypeError('an integer is required')` in `_write_heartbeat_to_redis`
+(line 191) when the heartbeat callback fires. The error originates in NautilusTrader's
+Cython `Logger.warning()` wrapper.
+
+**Root cause (TBC):** The `exc` variable captured in the `except Exception` block is
+passed to `self.log.warning("... %s", exc)`. The Cython logger may not handle
+`%s` formatting with Exception types correctly. Converting to `str(exc)` should fix.
+
+**Impact:** Redis heartbeat keys (`sam:heartbeat:last`) are not persisted.
+HealthMonitorActor continues to log heartbeats to console (L1), but the Redis-based
+safety dashboard (L3) is degraded.
+
+**Fix (applied 2026-05-25):**
+```python
+# In health_monitor.py, _write_heartbeat_to_redis, line 189:
+# Changed from %s C-style formatting to f-string — Nautilus Cython
+# Logger.warning() does not support %s with Exception arguments.
+self.log.warning(
+    f"HealthMonitorActor: Redis write failed for heartbeat: {exc}"
+)
+```
+
+**Secondary issue:** After the TypeError fix, the Redis write still fails with
+`no running event loop` because `_on_heartbeat` is a synchronous callback. The
+`asyncio.get_running_loop()` call fails. The loop reference should be stored
+at init time and reused.
+
+---
+
+*Last updated: 2026-05-25 — Added Known Issues from sandbox deployment*

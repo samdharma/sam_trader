@@ -192,6 +192,7 @@ def _docker_container_status(container_name: str) -> dict[str, Any]:
     try:
         result = subprocess.run(
             [
+                "sudo",
                 "docker",
                 "inspect",
                 "--format={{.State.Status}} {{.State.Health.Status}}",

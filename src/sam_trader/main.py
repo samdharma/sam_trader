@@ -87,6 +87,57 @@ def build_trading_node() -> TradingNode:
     data_clients: dict[str, object] = {}
     exec_clients: dict[str, object] = {}
 
+    # ── Load bundles FIRST so we know which instruments to pre-load ──
+    # into Futu's instrument provider before clients connect.
+    strategies: list = []
+    instrument_ids: list[str] = []
+    futu_load_ids: frozenset | None = None
+    try:
+        all_bundles = load_bundles(cfg.bundles_path)
+        # Extract instrument IDs from bundles for actors that need them
+        for bundle in all_bundles:
+            ins_id = bundle.config.get("instrument_id")
+            if ins_id and isinstance(ins_id, str) and ins_id not in instrument_ids:
+                instrument_ids.append(ins_id)
+        futu_load_ids = _make_load_ids(instrument_ids)
+        # Filter bundles by enabled venue to prevent cross-venue contamination.
+        # A bundle for a disabled venue would try to subscribe through a
+        # non-existent client and raise runtime errors.
+        skipped: list[str] = []
+        for bundle in all_bundles:
+            venue = bundle.config.get("venue")
+            if venue == "FUTU" and not cfg.futu_enabled:
+                skipped.append(bundle.config.get("bundle_id", "unknown"))
+                continue
+            if venue == "IB" and not cfg.ib_enabled:
+                skipped.append(bundle.config.get("bundle_id", "unknown"))
+                continue
+            strategies.append(bundle)
+
+        if skipped:
+            logger.info(
+                "Skipped %d bundle(s) for disabled venue(s): %s",
+                len(skipped),
+                skipped,
+            )
+        logger.info(
+            "Loaded %d strategy bundle(s) from %s",
+            len(strategies),
+            cfg.bundles_path,
+        )
+        if not strategies and cfg.futu_enabled:
+            logger.critical(
+                "ZERO strategies loaded but FUTU is enabled. "
+                "Check %s — copy from bundles.example.yaml if empty.",
+                cfg.bundles_path,
+            )
+    except (BundleLoaderError, BundleValidationError) as exc:
+        logger.warning(
+            "Failed to load bundles from %s: %s. Running with no strategies.",
+            cfg.bundles_path,
+            exc,
+        )
+
     # Lazy Futu adapter imports — built in later phases (Phase 2–4).
     # When missing, the node starts without Futu clients.
     futu_data_factory: type | None = None
@@ -107,6 +158,8 @@ def build_trading_node() -> TradingNode:
                 port=cfg.futu_opend_port,
                 trd_env=cfg.futu_trd_env,
                 trd_market=cfg.futu_trd_market,
+                load_ids=futu_load_ids,
+                routing=RoutingConfig(venues={"NASDAQ", "NYSE", "HKEX"}),
             )
 
             exec_clients["FUTU"] = FutuExecClientConfig(
@@ -194,53 +247,6 @@ def build_trading_node() -> TradingNode:
                 "ibapi not available; IBKR clients will not be registered: %s",
                 exc,
             )
-
-    strategies: list = []
-    instrument_ids: list[str] = []
-    try:
-        all_bundles = load_bundles(cfg.bundles_path)
-        # Extract instrument IDs from bundles for actors that need them
-        for bundle in all_bundles:
-            ins_id = bundle.config.get("instrument_id")
-            if ins_id and isinstance(ins_id, str) and ins_id not in instrument_ids:
-                instrument_ids.append(ins_id)
-        # Filter bundles by enabled venue to prevent cross-venue contamination.
-        # A bundle for a disabled venue would try to subscribe through a
-        # non-existent client and raise runtime errors.
-        skipped: list[str] = []
-        for bundle in all_bundles:
-            venue = bundle.config.get("venue")
-            if venue == "FUTU" and not cfg.futu_enabled:
-                skipped.append(bundle.config.get("bundle_id", "unknown"))
-                continue
-            if venue == "IB" and not cfg.ib_enabled:
-                skipped.append(bundle.config.get("bundle_id", "unknown"))
-                continue
-            strategies.append(bundle)
-
-        if skipped:
-            logger.info(
-                "Skipped %d bundle(s) for disabled venue(s): %s",
-                len(skipped),
-                skipped,
-            )
-        logger.info(
-            "Loaded %d strategy bundle(s) from %s",
-            len(strategies),
-            cfg.bundles_path,
-        )
-        if not strategies and cfg.futu_enabled:
-            logger.critical(
-                "ZERO strategies loaded but FUTU is enabled. "
-                "Check %s — copy from bundles.example.yaml if empty.",
-                cfg.bundles_path,
-            )
-    except (BundleLoaderError, BundleValidationError) as exc:
-        logger.warning(
-            "Failed to load bundles from %s: %s. Running with no strategies.",
-            cfg.bundles_path,
-            exc,
-        )
 
     # Build CacheConfig with Redis database for state persistence.
     # Only wire Redis when state persistence is enabled to avoid unnecessary

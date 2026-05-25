@@ -28,6 +28,7 @@ class FutuDataClientConfig(LiveDataClientConfig, frozen=True):
     trd_env: str = "SIMULATE"
     trd_market: str = "US"
     client_id: int = 1
+    load_ids: frozenset | None = None
 
     @property
     def client_key(self) -> tuple[str, int, str]:
