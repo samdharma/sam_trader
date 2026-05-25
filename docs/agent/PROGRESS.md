@@ -1353,3 +1353,12 @@
 - **Files Changed**: `config/bundles.yaml`, `src/sam_trader/main.py`, `tests/unit/test_main.py`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 16/16 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None.
+
+## Iteration 122
+- **Task**: BUG: SAM_TRADER_V3_PLAN.md references mean_reversion.py strategy that was never built
+- **Task ID**: sam_trader-4ki
+- **Status**: COMPLETE
+- **Decisions**: Removed `mean_reversion.py` from the §5 directory listing in `SAM_TRADER_V3_PLAN.md` since only `orb.py` and `momentum.py` were built in Phase 7. No strategies or bundles reference mean_reversion. Keeping the fix minimal — doc-only change.
+- **Files Changed**: `docs/reference/SAM_TRADER_V3_PLAN.md`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; no affected tests, lint skipped)
+- **Blockers / Notes**: None.

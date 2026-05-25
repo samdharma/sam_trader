@@ -292,7 +292,6 @@ sam_trader/
 │       │   ├── __init__.py
 │       │   ├── orb.py              # Opening Range Breakout
 │       │   ├── momentum.py         # Momentum at open
-│       │   ├── mean_reversion.py   # Mean reversion
 │       │   └── _template.py        # Copy-paste template for new strategies
 │       └── actors/
 │           ├── __init__.py
