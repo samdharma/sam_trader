@@ -9,8 +9,10 @@ import pytest
 from futu import RET_OK, SubType
 from nautilus_trader.common.component import LiveClock
 from nautilus_trader.common.providers import InstrumentProvider
+from nautilus_trader.core.uuid import UUID4
+from nautilus_trader.data.messages import RequestBars
 from nautilus_trader.model.data import BarType
-from nautilus_trader.model.identifiers import InstrumentId
+from nautilus_trader.model.identifiers import ClientId, InstrumentId, Venue
 from nautilus_trader.test_kit.stubs.component import TestComponentStubs
 
 from sam_trader.adapters.futu.config import FutuDataClientConfig
@@ -368,3 +370,108 @@ class TestBackfill:
             ktype=SubType.K_5M,
             max_count=100,
         )
+
+
+# ---------------------------------------------------------------------------
+# Request bars
+# ---------------------------------------------------------------------------
+
+
+class TestRequestBars:
+    """Tests for on-demand historical bar requests."""
+
+    def test_request_bars_success(self, event_loop, make_client, mock_quote_ctx):
+        client = make_client()
+        bar_type = BarType.from_str("AAPL.NASDAQ-5-MINUTE-LAST-EXTERNAL")
+        request = RequestBars(
+            bar_type=bar_type,
+            start=None,
+            end=None,
+            limit=50,
+            client_id=ClientId("FUTU-1"),
+            venue=Venue("FUTU"),
+            callback=None,
+            request_id=UUID4(),
+            ts_init=0,
+            params=None,
+        )
+
+        mock_df = MagicMock()
+        mock_df.empty = False
+        mock_df.to_dict.return_value = [
+            {
+                "open": 150.0,
+                "high": 151.0,
+                "low": 149.0,
+                "close": 150.5,
+                "volume": 1000,
+                "timestamp": 1_234_567_890.0,
+            }
+        ]
+        mock_quote_ctx.request_history_kline.return_value = (
+            RET_OK,
+            mock_df,
+            None,
+        )
+
+        handled = []
+        original_handle = client._handle_data
+
+        def _capture_handle(data):
+            handled.append(data)
+            original_handle(data)
+
+        client._handle_data = _capture_handle  # type: ignore[method-assign]
+
+        event_loop.run_until_complete(client._request_bars(request))
+
+        mock_quote_ctx.request_history_kline.assert_called_once_with(
+            "US.AAPL",
+            ktype=SubType.K_5M,
+            max_count=50,
+        )
+        assert len(handled) == 1
+        assert handled[0].bar_type == bar_type
+
+    def test_request_bars_no_context(self, event_loop, make_client):
+        client = make_client()
+        client._quote_ctx = None
+        bar_type = BarType.from_str("AAPL.NASDAQ-5-MINUTE-LAST-EXTERNAL")
+        request = RequestBars(
+            bar_type=bar_type,
+            start=None,
+            end=None,
+            limit=50,
+            client_id=ClientId("FUTU-1"),
+            venue=Venue("FUTU"),
+            callback=None,
+            request_id=UUID4(),
+            ts_init=0,
+            params=None,
+        )
+
+        # Should return gracefully without raising
+        event_loop.run_until_complete(client._request_bars(request))
+
+    def test_request_bars_unsupported_bar_type(
+        self, event_loop, make_client, mock_quote_ctx
+    ):
+        client = make_client()
+        # Create a bar type with an unsupported aggregation (e.g., SECOND)
+        bar_type = BarType.from_str("AAPL.NASDAQ-5-SECOND-LAST-EXTERNAL")
+        request = RequestBars(
+            bar_type=bar_type,
+            start=None,
+            end=None,
+            limit=50,
+            client_id=ClientId("FUTU-1"),
+            venue=Venue("FUTU"),
+            callback=None,
+            request_id=UUID4(),
+            ts_init=0,
+            params=None,
+        )
+
+        event_loop.run_until_complete(client._request_bars(request))
+
+        mock_quote_ctx.request_history_kline.assert_not_called()

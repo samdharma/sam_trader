@@ -1332,3 +1332,12 @@
 - **Files Changed**: `AGENTS.md`, `docs/reference/BUILD_PHASE_9.md`, `docs/reference/BUILD_PHASE_10.md`, `docs/reference/BUILD_PHASE_11.md`, `docs/reference/SAM_TRADER_V3_PLAN.md`, `docs/agent/TICKET_PLAN_V3.md`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; docs-only, no code changes)
 - **Blockers / Notes**: None. All documentation now reflects completed build state.
+
+## Iteration 120
+- **Task**: BUG: FutuLiveDataClient._request_bars is a stub — logs warning only
+- **Task ID**: sam_trader-6gm
+- **Status**: COMPLETE
+- **Decisions**: Implemented `_request_bars()` to call `self._quote_ctx.request_history_kline()` with the bar type mapped to Futu ktype, parse results via `parse_futu_bars()`, and dispatch each bar via `self._handle_data()`. Returns gracefully with a warning when quote context is unavailable. Uses `request.limit or 1000` for `max_count`. Added 3 unit tests: success path (verifies `request_history_kline` called and bars dispatched), no-context path (verifies graceful return), and unsupported bar type path (verifies early return without SDK call).
+- **Files Changed**: `src/sam_trader/adapters/futu/data.py`, `tests/unit/adapters/futu/test_data.py`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 20/20 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None.

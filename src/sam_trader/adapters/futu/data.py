@@ -454,7 +454,30 @@ class FutuLiveDataClient(LiveMarketDataClient):
         self._log.warning(f"Request not implemented: {request.data_type}")
 
     async def _request_bars(self, request: RequestBars) -> None:
-        self._log.warning("Request bars not implemented")
+        if self._quote_ctx is None:
+            self._log.warning("Quote context not available for request bars")
+            return
+
+        bar_type = request.bar_type
+        instrument_id = bar_type.instrument_id
+        code = instrument_id_to_futu_security(instrument_id)
+        subtype = _bar_type_to_futu_subtype(bar_type)
+        if subtype is None:
+            self._log.error(f"Unsupported bar type for Futu: {bar_type}")
+            return
+
+        try:
+            ret, data, _page_req_key = self._quote_ctx.request_history_kline(
+                code,
+                ktype=subtype,
+                max_count=request.limit or 1000,
+            )
+            if ret == RET_OK and data is not None and not data.empty:
+                bars = parse_futu_bars(data.to_dict("records"), bar_type)
+                for bar in bars:
+                    self._handle_data(bar)
+        except Exception as e:
+            self._log.exception(f"Request bars failed for {bar_type}: {e}", e)
 
     # -----------------------------------------------------------------------
     # Helpers
