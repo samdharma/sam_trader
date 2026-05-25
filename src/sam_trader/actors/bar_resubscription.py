@@ -25,6 +25,8 @@ class BarResubscriptionActorConfig(ActorConfig, frozen=True):
         The time of day (in *market_open_tz*) when the market opens.
     market_open_tz : str, default "America/New_York"
         The timezone for *market_open_time*.
+    market_close_time : time, default 16:00
+        The time of day (in *market_open_tz*) when the market closes.
     enabled : bool, default True
         Whether the actor is active.
     stale_timeout_seconds : int, default 300
@@ -38,6 +40,7 @@ class BarResubscriptionActorConfig(ActorConfig, frozen=True):
     bar_types: list[BarType] | None = None
     market_open_time: time = time(9, 30)
     market_open_tz: str = "America/New_York"
+    market_close_time: time = time(16, 0)
     enabled: bool = True
     stale_timeout_seconds: int = 300
     check_interval_seconds: int = 60
@@ -255,15 +258,25 @@ class BarResubscriptionActor(Actor):
         candidate = datetime.combine(next_day, self.config.market_open_time, tzinfo=tz)
         return candidate.astimezone(timezone.utc)
 
-    @staticmethod
-    def _is_market_hours(ts: datetime) -> bool:
-        """Return True if *ts* is within US equity market hours (09:30–16:00 ET)."""
-        et = ts.astimezone(ZoneInfo("America/New_York"))
-        if et.weekday() >= 5:  # Saturday=5, Sunday=6
+    def _is_market_hours(self, ts: datetime) -> bool:
+        """Return True if *ts* is within configured market hours."""
+        tz = ZoneInfo(self.config.market_open_tz)
+        local = ts.astimezone(tz)
+        if local.weekday() >= 5:  # Saturday=5, Sunday=6
             return False
-        market_open = et.replace(hour=9, minute=30, second=0, microsecond=0)
-        market_close = et.replace(hour=16, minute=0, second=0, microsecond=0)
-        return market_open <= et < market_close
+        market_open = local.replace(
+            hour=self.config.market_open_time.hour,
+            minute=self.config.market_open_time.minute,
+            second=0,
+            microsecond=0,
+        )
+        market_close = local.replace(
+            hour=self.config.market_close_time.hour,
+            minute=self.config.market_close_time.minute,
+            second=0,
+            microsecond=0,
+        )
+        return market_open <= local < market_close
 
     def on_stop(self) -> None:
         """Cancel timers and clean up subscriptions."""

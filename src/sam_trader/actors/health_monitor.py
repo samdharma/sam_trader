@@ -33,6 +33,12 @@ class HealthMonitorActorConfig(ActorConfig, frozen=True):
         Redis port.
     redis_password : str, optional
         Redis password.
+    market_timezone : str, default "America/New_York"
+        Timezone for market-hours check (e.g. "Asia/Hong_Kong" for HK).
+    market_open_time : str, default "09:30"
+        Local market open time HH:MM.
+    market_close_time : str, default "16:00"
+        Local market close time HH:MM.
 
     """
 
@@ -43,6 +49,9 @@ class HealthMonitorActorConfig(ActorConfig, frozen=True):
     redis_host: str = ""
     redis_port: int = 6379
     redis_password: str = ""
+    market_timezone: str = "America/New_York"
+    market_open_time: str = "09:30"
+    market_close_time: str = "16:00"
 
 
 class HealthMonitorActor(Actor):
@@ -204,15 +213,27 @@ class HealthMonitorActor(Actor):
                 f"HealthMonitorActor: Redis write failed for heartbeat: {exc}"
             )
 
-    @staticmethod
-    def _is_market_hours(ts: datetime) -> bool:
-        """Return True if *ts* is within US equity market hours (09:30–16:00 ET)."""
-        et = ts.astimezone(ZoneInfo("America/New_York"))
-        if et.weekday() >= 5:  # Saturday=5, Sunday=6
+    def _is_market_hours(self, ts: datetime) -> bool:
+        """Return True if *ts* is within configured market hours."""
+        tz = ZoneInfo(self.config.market_timezone)
+        local = ts.astimezone(tz)
+        if local.weekday() >= 5:  # Saturday=5, Sunday=6
             return False
-        market_open = et.replace(hour=9, minute=30, second=0, microsecond=0)
-        market_close = et.replace(hour=16, minute=0, second=0, microsecond=0)
-        return market_open <= et < market_close
+        open_parts = self.config.market_open_time.split(":")
+        close_parts = self.config.market_close_time.split(":")
+        market_open = local.replace(
+            hour=int(open_parts[0]),
+            minute=int(open_parts[1]) if len(open_parts) > 1 else 0,
+            second=0,
+            microsecond=0,
+        )
+        market_close = local.replace(
+            hour=int(close_parts[0]),
+            minute=int(close_parts[1]) if len(close_parts) > 1 else 0,
+            second=0,
+            microsecond=0,
+        )
+        return market_open <= local < market_close
 
     def on_stop(self) -> None:
         """Cancel all timers when the actor stops."""

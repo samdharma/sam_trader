@@ -28,6 +28,23 @@ _SUPPORTED_MARKETS: list[str] = [
     Market.SZ,
 ]
 
+# Map Futu code prefix (e.g. "HK", "US") to Market constant
+_MARKET_PREFIX_TO_MARKET: dict[str, str] = {
+    "US": Market.US,
+    "HK": Market.HK,
+    "SH": Market.SH,
+    "SZ": Market.SZ,
+}
+
+
+def _code_to_market(code: str) -> str:
+    """Extract Futu Market from a security code like ``HK.00700``.
+
+    Returns ``Market.US`` as a safe default when the prefix is unknown.
+    """
+    prefix = code.split(".", 1)[0] if "." in code else "US"
+    return _MARKET_PREFIX_TO_MARKET.get(prefix, Market.US)
+
 
 class FutuInstrumentProvider(InstrumentProvider):
     """Instrument provider backed by Futu OpenD ``get_stock_basicinfo``.
@@ -103,11 +120,19 @@ class FutuInstrumentProvider(InstrumentProvider):
         if not codes:
             return
 
-        await self._fetch_and_parse(
-            market=Market.US,
-            stock_type=SecurityType.STOCK,
-            code_list=codes,
-        )
+        # Group codes by market so HK stocks are queried against Market.HK
+        # and US stocks against Market.US.
+        from collections import defaultdict
+        market_groups: dict[str, list[str]] = defaultdict(list)
+        for code in codes:
+            market_groups[_code_to_market(code)].append(code)
+
+        for market, code_list in market_groups.items():
+            await self._fetch_and_parse(
+                market=market,
+                stock_type=SecurityType.STOCK,
+                code_list=code_list,
+            )
 
     async def load_async(
         self,
@@ -163,7 +188,7 @@ class FutuInstrumentProvider(InstrumentProvider):
             return instrument
 
         ret, data = self._quote_ctx.get_stock_basicinfo(
-            Market.US,
+            _code_to_market(code),
             SecurityType.STOCK,
             code_list=[code],
         )

@@ -295,6 +295,8 @@ def build_trading_node() -> TradingNode:
         )
 
     if cfg.actor_health_enabled:
+        # Quick-fix: use HK timezone when trading HK market
+        health_tz = "Asia/Hong_Kong" if cfg.futu_trd_market == "HK" else "America/New_York"
         actors.append(
             ImportableActorConfig(
                 actor_path="sam_trader.actors.health_monitor:HealthMonitorActor",
@@ -305,24 +307,29 @@ def build_trading_node() -> TradingNode:
                     "redis_host": cfg.redis_host,
                     "redis_port": cfg.redis_port,
                     "redis_password": cfg.redis_password,
+                    "market_timezone": health_tz,
                 },
             )
         )
-        logger.info("HealthMonitorActor registered")
+        logger.info("HealthMonitorActor registered (tz=%s)", health_tz)
 
     if cfg.actor_bar_resub_enabled:
         bar_resub_actor = "sam_trader.actors.bar_resubscription:BarResubscriptionActor"
         bar_resub_config = (
             "sam_trader.actors.bar_resubscription:BarResubscriptionActorConfig"
         )
+        # Quick-fix: use HK timezone when trading HK market
+        bar_resub_tz = "Asia/Hong_Kong" if cfg.futu_trd_market == "HK" else "America/New_York"
         actors.append(
             ImportableActorConfig(
                 actor_path=bar_resub_actor,
                 config_path=bar_resub_config,
-                config={},
+                config={
+                    "market_open_tz": bar_resub_tz,
+                },
             )
         )
-        logger.info("BarResubscriptionActor registered")
+        logger.info("BarResubscriptionActor registered (tz=%s)", bar_resub_tz)
 
     if cfg.actor_rejection_monitor_enabled:
         rej_actor = "sam_trader.actors.rejection_monitor:RejectionMonitorActor"
