@@ -1,0 +1,2133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SAM Trader V3 — Operator's Guide</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+  :root {
+    --bg: #0d1117;
+    --fg: #c9d1d9;
+    --header-bg: #161b22;
+    --border: #30363d;
+    --accent: #58a6ff;
+    --accent-dim: #1f6feb;
+    --warn: #d29922;
+    --danger: #f85149;
+    --success: #3fb950;
+    --code-bg: #1c2128;
+    --table-stripe: #161b22;
+    --mermaid-bg: #0d1117;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    background: var(--bg); color: var(--fg); line-height: 1.65;
+    max-width: 1100px; margin: 0 auto; padding: 2rem 1.5rem 6rem;
+  }
+  h1, h2, h3, h4, h5, h6 { color: #f0f6fc; margin-top: 2.5em; margin-bottom: 0.6em; }
+  h1 { font-size: 2.2em; border-bottom: 1px solid var(--border); padding-bottom: 0.4em; }
+  h2 { font-size: 1.6em; border-bottom: 1px solid var(--border); padding-bottom: 0.3em; }
+  h3 { font-size: 1.25em; }
+  h4 { font-size: 1.1em; color: var(--accent); }
+  p { margin: 0.8em 0; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code {
+    font-family: "SF Mono", "Cascadia Code", "Fira Code", Menlo, monospace;
+    font-size: 0.9em; background: var(--code-bg); padding: 0.15em 0.4em;
+    border-radius: 4px; border: 1px solid var(--border);
+  }
+  pre {
+    background: var(--code-bg); border: 1px solid var(--border); border-radius: 6px;
+    padding: 1em 1.2em; overflow-x: auto; margin: 1em 0; line-height: 1.5;
+  }
+  pre code { background: none; border: none; padding: 0; }
+  table {
+    width: 100%; border-collapse: collapse; margin: 1.2em 0;
+    font-size: 0.92em;
+  }
+  th, td {
+    border: 1px solid var(--border); padding: 0.55em 0.8em; text-align: left;
+  }
+  th { background: var(--header-bg); color: #f0f6fc; font-weight: 600; }
+  tr:nth-child(even) td { background: var(--table-stripe); }
+  tr:hover td { background: #1c2430; }
+  ul, ol { margin: 0.6em 0 0.6em 1.8em; }
+  li { margin: 0.3em 0; }
+  blockquote {
+    border-left: 3px solid var(--accent-dim); background: var(--header-bg);
+    margin: 1.2em 0; padding: 0.8em 1.2em; border-radius: 0 6px 6px 0;
+    color: #8b949e;
+  }
+  blockquote strong { color: var(--warn); }
+  hr { border: none; border-top: 1px solid var(--border); margin: 2.5em 0; }
+
+  /* Mermaid container */
+  .mermaid {
+    background: var(--mermaid-bg); border: 1px solid var(--border);
+    border-radius: 8px; padding: 1.5em; margin: 1.5em 0;
+    text-align: center; overflow-x: auto;
+  }
+
+  /* Info / warning / danger callouts */
+  .callout {
+    border-left: 4px solid; border-radius: 0 6px 6px 0;
+    padding: 0.9em 1.2em; margin: 1.2em 0; background: var(--header-bg);
+  }
+  .callout.info  { border-color: var(--accent); }
+  .callout.warn  { border-color: var(--warn); }
+  .callout.danger { border-color: var(--danger); }
+  .callout.success { border-color: var(--success); }
+  .callout strong { display: block; margin-bottom: 0.3em; }
+
+  /* ToC */
+  .toc { background: var(--header-bg); border: 1px solid var(--border); border-radius: 8px; padding: 1.2em 1.5em; margin: 1.5em 0; }
+  .toc h3 { margin-top: 0; }
+  .toc ol { columns: 2; column-gap: 2em; }
+  .toc li { margin: 0.3em 0; }
+  @media (max-width: 700px) { .toc ol { columns: 1; } }
+
+  /* Meta header */
+  .meta-header {
+    background: var(--header-bg); border: 1px solid var(--border); border-radius: 8px;
+    padding: 1em 1.4em; margin-bottom: 2em; display: flex; justify-content: space-between;
+    flex-wrap: wrap; gap: 0.6em; font-size: 0.9em; color: #8b949e;
+  }
+  .meta-header span { white-space: nowrap; }
+  .meta-header .live { color: var(--success); font-weight: 600; }
+
+  /* Checkbox list */
+  .checklist { list-style: none; margin-left: 0; }
+  .checklist li { margin: 0.35em 0; }
+  .checklist li::before { content: "☐  "; color: var(--border); }
+
+  /* Timeline */
+  .timeline { border-left: 2px solid var(--border); padding-left: 1.5em; margin: 1.5em 0; }
+  .timeline-entry { margin-bottom: 1em; }
+  .timeline-time { color: var(--accent); font-weight: 600; font-size: 0.85em; }
+  .timeline-body { margin-top: 0.15em; }
+
+  /* Print */
+  @media print {
+    body { background: white; color: black; }
+    .mermaid { background: white; }
+    .callout { background: #f6f8fa; }
+  }
+
+  /* Highlight */
+  .hl { background: rgba(88,166,255,0.15); padding: 0.1em 0.3em; border-radius: 3px; }
+  .hl-warn { background: rgba(210,153,34,0.2); padding: 0.1em 0.3em; border-radius: 3px; }
+  .hl-danger { background: rgba(248,81,73,0.2); padding: 0.1em 0.3em; border-radius: 3px; }
+
+  /* Phase tags */
+  .phase-tag {
+    display: inline-block; font-size: 0.75em; padding: 0.1em 0.5em; border-radius: 10px;
+    font-weight: 600; vertical-align: middle; margin-left: 0.3em;
+  }
+  .phase-done { background: rgba(63,185,80,0.2); color: var(--success); }
+  .phase-pending { background: rgba(88,166,255,0.15); color: var(--accent); }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- META HEADER                                                            -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<div class="meta-header">
+  <span>📄 <strong>SAM Trader V3 — Operator's Guide</strong></span>
+  <span>🕐 Last updated: <strong>2026-05-25 03:00 HKT</strong></span>
+  <span>📌 Version: <strong>v1.1</strong></span>
+  <span class="live">● Active</span>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- REVISION HISTORY                                                       -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2>Revision History</h2>
+<table>
+  <tr><th>Version</th><th>Date</th><th>Author</th><th>Description</th></tr>
+  <tr><td>v1.1</td><td>2026-05-25</td><td>sam.dharma</td><td>Fixed architecture diagram: Futu OpenD and IB Gateway now correctly shown as broker gateway services (box shape), not databases. Expanded §4 Installation with detailed prerequisites, mandatory info with actual values, project layout, environment options reference, step-by-step deployment with troubleshooting branches, and post-install verification. Content drawn from paper-trading test guide (<code>sam_trader_phase0_3_paper_testing_guide.html</code>).</td></tr>
+  <tr><td>v1.0</td><td>2026-05-24</td><td>sam.dharma</td><td>Initial operator's guide covering all 11 build phases, timezone-aware daily schedule, pre-market pipeline, broker operations, bundle management, maintenance, incident response, CLI reference, and troubleshooting.</td></tr>
+</table>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- TABLE OF CONTENTS                                                      -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<div class="toc">
+<h3>Table of Contents</h3>
+<ol>
+  <li><a href="#overview">Overview</a></li>
+  <li><a href="#architecture">System Architecture</a></li>
+  <li><a href="#timezone">Timezone &amp; Market Hours Reference</a></li>
+  <li><a href="#installation">New Installation</a></li>
+  <li><a href="#daily-schedule">The Operator's Day — Timezone-Aware Schedule</a></li>
+  <li><a href="#premarket-pipeline">Pre-Market Pipeline</a></li>
+  <li><a href="#human-review">Human Review Gates</a></li>
+  <li><a href="#market-hours">Market Hours — Monitoring</a></li>
+  <li><a href="#postmarket">Post-Market — Review &amp; Wrap-Up</a></li>
+  <li><a href="#updates">Updates &amp; Upgrades</a></li>
+  <li><a href="#hotfix">Hot-Fixing</a></li>
+  <li><a href="#futu-opend">Futu OpenD — Operating Guide</a></li>
+  <li><a href="#ib-gateway">IB Gateway — Operating Guide</a></li>
+  <li><a href="#bundles">Bundle Management</a></li>
+  <li><a href="#maintenance">Maintenance</a></li>
+  <li><a href="#incident-response">Incident Response</a></li>
+  <li><a href="#cli-reference">sam CLI Reference</a></li>
+  <li><a href="#troubleshooting">Troubleshooting</a></li>
+  <li><a href="#appendices">Appendices</a></li>
+</ol>
+</div>
+
+<hr>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- 1. OVERVIEW                                                            -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="overview">1. Overview</h2>
+
+<p><strong>SAM Trader V3</strong> is a production-grade autonomous trading platform built on
+<a href="https://nautilustrader.io/">NautilusTrader</a> v1.227+. It runs inside Docker on macOS (or Linux),
+trading US and HK equities through <strong>Futu OpenD</strong> (primary broker) and <strong>Interactive Brokers</strong>
+(secondary, optional). The system is deployed in Hong Kong and operates on <strong>HKT (GMT+8)</strong>.</p>
+
+<h3>1.1 What This Guide Covers</h3>
+<p>This is the complete reference for the human operator. It covers:</p>
+<ul>
+  <li>New installation and first-run setup</li>
+  <li>Timezone-aware daily schedule across US and HK market sessions</li>
+  <li>Pre-market pipeline: gap scanning, AI scoring, risk checks, bundle generation</li>
+  <li>Human review gates — where the operator inspects and approves before each session</li>
+  <li>Market-hours monitoring via dashboard and CLI</li>
+  <li>Post-market review and wrap-up</li>
+  <li>Updates, hot-fixes, and rollback procedures</li>
+  <li>Broker-specific operating guides (Futu OpenD + IB Gateway)</li>
+  <li>Bundle management (YAML registry, versioning, validation)</li>
+  <li>Maintenance: backup, restore, log rotation, volume management</li>
+  <li>Incident response: kill switch, halt, circuit breakers</li>
+  <li>Full <code>sam</code> CLI reference and troubleshooting</li>
+</ul>
+
+<h3>1.2 Key System Properties</h3>
+<table>
+  <tr><th>Property</th><th>Value</th></tr>
+  <tr><td>Engine</td><td>NautilusTrader v1.227+ (Rust-native, event-driven)</td></tr>
+  <tr><td>Primary broker</td><td>Futu OpenD (futu-api SDK v10.5.6508)</td></tr>
+  <tr><td>Secondary broker</td><td>Interactive Brokers (IB Gateway, optional)</td></tr>
+  <tr><td>Markets</td><td>US Equities (NASDAQ, NYSE) + HK Equities (HKEX)</td></tr>
+  <tr><td>Deployment</td><td>Docker Compose, 6 containers, macOS host in HK</td></tr>
+  <tr><td>Timezone</td><td>HKT (GMT+8). HK has no DST; US DST transitions handled</td></tr>
+  <tr><td>Maintenance window</td><td>05:00–08:00 HKT daily — all config changes happen here</td></tr>
+  <tr><td>Strategy deployment</td><td>YAML bundle registry (<code>config/bundles.yaml</code>), git-versioned</td></tr>
+  <tr><td>State persistence</td><td>PostgreSQL (journal) + Redis (cache/state) + Parquet (historical)</td></tr>
+  <tr><td>Recovery</td><td>Graceful restart with state save/restore, ~5–10s downtime</td></tr>
+  <tr><td>Pre-market pipeline</td><td>Gap scan → AI scoring → MC sizing → risk → bundles → human review</td></tr>
+</table>
+
+<div class="callout info">
+<strong>ⓘ System Status (2026-05-24)</strong>
+Phases 0–8 are complete and production-ready. Phase 9 (Pre-Market Pipeline), Phase 10 (Safety &amp; Dashboard),
+and Phase 11 (Deploy &amp; E2E) are planned. Sections covering Phase 9–11 features are marked
+<span class="phase-tag phase-pending">PENDING</span>.
+</div>
+
+<hr>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- 2. SYSTEM ARCHITECTURE                                                 -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="architecture">2. System Architecture</h2>
+
+<h3>2.1 Container Landscape</h3>
+
+<div class="mermaid">
+graph TB
+  subgraph Host["macOS Host (HK, GMT+8)"]
+    subgraph Net["sam-net (Docker bridge)"]
+      PG[("sam-postgres<br/>PostgreSQL 16 Alpine<br/>:5432<br/>Trade journal, portfolio")]
+      Redis[("sam-redis<br/>Redis 7 Alpine<br/>:6379<br/>Cache state, P&amp;L")]
+      FutuO["sam-futu-opend<br/>Futu OpenD Gateway<br/>:11111, Telnet :22222<br/>Profile: futu"]
+      IBGW["sam-ib-gateway<br/>IB Gateway<br/>:4004, VNC :5900<br/>Profile: ib (optional)"]
+      Trader["sam-trader<br/>Nautilus TradingNode<br/>PID 1<br/>Futu + IB clients<br/>Strategies + Actors"]
+      Services["sam-services<br/>Python 3.12<br/>:8080<br/>sam CLI, cron<br/>Dashboard, backup<br/>Pipeline (P9)"]
+    end
+  end
+
+  subgraph External["External Services"]
+    FutuCloud["Futu Servers<br/>HK/US Market Data<br/>+ Order Routing"]
+    IBCloud["IBKR Servers<br/>Market Data<br/>+ Order Routing"]
+  end
+
+  FutuO <-->|"Protobuf API"| FutuCloud
+  IBGW <-->|"TWS API"| IBCloud
+  Trader -->|"Data + Exec"| FutuO
+  Trader -.->|"Data + Exec<br/>(optional)"| IBGW
+  Trader -->|"Journal, orders"| PG
+  Trader -->|"State, P&amp;L cache"| Redis
+  Services -->|"Read fills/positions"| PG
+  Services -->|"Read P&amp;L, kill-switch"| Redis
+  Services -->|"API calls"| FutuO
+
+  style Host fill:#0d1117,stroke:#30363d,color:#c9d1d9
+  style Net fill:#161b22,stroke:#30363d,color:#c9d1d9
+  style External fill:#161b22,stroke:#30363d,color:#8b949e
+  style PG fill:#1a3a2a,stroke:#3fb950,color:#c9d1d9
+  style Redis fill:#3a1a1a,stroke:#f85149,color:#c9d1d9
+  style FutuO fill:#1a2a3a,stroke:#58a6ff,color:#c9d1d9
+  style IBGW fill:#2a1a3a,stroke:#bc8cff,color:#c9d1d9
+  style Trader fill:#2a2a1a,stroke:#d29922,color:#c9d1d9
+  style Services fill:#1a2a2a,stroke:#3fb950,color:#c9d1d9
+  style FutuCloud fill:#3a1a2a,stroke:#f85149,color:#8b949e
+  style IBCloud fill:#3a2a1a,stroke:#f0883e,color:#8b949e
+</div>
+
+<h3>2.2 Data Architecture</h3>
+<table>
+  <tr><th>Store</th><th>Technology</th><th>Contents</th><th>Consumer</th></tr>
+  <tr><td>PostgreSQL</td><td>postgres:16-alpine</td><td>fills, orders, positions, performance_stats</td><td>TradeJournalActor, dashboard, CLI</td></tr>
+  <tr><td>Redis</td><td>redis:7-alpine</td><td>Actor/strategy state cache, sam:pnl:*, sam:kill_switch</td><td>TradingNode cache, safety CLI, RealizedPnLTracker</td></tr>
+  <tr><td>Parquet Catalog</td><td>Host volume</td><td>Bars, trade ticks, quote ticks, instruments</td><td>BacktestNode, DuckDB, gap scanner (P9)</td></tr>
+</table>
+
+<h3>2.3 Strategy &amp; Bundle Architecture</h3>
+
+<div class="mermaid">
+flowchart LR
+  YAML["config/bundles.yaml<br/>(git-versioned, single source of truth)"] --> Loader
+  Loader["BundleLoader<br/>validates, converts"] --> Configs["list[ImportableStrategyConfig]"]
+  Configs --> Node["TradingNodeConfig<br/>strategies = [...]"]
+  Node --> Running["Running TradingNode<br/>OrbStrategy, MomentumStrategy<br/>× N instances"]
+
+  style YAML fill:#1a2a3a,stroke:#58a6ff
+  style Loader fill:#2a2a1a,stroke:#d29922
+  style Running fill:#2a1a3a,stroke:#bc8cff
+</div>
+
+<h3>2.4 3-Layer Health Check Pattern</h3>
+<p>Every container uses the same layered health check with identical timing:</p>
+<table>
+  <tr><th>Layer</th><th>Purpose</th><th>Timing</th></tr>
+  <tr><td>L1: Process</td><td>Verify main process is alive (pgrep)</td><td>interval 30s</td></tr>
+  <tr><td>L2: Socket</td><td>Verify service is listening (TCP connect)</td><td>timeout 10s</td></tr>
+  <tr><td>L3: Protocol</td><td>Verify application logic is healthy</td><td>start-period 60s</td></tr>
+  <tr><td></td><td></td><td>retries 3</td></tr>
+</table>
+
+<hr>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- 3. TIMEZONE & MARKET HOURS                                             -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="timezone">3. Timezone &amp; Market Hours Reference</h2>
+
+<div class="callout warn">
+<strong>⚠ CRITICAL: System runs on HKT (GMT+8)</strong>
+The server is physically in Hong Kong. All cron jobs, logs, and operational schedules use
+<strong>HKT</strong>. US market hours shift during DST transitions — see the tables below.
+HK does not observe DST.
+</div>
+
+<h3>3.1 US Market Hours ↔ HKT Conversion</h3>
+<table>
+  <tr><th>US Event</th><th>ET (US Eastern)</th><th>HKT Summer<br/>(Mar–Nov, ET+12)</th><th>HKT Winter<br/>(Nov–Mar, ET+13)</th></tr>
+  <tr><td>Pre-market opens</td><td>04:00 AM</td><td>16:00 (4:00 PM)</td><td>17:00 (5:00 PM)</td></tr>
+  <tr><td>Regular market opens</td><td>09:30 AM</td><td>21:30 (9:30 PM)</td><td>22:30 (10:30 PM)</td></tr>
+  <tr><td>Regular market closes</td><td>04:00 PM</td><td>04:00 (4:00 AM)</td><td>05:00 (5:00 AM)</td></tr>
+  <tr><td>Post-market closes</td><td>08:00 PM</td><td>08:00 (8:00 AM)</td><td>09:00 (9:00 AM)</td></tr>
+</table>
+
+<h3>3.2 HK Market Hours (Always HKT)</h3>
+<table>
+  <tr><th>HK Event</th><th>HKT</th></tr>
+  <tr><td>Pre-market session</td><td>09:00 – 09:30 AM</td></tr>
+  <tr><td>Morning session</td><td>09:30 AM – 12:00 PM</td></tr>
+  <tr><td>Lunch break</td><td>12:00 – 1:00 PM</td></tr>
+  <tr><td>Afternoon session</td><td>1:00 – 4:00 PM</td></tr>
+  <tr><td>Closing auction</td><td>4:00 – 4:10 PM</td></tr>
+</table>
+
+<h3>3.3 Automated Cron Schedule (HKT)</h3>
+<table>
+  <tr><th>Time (HKT)</th><th>Cron Job</th><th>Frequency</th></tr>
+  <tr><td>02:00</td><td>Performance analysis (PortfolioAnalyzer, nightly stats)</td><td>Daily</td></tr>
+  <tr><td>03:00</td><td>Log rotation (keep 7 days)</td><td>Daily</td></tr>
+  <tr><td>06:00</td><td>Full system backup (pg_dump + Redis BGSAVE + Futu vol + config)</td><td>Weekdays</td></tr>
+  <tr><td>16:30 (summer) / 17:30 (winter)</td><td>US Pre-Market Pass 1: Gap Scan</td><td>Weekdays</td></tr>
+  <tr><td>20:30 (summer) / 21:30 (winter)</td><td>US Pre-Market Pass 2: Trended Scan</td><td>Weekdays</td></tr>
+  <tr><td>21:00 (summer) / 22:00 (winter)</td><td>US Pre-Market Pass 3: AI + Risk + Bundles + Report</td><td>Weekdays</td></tr>
+  <tr><td>07:00</td><td>HK Pre-Market Pipeline (all-in-one: scan → AI → risk → bundles)</td><td>Weekdays</td></tr>
+</table>
+
+<div class="callout info">
+<strong>ⓘ DST Transition Dates (US)</strong>
+DST starts: 2nd Sunday in March. DST ends: 1st Sunday in November.
+The pipeline cron times in HKT shift by 1 hour on these dates because the ET→HKT offset changes.
+Plan ahead: the Monday after a DST transition, double-check that pipeline runs fired at the correct HKT time.
+</div>
+
+<hr>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- 4. NEW INSTALLATION                                                    -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="installation">4. New Installation</h2>
+
+<div class="callout info">
+<strong>ⓘ This section covers a first-time, from-scratch installation.</strong>
+If you are updating an existing installation, skip to <a href="#updates">§10 (Updates &amp; Upgrades)</a>.
+This guide assumes deployment on macOS in Hong Kong (HKT).
+</div>
+
+<h3>4.1 Where Everything Lives</h3>
+<table>
+  <tr><th>What</th><th>Where</th><th>Notes</th></tr>
+  <tr><td><strong>Git repository</strong></td><td><code>https://github.com/samdharma/sam_trader</code></td><td>Clone into <code>~/Trading/sam_trader</code></td></tr>
+  <tr><td><strong>Project root</strong></td><td><code>~/Trading/sam_trader</code></td><td>All commands run from here</td></tr>
+  <tr><td><strong>Docker Compose file</strong></td><td><code>docker/docker-compose.yml</code></td><td>NOT at project root — always use <br/><code>-f docker/docker-compose.yml</code></td></tr>
+  <tr><td><strong>Environment file</strong></td><td><code>.env</code> (project root)</td><td>Never committed. Template: <code>.env.example</code></td></tr>
+  <tr><td><strong>Deploy script</strong></td><td><code>./deploy.sh</code> (project root)</td><td>Single-script deploy (Phase 11)</td></tr>
+  <tr><td><strong>Bundle config</strong></td><td><code>config/bundles.yaml</code></td><td>Versioned in git, volume-mounted</td></tr>
+  <tr><td><strong>RSA key (Futu)</strong></td><td><code>docker/futu-opend/futu.pem</code></td><td>Generate once, gitignored</td></tr>
+  <tr><td><strong>Backup destination</strong></td><td><code>~/Documents/ai_agent_docs/backup-sam_trader_v3/</code></td><td>Volume-mounted from host</td></tr>
+  <tr><td><strong>Logs (host)</strong></td><td><code>logs/</code> (project root)</td><td>Volume-mounted, auto-rotated</td></tr>
+  <tr><td><strong>Parquet catalog</strong></td><td><code>data/catalog/</code> (project root)</td><td>Historical data, volume-mounted</td></tr>
+</table>
+
+<h3>4.2 Prerequisites — What You MUST Have</h3>
+<table>
+  <tr><th>Requirement</th><th>Minimum</th><th>How to Verify</th><th>Notes</th></tr>
+  <tr>
+    <td><strong>macOS</strong></td>
+    <td>Ventura 13.x or later</td>
+    <td>Apple menu → About This Mac</td>
+    <td>Apple Silicon (M1/M2/M3) supported via Rosetta 2. Futu OpenD binary is x86_64 — Docker Desktop runs it under emulation automatically.</td>
+  </tr>
+  <tr>
+    <td><strong>Docker Desktop</strong></td>
+    <td>4.x</td>
+    <td><code>docker --version</code></td>
+    <td><strong>File sharing:</strong> Docker Desktop → Settings → Resources → File Sharing → add <code>~/Trading</code> (or your project parent directory). Without this, volume mounts fail.</td>
+  </tr>
+  <tr>
+    <td><strong>Git</strong></td>
+    <td>2.x</td>
+    <td><code>git --version</code></td>
+    <td>Installed via Xcode CLT or <code>brew install git</code></td>
+  </tr>
+  <tr>
+    <td><strong>Python</strong></td>
+    <td>3.12+</td>
+    <td><code>python3 --version</code></td>
+    <td>Only needed for wizard script and telnet SMS helper. Containerized runtime uses Python 3.12-slim.</td>
+  </tr>
+  <tr>
+    <td><strong>Disk space</strong></td>
+    <td>~10 GB free</td>
+    <td>Apple menu → System Settings → General → Storage</td>
+    <td>Breakdown: Docker images ~2 GB + Futu OpenD binary ~405 MB + volumes + logs + Parquet. Grows over time with historical data.</td>
+  </tr>
+  <tr>
+    <td><strong>RAM</strong></td>
+    <td>8 GB (≥4 GB for Docker)</td>
+    <td>Docker Desktop → Settings → Resources → Memory</td>
+    <td>Allocate ≥4 GB to Docker. More if running many strategies.</td>
+  </tr>
+</table>
+
+<h3>4.3 Mandatory Information — What You Need to Provide</h3>
+<p>These are the <strong>minimum</strong> pieces of information you must have to complete installation. Every field is mandatory unless marked optional.</p>
+
+<table>
+  <tr><th>Item</th><th>Env Variable</th><th>Where to Find It</th><th>Example / Actual Value</th></tr>
+  <tr>
+    <td><strong>Futu Account ID</strong></td>
+    <td><code>FUTU_ACCOUNT_ID</code></td>
+    <td>Futubull / moomoo app → Profile → Account Number (numeric ID). <br/>Alternatively: login to Futubull web → Settings.</td>
+    <td>Numeric string, e.g., <code>12345678</code></td>
+  </tr>
+  <tr>
+    <td><strong>Futu Login Password (MD5)</strong></td>
+    <td><code>FUTU_ACCOUNT_PWD_MD5</code></td>
+    <td>Your Futubull login password, MD5-hashed (see §4.4). <br/>⚠ This is NOT your trade unlock password — it's your <em>account login</em> password.</td>
+    <td>32-character hex string, e.g., <code>5f4dcc3b5aa765d61d8327deb882cf99</code></td>
+  </tr>
+  <tr>
+    <td><strong>Futu Trade Password</strong></td>
+    <td><code>FUTU_TRADE_PASSWORD</code></td>
+    <td>Futubull app → Settings → Trade Password. <br/>This is the 6-digit (or alphanumeric) password needed to unlock trading each session.</td>
+    <td>Plain text, e.g., <code>123456</code></td>
+  </tr>
+  <tr>
+    <td><strong>Futu Trade Env</strong></td>
+    <td><code>FUTU_TRD_ENV</code></td>
+    <td>Set to <code>SIMULATE</code> for paper trading, <code>REAL</code> for live. <br/>⚠ <strong>Triple-check this.</strong> Wrong value = real money at risk.</td>
+    <td><code>SIMULATE</code></td>
+  </tr>
+  <tr>
+    <td><strong>Futu Trade Market</strong></td>
+    <td><code>FUTU_TRD_MARKET</code></td>
+    <td><code>US</code> for US equities, <code>HK</code> for HK equities. Controls default trade context.</td>
+    <td><code>US</code></td>
+  </tr>
+  <tr>
+    <td><strong>Futu OpenD Language</strong></td>
+    <td><code>FUTU_OPEND_LANG</code></td>
+    <td><code>en</code> (English) or <code>cn</code> (Chinese). Controls OpenD console language.</td>
+    <td><code>en</code></td>
+  </tr>
+  <tr>
+    <td><strong>Futu OpenD IP Bind</strong></td>
+    <td><code>FUTU_OPEND_IP</code></td>
+    <td>Must be <code>0.0.0.0</code> for Docker networking. <br/>⚠ <code>127.0.0.1</code> will fail — containers on sam-net cannot reach localhost.</td>
+    <td><code>0.0.0.0</code></td>
+  </tr>
+  <tr>
+    <td><strong>IBKR Credentials</strong></td>
+    <td><code>TWS_USERID</code>, <code>TWS_PASSWORD</code></td>
+    <td><em>Optional.</em> Your Interactive Brokers username + password. Only needed if <code>IB_ENABLED=true</code>.</td>
+    <td>—</td>
+  </tr>
+</table>
+
+<h3>4.4 Step-by-Step Installation</h3>
+
+<div class="callout warn">
+<strong>⚠ BEFORE YOU START: Safety Check</strong>
+This installation uses your real Futubull credentials. The system defaults to <code>SIMULATE</code> (paper trading),
+but one misconfiguration could route orders to your live account. Read every step.
+<strong>Keep the Futubull app open to the Paper Trading tab</strong> during testing.
+</div>
+
+<h4>Step 1: Clone the Repository</h4>
+<pre><code>cd ~/Trading
+git clone https://github.com/samdharma/sam_trader.git
+cd sam_trader
+
+# Verify you are in the right place:
+pwd
+# Expected: /Users/yourname/Trading/sam_trader
+
+ls docker/docker-compose.yml
+# Must exist — if not, you are in the wrong directory</code></pre>
+
+<h4>Step 2: Create Your .env File</h4>
+<pre><code>cp .env.example .env
+
+# Edit .env with your actual values:
+nano .env
+# or: open -e .env</code></pre>
+
+<p>Minimum <code>.env</code> for Futu paper trading:</p>
+<pre><code># ---- Identity ----
+TRADER_ID=sam_trader
+ENV=paper
+LOG_LEVEL=INFO
+
+# ---- Futu OpenD (FUTUBULL broker) ----
+FUTU_ENABLED=true
+FUTU_OPEND_HOST=sam-futu-opend
+FUTU_OPEND_PORT=11111
+FUTU_OPEND_TELNET_PORT=22222
+FUTU_OPEND_IP=0.0.0.0
+FUTU_OPEND_LANG=en
+FUTU_TRD_ENV=SIMULATE          # ← TRIPLE-CHECK THIS
+FUTU_TRD_MARKET=US
+
+FUTU_ACCOUNT_ID=<strong>&lt;your numeric Futu account ID&gt;</strong>
+FUTU_ACCOUNT_PWD_MD5=<strong>&lt;32-char MD5 hash of your login password&gt;</strong>
+FUTU_TRADE_PASSWORD=<strong>&lt;your trade unlock password&gt;</strong>
+FUTU_UNLOCK_PWD_MD5=
+
+# ---- IBKR (disable for now) ----
+IB_ENABLED=false
+WAIT_FOR_IB_GATEWAY=0
+
+# ---- Wait flags ----
+WAIT_FOR_FUTU_OPEND=1
+
+# ---- Databases ----
+POSTGRES_HOST=sam-postgres
+POSTGRES_PORT=5432
+POSTGRES_DB=sam_trader
+POSTGRES_USER=sam
+POSTGRES_PASSWORD=sam_secret
+REDIS_HOST=sam-redis
+REDIS_PORT=6379
+
+# ---- State ----
+STATE_SAVE_ENABLED=true
+STATE_LOAD_ENABLED=true
+
+# ---- Bundles ----
+BUNDLES_PATH=config/bundles.yaml</code></pre>
+
+<h4>Step 3: Generate Your MD5 Password Hash</h4>
+<div class="callout warn">
+<strong>⚠ The <code>-n</code> flag is essential.</strong> Without it, <code>echo</code> adds a trailing newline and the hash will be wrong — login will fail.
+</div>
+
+<p><strong>Method A — macOS built-in md5:</strong></p>
+<pre><code>echo -n 'YourFutuLoginPassword' | md5
+# Example output: 5f4dcc3b5aa765d61d8327deb882cf99</code></pre>
+
+<p><strong>Method B — OpenSSL (always available):</strong></p>
+<pre><code>printf '%s' 'YourFutuLoginPassword' | openssl md5
+# Example output: (stdin)= 5f4dcc3b5aa765d61d8327deb882cf99</code></pre>
+
+<p><strong>Method C — Python (most reliable, cross-platform):</strong></p>
+<pre><code>python3 -c "import hashlib; print(hashlib.md5('YourFutuLoginPassword'.encode()).hexdigest())"
+# Example output: 5f4dcc3b5aa765d61d8327deb882cf99</code></pre>
+
+<p>Copy the 32-character hex string into <code>FUTU_ACCOUNT_PWD_MD5=</code> in your <code>.env</code>.</p>
+
+<h4>Step 4: Generate the RSA Key (Futu Required)</h4>
+<p>Futu OpenD binds to <code>0.0.0.0</code> inside Docker so other containers can reach it over sam-net.
+Futu <strong>requires RSA encryption</strong> on the trading interface when listening on all interfaces.
+Without this key, market data works but order submission fails with an encryption error.</p>
+<pre><code>ssh-keygen -t rsa -b 1024 -m PEM -f docker/futu-opend/futu.pem -N ""
+
+# Verify:
+ls -l docker/futu-opend/futu.pem
+# Expected: -rw-------  1 you  staff  887 ... docker/futu-opend/futu.pem</code></pre>
+
+<div class="callout warn">
+<strong>⚠ Never commit futu.pem.</strong> <code>*.pem</code> is already in <code>.gitignore</code>.
+The key is mounted into both <code>sam-futu-opend</code> and <code>sam-trader</code> containers automatically at <code>/.futu/futu.pem</code>.
+</div>
+
+<h4>Step 5: Ensure Docker File Sharing Is Enabled</h4>
+<pre><code># Docker Desktop → Settings → Resources → File Sharing
+# Add: /Users/yourname/Trading
+# (or the parent directory of your sam_trader clone)
+#
+# Without this, volume mounts (config/, logs/, data/catalog/) will fail with:
+# "Mounts denied: the path is not shared from the host"</code></pre>
+
+<h4>Step 6: Build the Docker Images</h4>
+<pre><code># Build all images for Futu profile:
+docker compose -f docker/docker-compose.yml --env-file .env --profile futu build
+
+# This builds:
+#   sam-trader:latest      (Python 3.12-slim + Nautilus + sam_trader source)
+#   sam-futu-opend:latest  (Debian stable-slim + Futu OpenD binary downloader)
+#
+# Expected time: 2–5 minutes (first build). Subsequent builds are faster due to layer caching.
+#
+# If you see errors about COPY failing, check that you are in the project root (pwd = .../sam_trader).</code></pre>
+
+<h4>Step 7: Start Infrastructure Services First</h4>
+<p>PostgreSQL and Redis are always-on. Start them first and verify they are healthy before proceeding:</p>
+<pre><code>docker compose -f docker/docker-compose.yml --env-file .env up -d sam-postgres sam-redis
+
+# Wait for healthy:
+docker compose -f docker/docker-compose.yml --env-file .env ps
+# Both should show (healthy) within ~15 seconds.
+
+# If either shows (unhealthy) or (starting) for >60s:
+#   1. Check logs:  docker logs sam-postgres --tail 20
+#   2. Check port conflicts: lsof -i :5432  |  lsof -i :6379
+#   3. Check Docker has ≥4GB RAM allocated</code></pre>
+
+<h4>Step 8: Start Futu OpenD</h4>
+<p>This step is where first-time authentication happens. The Futu OpenD container
+<strong>downloads the binary on first start</strong> (~405 MB, 1–3 minutes depending on connection).
+Subsequent restarts use the cached binary from the persistent volume.</p>
+<pre><code>docker compose -f docker/docker-compose.yml --env-file .env --profile futu up -d sam-futu-opend
+
+# Watch the logs in real time:
+docker logs -f sam-futu-opend</code></pre>
+
+<p><strong>What you will see (first start):</strong></p>
+<ol>
+  <li><strong>Binary download:</strong> <code>Downloading Futu OpenD ...</code> → wait 1–3 minutes</li>
+  <li><strong>Extraction:</strong> <code>Extracting Futu OpenD ...</code></li>
+  <li><strong>Startup:</strong> <code>Futu OpenD ready: /home/futu/.com.futunn.FutuOpenD/.../FutuOpenD</code></li>
+  <li><strong>Login attempt:</strong> One of the scenarios below</li>
+</ol>
+
+<p><strong>Login scenarios — what happens next:</strong></p>
+
+<table>
+  <tr><th>Scenario</th><th>Log Output</th><th>Action</th></tr>
+  <tr>
+    <td><strong>A: Login Success</strong> <span class="phase-tag phase-done">BEST</span></td>
+    <td><code>[OpenD] Login success</code><br/><code>Connect to Futu server success</code></td>
+    <td>✅ Done! Skip to Step 10.</td>
+  </tr>
+  <tr>
+    <td><strong>B: SMS Verification Needed</strong> <span class="phase-tag phase-pending">COMMON</span></td>
+    <td><code>[OpenD] Login fail, ret=-1</code><br/><code>msg=Login failed; use web version for security verification</code></td>
+    <td>Go to <strong>Step 9 — SMS Verification</strong>.</td>
+  </tr>
+  <tr>
+    <td><strong>C: Regulatory Questionnaire</strong> <span class="phase-tag phase-pending">POSSIBLE</span></td>
+    <td><code>[Login] Account login required questionnaire completion.</code><br/>A URL starting with <code>https://www.futunn.com/questionnaire/...</code></td>
+    <td>Copy the URL → open in browser → complete questionnaire → <code>docker restart sam-futu-opend</code> → watch logs again.</td>
+  </tr>
+  <tr>
+    <td><strong>D: MD5 Hash Wrong</strong> <span class="hl-danger">ERROR</span></td>
+    <td><code>Login fail</code> with no questionnaire/SMS prompt</td>
+    <td>Re-generate MD5 hash with <code>echo -n</code> (not <code>echo</code>). Verify 32-character hex string. Update <code>.env</code> → <code>docker compose ... up -d sam-futu-opend</code>.</td>
+  </tr>
+  <tr>
+    <td><strong>E: Account Locked</strong> <span class="hl-danger">ERROR</span></td>
+    <td>Repeated login failures</td>
+    <td>Too many failed attempts → temporary lock. Wait 15 minutes before retrying.</td>
+  </tr>
+</table>
+
+<h4>Step 9: SMS Verification (If Needed)</h4>
+<p>If Futu requires SMS verification, you need to send the code to OpenD's telnet console on port 22222.
+<strong>This must be done by you</strong> — the code comes to your phone.</p>
+
+<p><strong>Method A: Python helper (no install needed):</strong></p>
+<pre><code># Replace 123456 with the actual SMS code from your phone:
+python3 -c "
+import socket, time, select
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+s.connect(('localhost', 22222))
+s.setblocking(0)
+time.sleep(0.5)
+ready, _, _ = select.select([s], [], [], 2)
+if ready: print(ready[0].recv(1024).decode('utf-8', errors='replace').strip())
+cmd = 'input_phone_verify_code -code=123456\n'.encode()
+s.send(cmd)
+time.sleep(2)
+ready, _, _ = select.select([s], [], [], 3)
+if ready: print(ready[0].recv(1024).decode('utf-8', errors='replace').strip())
+s.close()
+"</code></pre>
+
+<p><strong>Method B: Telnet (install via <code>brew install telnet</code>):</strong></p>
+<pre><code>/opt/homebrew/bin/telnet localhost 22222
+# Type: input_phone_verify_code -code=123456
+# Press Enter</code></pre>
+
+<p>After sending the code, check the logs:</p>
+<pre><code>docker logs sam-futu-opend --tail 10
+# Should show: [OpenD] Login success
+#               [OpenD] Connect to Futu server success</code></pre>
+
+<div class="callout success">
+<strong>✅ One-Time Setup Complete</strong>
+The login session is cached in the <code>futu_opend_data</code> Docker volume.
+Future restarts skip SMS and questionnaire. Only <code>docker compose down -v</code>
+(wiping volumes) requires re-authentication.
+</div>
+
+<h4>Step 10: Start sam-trader</h4>
+<p>Before starting the trader, ensure <code>bundles.yaml</code> is empty for the initial test:</p>
+<pre><code>echo "bundles: []" > config/bundles.yaml
+
+# Start sam-trader:
+docker compose -f docker/docker-compose.yml --env-file .env --profile futu up -d sam-trader
+
+# Watch logs:
+docker logs -f sam-trader</code></pre>
+
+<p><strong>Expected log output:</strong></p>
+<pre><code>Waiting for Futu OpenD at sam-futu-opend:11111 ... Futu OpenD is ready
+Futu client configs registered
+Loaded 0 strategy bundle(s) from config/bundles.yaml
+TradingNode built successfully
+FutuLiveDataClient connected
+TradingNode: RUNNING</code></pre>
+
+<p><strong>Key things to verify:</strong></p>
+<ul>
+  <li><code>Loaded 0 strategy bundle(s)</code> — confirms <code>bundles: []</code> is active. If it says 1+, your bundles.yaml is not empty — fix immediately before trading can occur.</li>
+  <li><code>FutuLiveDataClient connected</code> — data connection to Futu OpenD is live.</li>
+  <li><code>TradingNode: RUNNING</code> — Nautilus core is active.</li>
+</ul>
+
+<h4>Step 11: Start sam-services (Optional)</h4>
+<pre><code>docker compose -f docker/docker-compose.yml --env-file .env --profile services up -d sam-services
+
+# If sam-services image hasn't been built yet:
+docker compose -f docker/docker-compose.yml --env-file .env --profile services build
+docker compose -f docker/docker-compose.yml --env-file .env --profile services up -d sam-services</code></pre>
+
+<h4>Step 12: Verify Everything</h4>
+<pre><code># All containers healthy:
+docker compose -f docker/docker-compose.yml --env-file .env --profile futu ps
+# Expected: sam-postgres (healthy), sam-redis (healthy),
+#           sam-futu-opend (healthy), sam-trader (healthy)
+
+# Check individual container health details:
+docker inspect --format='{{json .State.Health}}' sam-futu-opend | python3 -m json.tool
+# Look for: "Status": "healthy", "FailingStreak": 0
+
+# If also running sam-services:
+docker compose -f docker/docker-compose.yml --env-file .env --profile services ps</code></pre>
+
+<h3>4.5 Post-Installation Validation</h3>
+<p>Run these checks to confirm the system is fully operational before deploying any strategies.</p>
+
+<table>
+  <tr><th>Check</th><th>Command</th><th>Expected Result</th></tr>
+  <tr>
+    <td>All containers healthy</td>
+    <td><code>docker compose ... ps</code></td>
+    <td>All show <code>Up (healthy)</code></td>
+  </tr>
+  <tr>
+    <td>TradingNode running</td>
+    <td><code>docker logs sam-trader | grep RUNNING</code></td>
+    <td><code>TradingNode: RUNNING</code></td>
+  </tr>
+  <tr>
+    <td>Futu data client connected</td>
+    <td><code>docker logs sam-trader | grep 
+
+<hr>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- 5. THE OPERATOR'S DAY                                                  -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="daily-schedule">5. The Operator's Day — Timezone-Aware Schedule</h2>
+
+<div class="callout info">
+<strong>ⓘ All times HKT (GMT+8) unless stated otherwise.</strong>
+"Summer" = Mar–Nov (US DST active). "Winter" = Nov–Mar (US standard time).
+</div>
+
+<h3>5.1 24-Hour Timeline (Summer)</h3>
+
+<div class="timeline">
+
+<div class="timeline-entry">
+<div class="timeline-time">00:00 HKT</div>
+<div class="timeline-body">
+<strong>US MARKET OPEN</strong> (since 21:30 HKT). Automated trading in progress — strategies execute, fills journaled to PostgreSQL. Operator typically off-duty.
+</div>
+</div>
+
+<div class="timeline-entry">
+<div class="timeline-time">02:00 HKT</div>
+<div class="timeline-body">
+<strong>CRON:</strong> Nightly performance analysis (PortfolioAnalyzer). Computes Sharpe, Sortino, CAGR, MaxDD, WinRate, ProfitFactor for all active strategies. Writes to <code>performance_stats</code> PG table.
+</div>
+</div>
+
+<div class="timeline-entry">
+<div class="timeline-time">03:00 HKT</div>
+<div class="timeline-body">
+<strong>CRON:</strong> Log rotation. Archives logs older than 7 days.
+</div>
+</div>
+
+<div class="timeline-entry">
+<div class="timeline-time">04:00 HKT</div>
+<div class="timeline-body">
+<strong>US MARKET CLOSE</strong> (summer). Automated trading stops. Post-market data settles.
+</div>
+</div>
+
+<div class="timeline-entry">
+<div class="timeline-time"><span class="hl-warn">05:00 – 08:00 HKT</span></div>
+<div class="timeline-body">
+<strong>🔧 MAINTENANCE WINDOW OPENS.</strong> This is when the human operator works:
+<ul>
+  <li>Review overnight US fills, P&L, rejections (<code>sam performance --days 1</code>)</li>
+  <li>Check system health (<code>sam health</code>, dashboard)</li>
+  <li><strong>HK Pre-Market Prep</strong> (see <a href="#premarket-hk">§6.3</a>):
+    <ul>
+      <li>07:00 — HK pipeline runs: gap scan → AI → risk → bundles → report</li>
+      <li>07:30 — <strong>Human Review Gate:</strong> review &amp; approve HK bundles</li>
+      <li>07:50 — Apply approved bundles, graceful restart, verify</li>
+    </ul>
+  </li>
+  <li>06:00 — CRON: Full system backup</li>
+  <li>Any code updates, config changes, bundle adjustments happen here</li>
+</ul>
+</div>
+</div>
+
+<div class="timeline-entry">
+<div class="timeline-time">08:00 HKT</div>
+<div class="timeline-body">
+<strong>🔧 MAINTENANCE WINDOW CLOSES.</strong> System is now read-only (emergency only).
+</div>
+</div>
+
+<div class="timeline-entry">
+<div class="timeline-time">09:00 HKT</div>
+<div class="timeline-body">
+<strong>HK PRE-MARKET OPENS.</strong> Morning auction begins.
+</div>
+</div>
+
+<div class="timeline-entry">
+<div class="timeline-time">09:30 HKT</div>
+<div class="timeline-body">
+<strong>HK MARKET OPEN.</strong> Active monitoring by operator.
+</div>
+</div>
+
+<div class="timeline-entry">
+<div class="timeline-time">09:30 – 16:00 HKT</div>
+<div class="timeline-body">
+<strong>HK MARKET HOURS.</strong> Active monitoring: dashboard, <code>sam health</code>, P&L drift. <strong>No config changes during market hours.</strong>
+</div>
+</div>
+
+<div class="timeline-entry">
+<div class="timeline-time">16:00 HKT</div>
+<div class="timeline-body">
+<strong>HK MARKET CLOSE.</strong> Post-HK review: fills, P&L, position snapshot. Then begins <strong>US Pre-Market Prep</strong>.
+</div>
+</div>
+
+<div class="timeline-entry">
+<div class="timeline-time">16:30 HKT</div>
+<div class="timeline-body">
+<strong>CRON: US Pre-Market Pass 1 — Gap Scan.</strong> Initial gap scan on US watchlist using real-time QuoteTicks from Futu. Identifies gapping symbols vs previous close.
+</div>
+</div>
+
+<div class="timeline-entry">
+<div class="timeline-time">20:30 HKT</div>
+<div class="timeline-body">
+<strong>CRON: US Pre-Market Pass 2 — Trended Scan.</strong> Second pass with intra-pre-market trend data. Direction confirmation, volume accumulation.
+</div>
+</div>
+
+<div class="timeline-entry">
+<div class="timeline-time">21:00 HKT</div>
+<div class="timeline-body">
+<strong>CRON: US Pre-Market Pass 3 — Final.</strong> AI Scoring Engine → Monte Carlo sizing → risk checks → heat monitor → bundle YAML generator → readiness report.
+</div>
+</div>
+
+<div class="timeline-entry">
+<div class="timeline-time"><span class="hl">21:15 HKT</span></div>
+<div class="timeline-body">
+<strong>👤 HUMAN REVIEW GATE — US Bundles.</strong> Review readiness report. Approve/reject/modify bundles. Apply approved bundles. Graceful restart.
+</div>
+</div>
+
+<div class="timeline-entry">
+<div class="timeline-time"><span class="hl">21:30 HKT</span></div>
+<div class="timeline-body">
+<strong>US MARKET OPEN</strong> (summer). Automated trading resumes. Operator off-duty (optional periodic check).
+</div>
+</div>
+
+</div>
+
+<h3>5.2 Daily Operator Checklist</h3>
+
+<h4>Shift Start (~05:00 HKT)</h4>
+<ul class="checklist">
+  <li>Review overnight US session: <code>sam performance --days 1</code></li>
+  <li>Check fills for anomalies: dashboard → Today's Fills</li>
+  <li>Check rejections: <code>docker logs sam-trader | grep -i reject</code></li>
+  <li>Check system health: <code>sam health</code>, all containers green</li>
+  <li>Check backup completed: <code>sam backup --last</code> shows today 06:00</li>
+</ul>
+
+<h4>HK Pre-Market (~07:00–07:50 HKT)</h4>
+<ul class="checklist">
+  <li>Review HK readiness report (generated at 07:00)</li>
+  <li>Human Review Gate: approve/reject/modify HK bundles</li>
+  <li><code>sam validate-bundles</code> — must pass</li>
+  <li>Apply bundles + graceful restart + verify healthy</li>
+</ul>
+
+<h4>HK Market Hours (~09:30–16:00 HKT)</h4>
+<ul class="checklist">
+  <li>Dashboard open, <code>sam status</code> every 30–60 min</li>
+  <li>Watch: fill rate, rejection rate, P&L drift, broker connections</li>
+  <li><strong>No config changes during market hours</strong></li>
+</ul>
+
+<h4>HK Post-Market / US Pre-Market (~16:00–21:30 HKT)</h4>
+<ul class="checklist">
+  <li>Post-HK review: fills, P&L, <code>sam snapshot</code></li>
+  <li>Review US Pass 1 gap scan results (16:30)</li>
+  <li>Review US Pass 2 trended results (20:30)</li>
+  <li>Human Review Gate: approve US bundles from readiness report (21:15)</li>
+  <li>Apply US bundles + graceful restart before US open (21:30)</li>
+</ul>
+
+<h3>5.3 Weekend Schedule</h3>
+<table>
+  <tr><th>When</th><th>Activity</th></tr>
+  <tr><td>Friday post-US-close (Saturday ~5am HKT)</td><td>Full weekly review: <code>sam performance --days 5</code>. Archive weekly report. Verify backup (06:00 HKT daily, covering Friday session).</td></tr>
+  <tr><td>Saturday–Sunday</td><td>No trading. No market data streams. Docker images can be pulled for updates (apply Monday).</td></tr>
+  <tr><td>Sunday evening HKT</td><td>Pre-Monday checks: <code>sam health</code>, <code>docker compose pull</code> for updates, review GitHub changes. Verify all containers start cleanly.</td></tr>
+  <tr><td>Monday pre-market</td><td>Standard routine, plus extra attention to weekend gap risk (Pass 1 will highlight large gaps).</td></tr>
+</table>
+
+<hr>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- 6. PRE-MARKET PIPELINE                                                 -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="premarket-pipeline">6. Pre-Market Pipeline</h2>
+
+<div class="callout info">
+<strong>ⓘ Phase 9 — Not Yet Deployed</strong>
+The pre-market pipeline is fully designed and ticketed (Phase 9, 12 tickets) but not yet built.
+This section documents the target workflow. Sections marked
+<span class="phase-tag phase-pending">PENDING</span> are planned but not yet available.
+</div>
+
+<h3>6.1 Pipeline Architecture</h3>
+
+<div class="mermaid">
+flowchart TB
+  subgraph Inputs
+    Watchlist["config/premarket_watchlist.yaml<br/>+ auto from active bundles"]
+    Parquet["Parquet Catalog<br/>(EOD bars)"]
+    PG["PostgreSQL fills<br/>(last fill = prev close)"]
+  end
+
+  Watchlist --> QC["QuoteCollectionService<br/>Wraps FutuLiveDataClient<br/>Returns dict[InstrumentId, QuoteTick]"]
+  PG --> Composite["CompositePrevCloseLoader<br/>PG fills + Parquet bars"]
+  Parquet --> Composite
+
+  QC --> Gap["PreMarketGapScanner<br/>gap% = (current - prev_close) / prev_close<br/>Filters: threshold, blacklist, price, volume"]
+  Composite --> Gap
+
+  Gap --> AI["AI Scoring Engine<br/>LLM: DeepSeek / Kimi K2.6<br/>6-dimension scoring"]
+  Regime["Market Regime Detection<br/>HMM classifier<br/>(parallel track)"] --> Executor
+
+  AI --> MC["Monte Carlo Position Sizer<br/>10,000 paths → position distribution"]
+  MC --> Risk["Pre-trade Risk Checks<br/>max notional, margin, correlation"]
+  Risk --> Heat["Portfolio Heat Monitor<br/>aggregate exposure, sector conc."]
+  Heat --> Executor["Pipeline Executor<br/>merges both tracks"]
+  Regime --> Executor
+
+  Executor --> Bundler["Bundle YAML Generator<br/>→ versioned bundle IDs"]
+  Bundler --> Report["Readiness Report<br/>Markdown → data/reports/"]
+  Report --> Human["👤 HUMAN REVIEW GATE"]
+
+  style Human fill:#2a1a3a,stroke:#bc8cff,color:#f0f6fc
+  style Gap fill:#1a2a3a,stroke:#58a6ff
+  style AI fill:#3a1a2a,stroke:#f85149
+  style Executor fill:#2a2a1a,stroke:#d29922
+</div>
+
+<h3>6.2 Gap Scanner — How It Works</h3>
+<table>
+  <tr><th>Step</th><th>Detail</th></tr>
+  <tr><td>1. Load watchlist</td><td><code>config/premarket_watchlist.yaml</code> (curated) + auto-generate from active bundles (any instrument in an enabled bundle is scanned)</td></tr>
+  <tr><td>2. Get prev close</td><td>Composite loader: tries PG fills table (last fill price), falls back to Parquet EOD bar</td></tr>
+  <tr><td>3. Get current price</td><td>Real-time QuoteTick from Futu OpenD via QuoteCollectionService (reuses <code>FutuLiveDataClient</code> from Phase 2)</td></tr>
+  <tr><td>4. Compute gap</td><td><code>gap_pct = (current_price - prev_close) / prev_close × 100</code></td></tr>
+  <tr><td>5. Filter</td><td>Min gap threshold (configurable), blacklist (earnings/event stocks), exclude OTC/penny (&lt;$5), min volume threshold</td></tr>
+  <tr><td>6. Rank</td><td>Candidates ranked by absolute gap % descending, with direction, volume, and pre-market trend</td></tr>
+</table>
+
+<h3 id="premarket-us">6.3 US Pre-Market Pipeline (Afternoon/Evening HKT)</h3>
+<table>
+  <tr><th>Time (Summer HKT)</th><th>Stage</th><th>What Happens</th><th>Operator Action</th></tr>
+  <tr><td>16:30</td><td>Pass 1: Initial Gap Scan</td><td>QuoteTicks from Futu → gap vs prev close → filter → ranked candidate list</td><td>Monitor for extreme gaps (&gt;10%)</td></tr>
+  <tr><td>20:30</td><td>Pass 2: Trended Scan</td><td>Second pass with 4 hours of pre-market data. Direction confirmation, volume accumulation trend</td><td>Review trend changes vs Pass 1</td></tr>
+  <tr><td>21:00</td><td>Pass 3: AI + Risk</td><td>LLM scores each candidate → MC position sizing → pre-trade risk checks → heat monitor → bundle YAML → readiness report</td><td>—</td></tr>
+  <tr><td>21:15</td><td><strong>Human Review Gate</strong></td><td>Readiness report ready</td><td><strong>Approve / reject / modify each bundle</strong></td></tr>
+  <tr><td>21:25</td><td>Apply</td><td>Validated bundles → <code>sam apply</code> → graceful restart</td><td>Confirm restart clean, verify health</td></tr>
+</table>
+
+<h3 id="premarket-hk">6.4 HK Pre-Market Pipeline (Early Morning HKT)</h3>
+<table>
+  <tr><th>Time (HKT)</th><th>Stage</th><th>What Happens</th><th>Operator Action</th></tr>
+  <tr><td>07:00</td><td>All-in-one pipeline</td><td>Gap scan + AI scoring + MC sizing + risk checks + heat monitor + bundle generation + readiness report (compressed ~30 min window)</td><td>—</td></tr>
+  <tr><td>07:30</td><td><strong>Human Review Gate</strong></td><td>Readiness report ready</td><td><strong>Approve / reject / modify each bundle</strong></td></tr>
+  <tr><td>07:50</td><td>Apply</td><td>Validated bundles → <code>sam apply</code> → graceful restart</td><td>Confirm restart clean, verify health</td></tr>
+</table>
+
+<h3>6.5 AI Scoring Engine</h3>
+<table>
+  <tr><th>Dimension</th><th>What It Measures</th></tr>
+  <tr><td>1. Gap Magnitude</td><td>Absolute gap %, normalized per sector</td></tr>
+  <tr><td>2. Pre-Market Volume Trend</td><td>Volume acceleration, bid/ask imbalance</td></tr>
+  <tr><td>3. News Sentiment</td><td>If news source available: headline sentiment score</td></tr>
+  <tr><td>4. Sector Correlation</td><td>Is the gap sector-wide or stock-specific?</td></tr>
+  <tr><td>5. Regime Alignment</td><td>Does the gap direction align with HMM regime classification?</td></tr>
+  <tr><td>6. Historical Gap-Fade Probability</td><td>From Parquet catalog: what % of similar gaps faded?</td></tr>
+</table>
+<p><strong>Grade output:</strong> <code>STRONG_BUY</code> / <code>BUY</code> / <code>WATCH</code> / <code>SKIP</code>.
+Rule-based fallback if LLM unavailable (uses gap% + volume only).</p>
+
+<h3>6.6 Readiness Report</h3>
+<p>Generated to <code>data/reports/YYYY-MM-DD_{US|HK}_readiness.md</code>. Sections:</p>
+<ul>
+  <li><strong>Market Regime:</strong> HMM classification (trending_up / trending_down / ranging / volatile)</li>
+  <li><strong>Gap Candidates:</strong> Ranked table with symbol, gap%, direction, volume, AI grade</li>
+  <li><strong>Risk Summary:</strong> Per-candidate position size, max loss, contribution to portfolio heat</li>
+  <li><strong>Proposed Bundles:</strong> Generated bundle YAML entries ready for copy-paste into <code>bundles.yaml</code></li>
+  <li><strong>Warnings:</strong> Extreme gaps, earnings today, low liquidity, sector concentration</li>
+</ul>
+
+<hr>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- 7. HUMAN REVIEW GATES                                                  -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="human-review">7. Human Review Gates</h2>
+
+<div class="callout warn">
+<strong>⚠ The Human Review Gate is the most important step in the operator's day.</strong>
+The pipeline generates proposals. The human operator validates, overrides, and approves.
+Never skip this step for a live trading session.
+</div>
+
+<h3>7.1 Pre-Market Review Checklist</h3>
+<ul class="checklist">
+  <li><strong>Readiness report reviewed?</strong> Read the full report for current session</li>
+  <li><strong>Regime classification makes sense?</strong> If HMM says "trending_up" but you see news of a crash, override</li>
+  <li><strong>Top candidates: any earnings/events today?</strong> Manual check — earnings, FDA decisions, Fed minutes</li>
+  <li><strong>Position sizes reasonable?</strong> MC-suggested size vs account equity — sanity check</li>
+  <li><strong>Any single-stock concentration > limit?</strong> Per strategy <code>max_position</code> + aggregate heat</li>
+  <li><strong>Total portfolio heat within limits?</strong> Sum of all position risk vs <code>max_daily_loss</code></li>
+  <li><strong>Bundles manually overridden?</strong> Document reason for each override in the report</li>
+  <li><strong><code>sam validate-bundles</code> passes?</strong> Schema + class-existence + backtest gate</li>
+  <li><strong>Graceful restart confirmed healthy?</strong> After applying, verify all containers <code>healthy</code></li>
+</ul>
+
+<h3>7.2 Bundle Approval Workflow</h3>
+
+<div class="mermaid">
+flowchart TD
+  Report["Readiness Report Generated"] --> Review["Operator reviews report"]
+  Review --> Decision{"Decision per candidate?"}
+
+  Decision -->|APPROVE| Approve["Add to bundles.yaml<br/>with generated config"]
+  Decision -->|MODIFY| Modify["Edit position size,<br/>risk params, or bracket"]
+  Decision -->|REJECT| Reject["Skip — do not add<br/>(document reason)"]
+
+  Approve --> Validate["sam validate-bundles"]
+  Modify --> Validate
+  Reject --> Done
+
+  Validate -->|FAIL| Fix["Fix schema / class errors"]
+  Fix --> Validate
+  Validate -->|PASS| Apply["sam apply<br/>(graceful restart)"]
+  Apply --> Verify["Verify: sam health<br/>all containers healthy"]
+  Verify --> Done["✅ Session ready"]
+
+  style Report fill:#1a2a3a,stroke:#58a6ff
+  style Done fill:#1a3a2a,stroke:#3fb950
+  style Decision fill:#2a2a1a,stroke:#d29922
+</div>
+
+<h3>7.3 What to Look For (Red Flags)</h3>
+<table>
+  <tr><th>Red Flag</th><th>Action</th></tr>
+  <tr><td>Gap > 15% on a single stock</td><td>Likely earnings/event. Check news. Consider SKIP or halved position.</td></tr>
+  <tr><td>All candidates same direction</td><td>Macro event (FOMC, CPI). Regime detection may be wrong. Consider reducing all positions.</td></tr>
+  <tr><td>AI grade = STRONG_BUY but regime = ranging</td><td>Conflict. AI may be wrong. Downgrade to WATCH or reduce size.</td></tr>
+  <tr><td>Volume < 10,000 shares pre-market</td><td>Low liquidity. Gap may not hold at open. Consider SKIP.</td></tr>
+  <tr><td>Portfolio heat > 80% of daily loss limit</td><td>Too much risk. Reject lowest-grade candidates until heat < 60%.</td></tr>
+</table>
+
+<hr>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- 8. MARKET HOURS MONITORING                                             -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="market-hours">8. Market Hours — Monitoring</h2>
+
+<h3>8.1 US Market Hours (Overnight HKT, Automated)</h3>
+<p>US trading runs from 21:30 to 04:00 HKT (summer). During this period:</p>
+<ul>
+  <li><strong>Primary:</strong> automated trading — strategies execute autonomously</li>
+  <li><strong>Operator:</strong> optional periodic checks; system runs unattended</li>
+  <li>If you wake up and check at 02:00 HKT: <code>sam health</code>, glance at dashboard</li>
+  <li><strong>No config changes</strong> during US market hours</li>
+</ul>
+
+<h3>8.2 HK Market Hours (Daytime HKT, Active Monitoring)</h3>
+<p>HK trading runs from 09:30 to 16:00 HKT. During this period:</p>
+<ul>
+  <li><strong>Primary:</strong> active monitoring by operator</li>
+  <li>Dashboard open on secondary screen</li>
+  <li><code>sam status</code> every 30–60 minutes</li>
+  <li>Watch for: fill rate changes, rejection spikes, P&L drift, broker disconnection</li>
+</ul>
+
+<h3>8.3 Dashboard Reference</h3>
+
+<div class="mermaid">
+graph TB
+  subgraph Dashboard["Dashboard (http://localhost:8080, 30s auto-refresh)"]
+    Health["System Health<br/>PG ● UP  Redis ● UP<br/>Futu ● UP  Trader ● UP"]
+    Fills["Today's Fills (last 20)<br/>Time | Symbol | Side | Qty | Price | Venue | Slippage"]
+    Positions["Current Positions<br/>Symbol | Venue | Qty | Avg Px | Unreal P&L | Strategy"]
+    PnL["P&L Summary<br/>tsla-orb-15m-futu: +$342.50<br/>nvda-mom-5m-ib: -$87.30<br/>TOTAL: +$255.20"]
+  end
+
+  style Dashboard fill:#161b22,stroke:#30363d
+  style Health fill:#1a3a2a,stroke:#3fb950
+  style Fills fill:#1a2a3a,stroke:#58a6ff
+  style Positions fill:#2a1a3a,stroke:#bc8cff
+  style PnL fill:#2a2a1a,stroke:#d29922
+</div>
+
+<h3>8.4 Monitoring Commands</h3>
+<table>
+  <tr><th>Command</th><th>What It Shows</th><th>Frequency</th></tr>
+  <tr><td><code>sam health</code></td><td>All 6 containers: healthy/unhealthy status</td><td>Every 30 min</td></tr>
+  <tr><td><code>sam status</code></td><td>TradingNode state, connections (Futu + IB), active subscriptions, strategy instances, quota usage</td><td>Every 60 min</td></tr>
+  <tr><td><code>sam quote TSLA.NASDAQ</code></td><td>Real-time bid/ask/last for a symbol</td><td>On demand</td></tr>
+  <tr><td><code>sam performance --days 1</code></td><td>Today's realized P&L per strategy</td><td>Every 2–3 hours</td></tr>
+  <tr><td><code>docker logs -f --tail 50 sam-trader</code></td><td>Live TradingNode logs</td><td>When investigating</td></tr>
+</table>
+
+<h3>8.5 Alert Thresholds</h3>
+<table>
+  <tr><th>Alert</th><th>Threshold</th><th>Auto Response</th><th>Operator Response</th></tr>
+  <tr><td>Daily loss limit hit</td><td>Per-strategy <code>max_daily_loss</code></td><td>Strategy auto-halted by RealizedPnLTrackerActor</td><td>Review why, adjust or disable bundle</td></tr>
+  <tr><td>Rejection streak</td><td>3 consecutive per (instrument, strategy, reason)</td><td>Strategy auto-halted by RejectionMonitorActor, 15-min cooldown</td><td>Check rejection reason, fix or disable</td></tr>
+  <tr><td>Broker disconnect</td><td>Health check L2/L3 fails</td><td>Auto-reconnect with subscription restoration</td><td>If >5 min: check broker container, restart if needed</td></tr>
+  <tr><td>Subscription quota 80%</td><td>Futu subscription manager</td><td>Warning logged</td><td>Review active subscriptions, release idle ones</td></tr>
+  <tr><td>Subscription quota 95%</td><td>Futu subscription manager</td><td>Critical warning, refuses new subscriptions</td><td>Immediately release idle subscriptions or reduce strategy count</td></tr>
+</table>
+
+<hr>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- 9. POST-MARKET                                                         -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="postmarket">9. Post-Market — Review &amp; Wrap-Up</h2>
+
+<h3>9.1 US Post-Market (Early Morning HKT, ~05:00)</h3>
+<p>After US market close, before HK pre-market prep begins:</p>
+<pre><code># Review overnight fills
+sam performance --days 1
+
+# Check for unusual fills (dashboard → Today's Fills)
+
+# Check any rejections
+docker logs sam-trader --since 8h | grep -i reject
+
+# Snapshot database state
+sam snapshot
+
+# This flows directly into HK pre-market prep (§6.4)</code></pre>
+
+<h3>9.2 HK Post-Market (Afternoon HKT, ~16:00)</h3>
+<p>After HK market close, before US pre-market prep begins:</p>
+<pre><code># Review day session
+sam performance --days 1 --venue HK
+
+# Snapshot database
+sam snapshot
+
+# Review what worked / didn't
+# Adjust watchlist or strategy params for tomorrow
+
+# This flows directly into US pre-market prep (§6.3)</code></pre>
+
+<h3>9.3 End-of-Week Review (Friday Post-US-Close)</h3>
+<pre><code># Full week stats
+sam performance --days 5
+sam performance --days 5 --json > weekly_report.json
+
+# Compare actual vs expected:
+#   - Sharpe ratio &gt; 0.5?
+#   - Max drawdown &lt; 20%?
+#   - Win rate &gt; 40%?
+#   - Profit factor &gt; 1.2?
+
+# Review per-bundle performance
+sam performance --strategy tsla-orb-15m-futu --days 5
+sam performance --strategy baba-mom-5m-futu --days 5
+
+# Archive weekly report
+cp data/reports/weekly_*.md data/reports/archive/
+
+# Verify backup (automated at 06:00 HKT daily)
+sam backup --last
+
+# Pull Docker image updates (apply Monday during maintenance window)
+docker compose pull</code></pre>
+
+<hr>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- 10. UPDATES & UPGRADES                                                 -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="updates">10. Updates &amp; Upgrades</h2>
+
+<h3>10.1 Routine Update Workflow</h3>
+<div class="callout info">
+<strong>ⓘ All updates happen within the 05:00–08:00 HKT maintenance window.</strong>
+</div>
+<pre><code># 1. Pull latest code
+git pull origin main
+
+# 2. Review changes
+git log --oneline -10
+
+# 3. Rebuild and restart
+./deploy.sh --build
+
+# 4. Verify
+sam health
+sam status
+docker compose ps</code></pre>
+
+<h3>10.2 Graceful Restart Flow</h3>
+<p>The restart process preserves strategy/actor state via Redis:</p>
+<ol>
+  <li><strong>save_state()</strong> — all actors and strategies serialize state to Redis</li>
+  <li><strong>stop()</strong> — TradingNode stops, connections closed</li>
+  <li><strong>build(new_config)</strong> — new TradingNode built from updated config</li>
+  <li><strong>run()</strong> — new node starts</li>
+  <li><strong>State restored</strong> — strategies/actors reload state from Redis</li>
+</ol>
+<p><strong>Total downtime: ~5–10 seconds.</strong> Futu OpenD and IB Gateway containers are unaffected (they run independently). Subscriptions are restored automatically on reconnect.</p>
+
+<h3>10.3 Version Pinning</h3>
+<table>
+  <tr><th>Component</th><th>Pinned To</th><th>Update Strategy</th></tr>
+  <tr><td>NautilusTrader</td><td>Specific image tag (not <code>:latest</code>)</td><td>Test new version in paper first, then pin</td></tr>
+  <tr><td>Futu OpenD</td><td>Specific image tag</td><td>Auth session persists in volume, survives upgrade</td></tr>
+  <tr><td>IB Gateway</td><td><code>stable</code> tag</td><td>IB updates are rare; test before upgrade</td></tr>
+  <tr><td>PostgreSQL</td><td><code>16-alpine</code></td><td>Major version upgrades require pg_dump → restore cycle</td></tr>
+  <tr><td>Redis</td><td><code>7-alpine</code></td><td>Minor upgrades within v7 are safe</td></tr>
+</table>
+
+<h3>10.4 Rollback Procedure</h3>
+
+<div class="mermaid">
+flowchart TD
+  Bad["❌ Update causes issues"] --> Halt["sam halt<br/>(close-only mode)"]
+  Halt --> Revert["git revert &lt;bad-commit&gt;<br/>or git checkout &lt;last-good-tag&gt;"]
+  Revert --> Rebuild["./deploy.sh --build"]
+  Rebuild --> Verify["sam health<br/>verify fills resume"]
+  Verify -->|OK| Resume["sam resume"]
+  Verify -->|Still broken| Escalate["Check logs<br/>Restore from backup if DB corrupted"]
+
+  style Bad fill:#3a1a2a,stroke:#f85149
+  style Resume fill:#1a3a2a,stroke:#3fb950
+</div>
+
+<hr>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- 11. HOT-FIXING                                                         -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="hotfix">11. Hot-Fixing</h2>
+
+<h3>11.1 What Qualifies as a Hot-Fix</h3>
+<ul>
+  <li>Critical bug causing incorrect fills or orders</li>
+  <li>Broker disconnection loop that auto-reconnect can't resolve</li>
+  <li>Strategy misbehavior (e.g., sending orders in a loop)</li>
+  <li>Urgent bundle removal (strategy trading an instrument with unexpected news)</li>
+  <li>Docker container crash loop</li>
+</ul>
+
+<h3>11.2 Hot-Fix Workflow</h3>
+<pre><code># 1. Immediately halt trading
+sam kill    # cancel all orders, halt all strategies
+# or
+sam halt    # close-only mode — keep positions, no new entries
+
+# 2. Diagnose
+sam logs sam-trader
+docker logs sam-futu-opend --tail 100
+
+# 3. Apply fix
+# Option A: Disable a misbehaving bundle
+#   Edit config/bundles.yaml → set enabled: false → sam apply
+# Option B: Code fix
+#   Edit source → git commit → ./deploy.sh --build
+# Option C: Rollback
+#   git revert <bad-commit> → ./deploy.sh --build
+
+# 4. Verify
+sam health
+sam status
+
+# 5. Resume
+sam resume</code></pre>
+
+<h3>11.3 Single Strategy Fix</h3>
+<p>If one strategy is misbehaving, you don't need to stop everything:</p>
+<pre><code># Disable just that bundle in config/bundles.yaml:
+#   - id: "tsla-orb-15m-futu"
+#     enabled: false   # ← change this
+
+# Apply
+sam apply
+
+# The other strategies continue unaffected.
+# The disabled strategy's positions remain managed by Nautilus (can be closed manually if needed).</code></pre>
+
+<h3>11.4 Out-of-Window Hot-Fix Decision Matrix</h3>
+<table>
+  <tr><th>Situation</th><th>Fix Now?</th><th>Rationale</th></tr>
+  <tr><td>Strategy sending duplicate orders (financial risk)</td><td><strong>YES — sam kill immediately</strong></td><td>Financial loss > 5s downtime</td></tr>
+  <tr><td>Broker disconnected, auto-reconnect failing</td><td><strong>YES — restart broker container</strong></td><td>No trading possible until fixed</td></tr>
+  <tr><td>Cosmetic bug in dashboard</td><td>No — wait for maintenance window</td><td>Zero trading impact</td></tr>
+  <tr><td>Performance stats not updating</td><td>No — wait for maintenance window</td><td>Monitoring gap only, trading unaffected</td></tr>
+  <tr><td>Single bundle config typo (safe — no orders)</td><td>No — wait. Or disable bundle only (no restart needed for disable)</td><td>Isolated, no financial risk</td></tr>
+</table>
+
+<hr>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- 12. FUTU OPEND                                                         -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="futu-opend">12. Futu OpenD — Operating Guide</h2>
+
+<h3>12.1 Architecture</h3>
+<ul>
+  <li><strong>Separate Docker container</strong>: <code>sam-futu-opend</code></li>
+  <li><strong>Independent lifecycle</strong>: survives Nautilus restarts, auth session persists in volume (<code>futu_opend_data</code>)</li>
+  <li><strong>Image</strong>: Custom <code>debian:stable-slim</code> build with tini init, ~46 MB compressed</li>
+  <li><strong>Binary</strong>: Futu OpenD x86_64 (downloaded on first start ~405 MB, cached in volume)</li>
+  <li><strong>Apple Silicon</strong>: Runs via Rosetta 2 (<code>platform: linux/amd64</code> in compose)</li>
+</ul>
+
+<h3>12.2 Ports &amp; Access</h3>
+<table>
+  <tr><th>Service</th><th>Port</th><th>Description</th></tr>
+  <tr><td>Futu API</td><td>11111</td><td>Protobuf API for market data &amp; trading</td></tr>
+  <tr><td>Telnet Console</td><td>22222</td><td>Admin / debug interface</td></tr>
+</table>
+
+<h3>12.3 Health Checks</h3>
+<table>
+  <tr><th>Layer</th><th>Check</th><th>Command</th></tr>
+  <tr><td>L1</td><td>Process alive</td><td><code>docker exec sam-futu-opend pgrep -x FutuOpenD</code></td></tr>
+  <tr><td>L2</td><td>API port accepting</td><td><code>docker exec sam-futu-opend sh -c 'true &gt; /dev/tcp/localhost/11111'</code></td></tr>
+  <tr><td>L3</td><td>No login failures in logs</td><td><code>docker exec sam-futu-opend sh -c 'grep -iE "login fail|conn failed|auth fail" .../log/*.log'</code></td></tr>
+</table>
+
+<h3>12.4 First-Time Login</h3>
+<ol>
+  <li><strong>Generate MD5 password:</strong>
+    <pre><code>echo -n 'your_password' | md5sum
+# Set FUTU_ACCOUNT_PWD_MD5 in .env</code></pre>
+  </li>
+  <li><strong>Generate RSA key:</strong>
+    <pre><code>ssh-keygen -t rsa -b 1024 -m PEM -f docker/futu-opend/futu.pem -N ""</code></pre>
+  </li>
+  <li><strong>Start OpenD:</strong> <code>docker compose --profile futu up -d sam-futu-opend</code></li>
+  <li><strong>Check for questionnaire:</strong>
+    <pre><code>docker logs sam-futu-opend | grep -i "questionnaire\|问卷"</code></pre>
+    Open the URL in a browser, complete the questionnaire, then restart:
+    <code>docker restart sam-futu-opend</code>
+  </li>
+</ol>
+
+<h3>12.5 Telnet Console</h3>
+<pre><code># Connect
+docker exec -it sam-futu-opend telnet localhost 22222
+
+# Commands
+help          # List available commands
+status        # Show connection / login status
+reconnect     # Force re-login to Futu servers
+quit          # Close session
+
+# Or trigger reconnect without telnet:
+docker exec sam-futu-opend sh -c 'echo "reconnect" | nc localhost 22222'</code></pre>
+
+<h3>12.6 Subscription Quota Management</h3>
+<p>Futu enforces per-account limits on concurrent data subscriptions:</p>
+<table>
+  <tr><th>Data Type</th><th>Default Limit</th></tr>
+  <tr><td>Quote (real-time)</td><td>100 symbols</td></tr>
+  <tr><td>Order Book (L2 depth)</td><td>100 symbols</td></tr>
+  <tr><td>K-Line (bar) streams</td><td>100 symbols</td></tr>
+</table>
+<p>The <code>FutuSubscriptionManager</code> (Phase 2) tracks usage automatically:</p>
+<ul>
+  <li><strong>80% threshold:</strong> Warning logged</li>
+  <li><strong>95% threshold:</strong> Critical — refuses new subscriptions</li>
+  <li><strong>Idle release:</strong> Unused subscriptions released after configurable idle period</li>
+  <li><strong>Priority bundles:</strong> Higher-priority strategies get quota first</li>
+</ul>
+<p>Check quota: <code>sam status</code> shows current usage per data type.</p>
+
+<h3>12.7 Recovery Procedures</h3>
+<table>
+  <tr><th>Symptom</th><th>Action</th></tr>
+  <tr><td>Login failed / auth error</td><td>Re-verify MD5 hash (<code>echo -n</code>, not <code>echo</code>). Check questionnaire completed. Check account not locked (wait 15 min).</td></tr>
+  <tr><td>Connection refused</td><td>Check container running. Check port not in use (<code>lsof -i :11111</code>). Wait 30–60s for cold start.</td></tr>
+  <tr><td>No market data</td><td>Check subscription quota. Check instrument_id format (<code>TSLA.NASDAQ</code>, not <code>TSLA</code>). Check market data permissions in Futu account.</td></tr>
+  <tr><td>Order rejected with encryption error</td><td>RSA key not mounted or expired. Regenerate and restart both containers.</td></tr>
+  <tr><td>Container exits immediately</td><td>Missing <code>FUTU_ACCOUNT_ID</code> or <code>FUTU_ACCOUNT_PWD_MD5</code> env vars. Check <code>.env</code> is at project root.</td></tr>
+</table>
+
+<hr>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- 13. IB GATEWAY                                                         -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="ib-gateway">13. IB Gateway — Operating Guide</h2>
+
+<h3>13.1 Architecture</h3>
+<ul>
+  <li><strong>Separate Docker container</strong>: <code>sam-ib-gateway</code> (profile: <code>ib</code>)</li>
+  <li><strong>Image</strong>: <code>ghcr.io/gnzsnz/ib-gateway:stable</code></li>
+  <li><strong>Ports</strong>: 4004 (API), 5900 (VNC for 2FA)</li>
+  <li><strong>Independent lifecycle</strong>: survives Nautilus restarts, session persistence</li>
+</ul>
+
+<h3>13.2 2FA Authentication</h3>
+<p>IB Gateway requires two-factor authentication on restart:</p>
+<ol>
+  <li>Connect VNC: <code>open vnc://localhost:5900</code> (macOS Screen Sharing)</li>
+  <li>Enter IB username + password</li>
+  <li>Complete 2FA challenge (mobile app notification or code)</li>
+  <li>Gateway connects → API available on port 4004</li>
+</ol>
+
+<h3>13.3 Health Checks</h3>
+<table>
+  <tr><th>Layer</th><th>Check</th><th>Command</th></tr>
+  <tr><td>L1</td><td>Process alive</td><td><code>docker exec sam-ib-gateway pgrep java</code></td></tr>
+  <tr><td>L2</td><td>API port accepting</td><td><code>docker exec sam-ib-gateway sh -c 'true &gt; /dev/tcp/localhost/4004'</code></td></tr>
+  <tr><td>L3</td><td>API readiness</td><td>TCP connect on 4004 (IB proprietary API has no simple HTTP health endpoint)</td></tr>
+</table>
+
+<h3>13.4 Pre-Flight Permissions Check</h3>
+<p>On connection, the IB adapter queries the account's trading permissions. If a required permission is missing
+(e.g., short-selling disabled but a bundle requires it), a <strong>CRITICAL</strong> log is emitted and that strategy
+is disabled automatically. This prevents the v2 scenario of 189 consecutive rejections.</p>
+
+<h3>13.5 Known IB-Specific Behaviors</h3>
+<table>
+  <tr><th>Behavior</th><th>Handling</th></tr>
+  <tr><td>SMART routing default</td><td>Uses SMART by default — avoids v2 code-10311 warnings from misconfigured routing</td></tr>
+  <tr><td><code>post_only=True</code> incompatible</td><td>IB does not support post-only orders. The adapter sets <code>post_only=False</code> automatically. Bundles use <code>tp_post_only: false</code> for IB strategies.</td></tr>
+  <tr><td>Order rate limits</td><td>IB has stricter rate limits than Futu. <code>LiveRiskEngine</code> enforces configurable limits.</td></tr>
+</table>
+
+<h3>13.6 Recovery Procedures</h3>
+<table>
+  <tr><th>Symptom</th><th>Action</th></tr>
+  <tr><td>2FA expired / session lost</td><td>VNC in, re-authenticate. Gateway auto-reconnects to IB servers.</td></tr>
+  <tr><td>API port not responding</td><td>Check VNC: is Gateway UI showing "Connected"? If not, check internet + credentials.</td></tr>
+  <tr><td>Orders rejected (code 10311, 108, 189)</td><td>All fixed in v3. If new rejection codes appear, check IB API docs and add handling.</td></tr>
+</table>
+
+<hr>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- 14. BUNDLE MANAGEMENT                                                  -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="bundles">14. Bundle Management</h2>
+
+<h3>14.1 Bundle Registry</h3>
+<p>All active strategies are defined in a single file: <code>config/bundles.yaml</code>, versioned in git.
+Bundles are the <strong>only</strong> way strategies are loaded — no strategy imports in <code>main.py</code>.</p>
+
+<h3>14.2 Bundle Schema</h3>
+<pre><code>bundles:
+  - id: "tsla-orb-aggressive-v1.0"      # Unique identifier (family_variant_version)
+    enabled: true                        # true = active, false = skip
+    venue: FUTU                          # FUTU or IB
+    strategy:
+      path: sam_trader.strategies.orb:OrbStrategy  # Dotted path to class
+      config:
+        instrument_id: "TSLA.NASDAQ"     # Futu symbology
+        bar_type: "TSLA.NASDAQ-15-MINUTE-LAST-EXTERNAL"
+        first_candle_minutes: 15
+        trade_size: 5
+        entry_order_type: MARKET         # MARKET, LIMIT, or STOP_MARKET
+    bracket:
+      stop_loss_ticks: 10
+      take_profit_ticks: 30
+    risk:
+      max_position: 500
+      max_daily_loss: 1000</code></pre>
+
+<h3>14.3 Version-Aware Bundle Naming</h3>
+<table>
+  <tr><th>Format</th><th>Example</th><th>Meaning</th></tr>
+  <tr><td><code>{SYMBOL}_{STRATEGY}_{VARIANT}_v{MAJOR}.{MINOR}</code></td><td><code>TSLA_ORB_aggressive_v2.3</code></td><td>Tesla ORB strategy, aggressive variant, version 2.3</td></tr>
+  <tr><td></td><td><code>BABA_MOMENTUM_bearish_v1.0</code></td><td>Alibaba momentum, short-biased</td></tr>
+  <tr><td></td><td><code>NVDA_ORB_5min_v1.0</code></td><td>Nvidia ORB, 5-minute candle</td></tr>
+  <tr><td></td><td><code>QQQ_MOMENTUM_60m_v1.2</code></td><td>QQQ momentum, 60-min window</td></tr>
+</table>
+
+<h3>14.4 Multi-Venue Symbology</h3>
+<table>
+  <tr><th>Venue</th><th>US Format</th><th>HK Format</th><th>Example</th></tr>
+  <tr><td>Futu</td><td><code>SYMBOL.NASDAQ</code> or <code>SYMBOL.NYSE</code></td><td><code>CODE.HKEX</code></td><td><code>TSLA.NASDAQ</code>, <code>00700.HKEX</code></td></tr>
+  <tr><td>IB</td><td><code>SYMBOL.NASDAQ</code> or <code>SYMBOL.NYSE</code></td><td><code>CODE.HKEX</code></td><td><code>NVDA.NASDAQ</code></td></tr>
+</table>
+
+<h3>14.5 Bundle Operations</h3>
+
+<h4>Add a New Bundle</h4>
+<pre><code># 1. Edit config/bundles.yaml — add a new entry
+# 2. Validate
+sam validate-bundles
+# 3. Apply (within maintenance window)
+sam apply</code></pre>
+
+<h4>Disable a Bundle</h4>
+<pre><code># Set enabled: false — no strategy instantiated, no subscriptions
+# Apply: sam apply
+# No positions opened. Existing positions remain managed by Nautilus.</code></pre>
+
+<h4>Modify a Bundle</h4>
+<pre><code># Edit config (trade_size, stop_loss_ticks, take_profit_ticks, etc.)
+# Bump version: id: "tsla-orb-aggressive-v1.1"
+# Validate + apply (within maintenance window)</code></pre>
+
+<h4>Validate Bundles</h4>
+<pre><code>sam validate-bundles
+# Checks:
+#   - YAML schema valid
+#   - Strategy class exists at path
+#   - venue is "FUTU" or "IB"
+#   - instrument_id format matches venue
+#   - bracket/risk constraints are reasonable
+#   - Backtest gate (optional, if historical data available)</code></pre>
+
+<h3>14.6 Multi-Venue Coexistence</h3>
+<p>Futu and IB bundles coexist in the same <code>bundles.yaml</code>, in the same TradingNode.
+No cross-contamination: a Futu order is never sent to IB, and vice versa.
+Each strategy gets its own instrument subscriptions via its venue's data client.</p>
+
+<h3>14.7 Example: Full Bundle File</h3>
+<pre><code>bundles:
+  # === FUTU — US Equities ===
+  - id: "tsla-orb-aggressive-v1.0"
+    enabled: true
+    venue: FUTU
+    strategy:
+      path: sam_trader.strategies.orb:OrbStrategy
+      config:
+        instrument_id: "TSLA.NASDAQ"
+        bar_type: "TSLA.NASDAQ-15-MINUTE-LAST-EXTERNAL"
+        first_candle_minutes: 15
+        trade_size: 5
+    bracket:
+      stop_loss_ticks: 10
+      take_profit_ticks: 30
+    risk:
+      max_position: 500
+      max_daily_loss: 1000
+
+  # === FUTU — HK Equities ===
+  - id: "tencent-momentum-v1.0"
+    enabled: false              # Disabled for now
+    venue: FUTU
+    strategy:
+      path: sam_trader.strategies.momentum:MomentumStrategy
+      config:
+        instrument_id: "00700.HKEX"
+        bar_type: "00700.HKEX-5-MINUTE-LAST-EXTERNAL"
+        window: 20
+        trade_size: 100
+    bracket:
+      stop_loss_ticks: 20
+      take_profit_ticks: 60
+    risk:
+      max_position: 1000
+      max_daily_loss: 5000
+
+  # === IB — US Equities (legacy) ===
+  - id: "nvda-momentum-ib-v1.0"
+    enabled: false
+    venue: IB
+    strategy:
+      path: sam_trader.strategies.momentum:MomentumStrategy
+      config:
+        instrument_id: "NVDA.NASDAQ"
+        bar_type: "NVDA.NASDAQ-5-MINUTE-LAST-INTERNAL"
+        window: 20
+        trade_size: 50
+        tp_post_only: false      # Required for IB
+    bracket:
+      stop_loss_ticks: 15
+      take_profit_ticks: 45
+    risk:
+      max_position: 200
+      max_daily_loss: 500</code></pre>
+
+<hr>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- 15. MAINTENANCE                                                        -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="maintenance">15. Maintenance</h2>
+
+<h3>15.1 Backup System</h3>
+<table>
+  <tr><th>What</th><th>Method</th><th>Schedule</th><th>Retention</th></tr>
+  <tr><td>PostgreSQL</td><td><code>pg_dump</code></td><td>06:00 HKT weekdays</td><td>30 days</td></tr>
+  <tr><td>Redis</td><td><code>BGSAVE</code> → copy dump.rdb</td><td>06:00 HKT weekdays</td><td>30 days</td></tr>
+  <tr><td>Futu OpenD volume</td><td>tar archive</td><td>06:00 HKT weekdays</td><td>30 days</td></tr>
+  <tr><td>Config files</td><td>tar archive (<code>config/</code>, <code>.env</code>)</td><td>06:00 HKT weekdays</td><td>30 days</td></tr>
+  <tr><td>Bundles.yaml</td><td>Already in git — no separate backup needed</td><td>Every commit</td><td>Permanent</td></tr>
+</table>
+<pre><code># Manual backup
+sam backup
+
+# Check last backup
+sam backup --last
+
+# Restore from date
+sam restore 20240520</code></pre>
+
+<h3>15.2 Log Rotation</h3>
+<pre><code># Automatic: cron at 03:00 HKT daily, keeps 7 days
+# Manual:
+sam rotate-logs
+
+# View logs
+sam logs sam-trader
+sam logs sam-futu-opend --tail 100
+sam logs sam-services</code></pre>
+
+<h3>15.3 Volume Management</h3>
+<table>
+  <tr><th>Volume</th><th>Type</th><th>Contents</th><th>Management</th></tr>
+  <tr><td><code>postgres_data</code></td><td>Named volume</td><td>PG database files</td><td>Backup via pg_dump</td></tr>
+  <tr><td><code>redis_data</code></td><td>Named volume</td><td>Redis dump.rdb</td><td>Backup via BGSAVE copy</td></tr>
+  <tr><td><code>futu_opend_data</code></td><td>Named volume</td><td>Futu OpenD binary + logs + auth</td><td>Backup via tar</td></tr>
+  <tr><td><code>ib_data</code></td><td>Named volume</td><td>IB Gateway session files</td><td>Minimal; session re-auth on loss</td></tr>
+  <tr><td><code>data/catalog/</code></td><td>Host bind mount</td><td>Parquet historical data</td><td>Can grow large — prune old bars if disk low</td></tr>
+  <tr><td><code>logs/</code></td><td>Host bind mount</td><td>Runtime logs</td><td>Auto-rotated, 7-day retention</td></tr>
+</table>
+
+<h3>15.4 Disk Space Check</h3>
+<pre><code># Check volume sizes
+docker system df -v | grep sam_
+
+# Check Parquet catalog
+du -sh data/catalog/
+
+# Clean old backups (>30 days)
+find data/backups/ -name "*.tar.gz" -mtime +30 -delete
+
+# Docker cleanup (prune unused images)
+docker system prune -a --filter "until=168h"</code></pre>
+
+<h3>15.5 PostgreSQL Maintenance</h3>
+<pre><code># Manual snapshot
+sam snapshot
+
+# Check table sizes
+docker exec sam-postgres psql -U sam -d sam_trader -c "
+  SELECT tablename,
+         pg_size_pretty(pg_total_relation_size(schemaname||'.'||tablename)) AS size
+  FROM pg_tables
+  WHERE schemaname = 'public'
+  ORDER BY pg_total_relation_size(schemaname||'.'||tablename) DESC;
+"
+
+# VACUUM runs automatically via autovacuum
+# Manual VACUUM if needed:
+docker exec sam-postgres psql -U sam -d sam_trader -c "VACUUM ANALYZE;"</code></pre>
+
+<hr>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- 16. INCIDENT RESPONSE                                                  -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="incident-response">16. Incident Response</h2>
+
+<h3>16.1 Safety Commands</h3>
+<table>
+  <tr><th>Command</th><th>Effect</th><th>When to Use</th></tr>
+  <tr><td><code>sam kill</code></td><td>Cancel ALL open orders. Halt all strategies. Publish HALTED to Redis. LiveRiskEngine enforces.</td><td>Critical emergency: incorrect orders flooding, extreme P&L loss, broker sending bad data</td></tr>
+  <tr><td><code>sam halt</code></td><td>Close-only mode. No new entries. Existing positions can still be closed or hit stops/targets.</td><td>Something looks wrong but positions are okay. Investigation mode.</td></tr>
+  <tr><td><code>sam resume</code></td><td>Clear halt. Re-enable full trading.</td><td>Issue resolved, verified safe to resume</td></tr>
+</table>
+
+<h3>16.2 Automated Circuit Breakers</h3>
+<table>
+  <tr><th>Breaker</th><th>Trigger</th><th>Action</th><th>Source</th></tr>
+  <tr><td>DAILY_PNL</td><td>Per-strategy realized P&L exceeds <code>max_daily_loss</code></td><td>Strategy auto-halted. Redis <code>sam:pnl:{strategy}:{date}</code> key.</td><td>RealizedPnLTrackerActor (Phase 6)</td></tr>
+  <tr><td>REJECTION_STREAK</td><td>3 consecutive order rejections for same (instrument, strategy, reason)</td><td><code>StrategyHaltRequest</code> emitted. 15-minute cooldown.</td><td>RejectionMonitorActor (Phase 6)</td></tr>
+  <tr><td>CONNECTIVITY_LOSS</td><td>Broker connection down for >5 minutes</td><td>Alert logged. Strategies continue (no new data). Auto-reconnect attempts ongoing.</td><td>HealthMonitorActor (Phase 6)</td></tr>
+  <tr><td>RATE_LIMIT</td><td>Order submit/modify rate exceeded</td><td>Orders queued / rejected by LiveRiskEngine</td><td>LiveRiskEngine (Phase 8)</td></tr>
+</table>
+
+<h3>16.3 Incident Escalation Path</h3>
+
+<div class="mermaid">
+flowchart TD
+  Alert["🚨 Alert / Anomaly Detected"] --> Assess["Assess severity"]
+
+  Assess -->|"Financial risk<br/>(wrong orders, extreme P&L)"| Kill["sam kill<br/>HALT EVERYTHING"]
+  Assess -->|"Suspicious<br/>(unusual fills, warnings)"| Halt["sam halt<br/>Close-only mode"]
+  Assess -->|"Minor<br/>(cosmetic, logging)"| Note["Note it,<br/>fix in maint window"]
+
+  Kill --> Diagnose["Diagnose:<br/>sam logs<br/>dashboard<br/>check broker"]
+  Halt --> Diagnose
+
+  Diagnose --> Fix["Apply fix:<br/>disable bundle<br/>OR code fix<br/>OR rollback"]
+  Fix --> Verify["Verify:<br/>sam health<br/>test order (paper)"]
+  Verify --> Resume["sam resume"]
+  Resume --> Monitor["Monitor 30 min<br/>for recurrence"]
+
+  style Alert fill:#3a1a2a,stroke:#f85149
+  style Resume fill:#1a3a2a,stroke:#3fb950
+  style Monitor fill:#2a2a1a,stroke:#d29922
+</div>
+
+<h3>16.4 Scenario Playbooks</h3>
+
+<h4>Scenario A: Strategy Sending Duplicate Orders</h4>
+<pre><code>sam kill                                    # 1. Stop everything immediately
+sam logs sam-trader | grep "submit_order"   # 2. Identify which strategy
+# Edit bundles.yaml → set that bundle enabled: false
+sam apply                                   # 3. Disable just that strategy
+sam resume                                  # 4. Resume other strategies
+# Investigate root cause; fix; re-enable bundle when ready</code></pre>
+
+<h4>Scenario B: Broker Disconnected, Auto-Reconnect Failing</h4>
+<pre><code>sam status                                  # 1. Which broker?
+docker restart sam-futu-opend               # 2. Restart broker container
+# (or sam-ib-gateway)
+docker compose ps                           # 3. Wait for healthy
+docker logs sam-trader | grep "Connected"   # 4. Confirm reconnection
+sam status                                  # 5. Verify subscriptions restored</code></pre>
+
+<h4>Scenario C: Unexpected Large Loss</h4>
+<pre><code>sam kill                                    # 1. Stop all trading
+sam performance --days 1 --strategy all     # 2. Identify losing strategy
+sam logs sam-trader | grep "OrderFilled"    # 3. Review fills
+# Check: was gap against position? news event? strategy logic error?
+# Decide: disable bundle, reduce position size, or accept as normal variance</code></pre>
+
+<h4>Scenario D: Database Connection Lost</h4>
+<pre><code>docker compose ps sam-postgres              # 1. Check container
+docker restart sam-postgres                 # 2. Restart if down
+# PostgreSQL volume is persistent — no data loss
+# TradeJournalActor will reconnect automatically
+sam health                                  # 3. Verify healthy</code></pre>
+
+<hr>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- 17. SAM CLI REFERENCE                                                  -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="cli-reference">17. <code>sam</code> CLI Reference</h2>
+
+<p>All commands are run inside the <code>sam-services</code> container:</p>
+<pre><code>docker exec -it sam-services sam &lt;command&gt;</code></pre>
+
+<table>
+  <tr><th>Command</th><th>Flags</th><th>Description</th></tr>
+  <tr><td><code>sam status</code></td><td>—</td><td>Full system status: containers, TradingNode state, broker connections, active subscriptions, strategy instances, quota usage</td></tr>
+  <tr><td><code>sam health</code></td><td>—</td><td>Per-container 3-layer health check results (table format)</td></tr>
+  <tr><td><code>sam backup</code></td><td><code>--last</code></td><td>Trigger full system backup or show last backup</td></tr>
+  <tr><td><code>sam restore</code></td><td><code>&lt;date&gt;</code> (YYYYMMDD)</td><td>Restore from backup archive</td></tr>
+  <tr><td><code>sam logs</code></td><td><code>&lt;service&gt;</code> <code>--tail N</code> <code>--since &lt;duration&gt;</code></td><td>Tail logs for any container (sam-trader, sam-futu-opend, etc.)</td></tr>
+  <tr><td><code>sam restart</code></td><td>—</td><td>Graceful restart of sam-trader (save_state → stop → build → run → restore)</td></tr>
+  <tr><td><code>sam quote</code></td><td><code>&lt;symbol&gt;</code> (e.g., <code>TSLA.NASDAQ</code>)</td><td>Real-time quote: bid, ask, last, volume from Redis cache or broker</td></tr>
+  <tr><td><code>sam performance</code></td><td><code>--strategy &lt;id&gt;</code> <code>--days N</code> <code>--json</code></td><td>Performance stats: Sharpe, Sortino, CAGR, MaxDD, WinRate, ProfitFactor from PortfolioAnalyzer</td></tr>
+  <tr><td><code>sam deploy</code></td><td><code>--build</code></td><td>Run deploy.sh from sam-services (rebuild + restart)</td></tr>
+  <tr><td><code>sam hotfix</code></td><td>—</td><td>Emergency patch workflow: halt → apply fix → build → verify → resume</td></tr>
+  <tr><td><code>sam rollback</code></td><td>—</td><td>Rollback to previous version: git revert → build → verify</td></tr>
+  <tr><td><code>sam version</code></td><td>—</td><td>Show current version of all components (Nautilus, futu-api, sam_trader)</td></tr>
+  <tr><td><code>sam update</code></td><td>—</td><td>Git pull + rebuild (within maintenance window)</td></tr>
+  <tr><td><code>sam validate-bundles</code></td><td>—</td><td>Schema validation + class existence check on bundles.yaml</td></tr>
+  <tr><td><code>sam kill</code></td><td>—</td><td>🚨 Emergency: cancel all orders, halt all strategies, publish HALTED to Redis</td></tr>
+  <tr><td><code>sam halt</code></td><td>—</td><td>Close-only mode: keep positions, block new entries</td></tr>
+  <tr><td><code>sam resume</code></td><td>—</td><td>Clear halt, re-enable full trading</td></tr>
+  <tr><td><code>sam snapshot</code></td><td>—</td><td>Manual PostgreSQL dump to backup archive</td></tr>
+  <tr><td><code>sam rotate-logs</code></td><td>—</td><td>Manual log rotation (auto at 03:00 HKT)</td></tr>
+  <tr><td><code>sam apply</code></td><td>—</td><td>Applies bundles.yaml changes via graceful restart</td></tr>
+  <tr><td><code>sam preflight</code></td><td>—</td><td>Pre-deployment validation: checks config, bundles, broker connectivity</td></tr>
+</table>
+
+<hr>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- 18. TROUBLESHOOTING                                                    -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="troubleshooting">18. Troubleshooting</h2>
+
+<h3>18.1 sam-futu-opend</h3>
+<table>
+  <tr><th>Symptom</th><th>Diagnosis</th><th>Fix</th></tr>
+  <tr><td>Container won't start (Exit 1)</td><td>Missing <code>FUTU_ACCOUNT_ID</code> or <code>FUTU_ACCOUNT_PWD_MD5</code></td><td>Check <code>.env</code> at project root. Set both vars.</td></tr>
+  <tr><td>Login failure in logs</td><td>MD5 hash wrong or questionnaire not completed</td><td>Regenerate MD5 with <code>echo -n</code>. Check logs for questionnaire URL.</td></tr>
+  <tr><td>Account locked</td><td>Too many failed attempts</td><td>Wait 15 min and retry.</td></tr>
+  <tr><td>Port 11111 in use</td><td>Another service on host port</td><td><code>lsof -i :11111</code>. Change <code>FUTU_OPEND_PORT</code> in <code>.env</code>.</td></tr>
+  <tr><td>Slow on Apple Silicon</td><td>x86_64 emulation via Rosetta</td><td>Normal for cold start (~30s extra). Allocate ≥4 GB RAM to Docker.</td></tr>
+  <tr><td>RSA encryption error on orders</td><td>RSA key missing or not mounted</td><td>Generate <code>docker/futu-opend/futu.pem</code>. Verify compose mounts it.</td></tr>
+</table>
+
+<h3>18.2 sam-trader</h3>
+<table>
+  <tr><th>Symptom</th><th>Diagnosis</th><th>Fix</th></tr>
+  <tr><td>Can't connect to Futu</td><td>sam-futu-opend not healthy</td><td>Check <code>docker compose ps sam-futu-opend</code>. Wait for healthy.</td></tr>
+  <tr><td>Can't connect to PostgreSQL</td><td>Hostname mismatch or PG not healthy</td><td>Check <code>.env</code> uses <code>sam-postgres</code> (not <code>csam-postgres</code> from v2).</td></tr>
+  <tr><td>"Account discovery returned no accounts"</td><td>Normal in SIMULATE (paper) mode</td><td>Non-fatal. Trading works in paper mode.</td></tr>
+  <tr><td>No market data arriving</td><td>Subscription quota exhausted or wrong instrument_id</td><td><code>sam status</code> to check quota. Verify symbology format.</td></tr>
+  <tr><td>PermissionError: /opt/sam_trader</td><td>Non-root user sam can't write</td><td>Dockerfile must have <code>chown sam:sam /opt/sam_trader</code> before <code>USER sam</code>.</td></tr>
+  <tr><td>High CPU / memory</td><td>Too many strategies or subscriptions</td><td>Reduce bundle count or subscription scope.</td></tr>
+</table>
+
+<h3>18.3 sam-ib-gateway</h3>
+<table>
+  <tr><th>Symptom</th><th>Diagnosis</th><th>Fix</th></tr>
+  <tr><td>API port not responding</td><td>Gateway not authenticated</td><td>VNC to :5900, complete login + 2FA.</td></tr>
+  <tr><td>Orders rejected code 10311</td><td>Routing destination missing (fixed in v3)</td><td>Uses SMART routing by default. If still occurring, check <code>ib_routing</code> config.</td></tr>
+  <tr><td>Orders rejected code 108 (post_only)</td><td>Fixed in v3 — <code>tp_post_only=False</code></td><td>Ensure bundle has <code>tp_post_only: false</code> for IB strategies.</td></tr>
+  <tr><td>Orders rejected code 189 (permissions)</td><td>Fixed in v3 — pre-flight check</td><td>Check IB account has required trading permissions.</td></tr>
+</table>
+
+<h3>18.4 General</h3>
+<table>
+  <tr><th>Symptom</th><th>Diagnosis</th><th>Fix</th></tr>
+  <tr><td>Dashboard blank</td><td>sam-services not running or port 8080 in use</td><td><code>docker compose --profile services ps</code>. <code>lsof -i :8080</code>.</td></tr>
+  <tr><td>Backup not created</td><td>Cron not running or disk full</td><td>Check <code>docker logs sam-services | grep backup</code>. Check disk space.</td></tr>
+  <tr><td>Volume mounting errors</td><td>Docker Desktop file sharing</td><td>Settings → Resources → File Sharing — add project directory.</td></tr>
+  <tr><td><code>.env</code> changes not taking effect</td><td>Compose reads <code>.env</code> only on <code>up</code></td><td>Run <code>docker compose up -d --force-recreate</code> after <code>.env</code> changes.</td></tr>
+  <tr><td>Stale v2 hostnames</td><td><code>.env</code> has <code>csam-postgres</code>, <code>redis</code>, <code>ib-gateway</code></td><td>Replace with <code>sam-postgres</code>, <code>sam-redis</code>, <code>sam-ib-gateway</code>.</td></tr>
+</table>
+
+<hr>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- 19. APPENDICES                                                         -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="appendices">19. Appendices</h2>
+
+<h3>A. Complete <code>.env</code> Variable Reference</h3>
+
+<h4>Identity</h4>
+<table>
+  <tr><th>Variable</th><th>Default</th><th>Description</th></tr>
+  <tr><td><code>TRADER_ID</code></td><td><code>sam_trader</code></td><td>Unique identifier for this trader instance</td></tr>
+  <tr><td><code>ENV</code></td><td><code>paper</code></td><td><code>paper</code> or <code>live</code></td></tr>
+  <tr><td><code>LOG_LEVEL</code></td><td><code>INFO</code></td><td><code>DEBUG</code>, <code>INFO</code>, <code>WARNING</code>, <code>ERROR</code></td></tr>
+</table>
+
+<h4>IBKR</h4>
+<table>
+  <tr><th>Variable</th><th>Default</th><th>Description</th></tr>
+  <tr><td><code>IB_ENABLED</code></td><td><code>false</code></td><td>Enable IBKR adapter</td></tr>
+  <tr><td><code>IB_GATEWAY_HOST</code></td><td><code>sam-ib-gateway</code></td><td>IB Gateway hostname</td></tr>
+  <tr><td><code>IB_GATEWAY_PORT</code></td><td><code>4004</code></td><td>IB Gateway API port</td></tr>
+  <tr><td><code>IB_CLIENT_ID</code></td><td><code>1</code></td><td>IB client ID</td></tr>
+  <tr><td><code>IB_ACCOUNT_ID</code></td><td>—</td><td>IB account number</td></tr>
+  <tr><td><code>IB_SYMBOLS</code></td><td>—</td><td>Comma-separated symbol list</td></tr>
+</table>
+
+<h4>Futu</h4>
+<table>
+  <tr><th>Variable</th><th>Default</th><th>Description</th></tr>
+  <tr><td><code>FUTU_ENABLED</code></td><td><code>true</code></td><td>Enable Futu adapter</td></tr>
+  <tr><td><code>FUTU_OPEND_HOST</code></td><td><code>sam-futu-opend</code></td><td>Futu OpenD hostname</td></tr>
+  <tr><td><code>FUTU_OPEND_PORT</code></td><td><code>11111</code></td><td>Futu OpenD API port</td></tr>
+  <tr><td><code>FUTU_TRD_ENV</code></td><td><code>SIMULATE</code></td><td><code>SIMULATE</code> or <code>REAL</code></td></tr>
+  <tr><td><code>FUTU_TRD_MARKET</code></td><td><code>US</code></td><td><code>US</code> or <code>HK</code> (default market for trade context)</td></tr>
+  <tr><td><code>FUTU_UNLOCK_PWD_MD5</code></td><td>—</td><td>Trade unlock password MD5 (if trade password is set in Futu)</td></tr>
+</table>
+
+<h4>Actors</h4>
+<table>
+  <tr><th>Variable</th><th>Default</th><th>Description</th></tr>
+  <tr><td><code>ACTOR_BAR_RESUB_ENABLED</code></td><td><code>true</code></td><td>Bar resubscription actor</td></tr>
+  <tr><td><code>ACTOR_JOURNAL_ENABLED</code></td><td><code>true</code></td><td>Trade journal actor</td></tr>
+  <tr><td><code>ACTOR_HEALTH_ENABLED</code></td><td><code>true</code></td><td>Health monitor actor</td></tr>
+  <tr><td><code>ACTOR_REJECTION_MONITOR_ENABLED</code></td><td><code>true</code></td><td>Rejection monitor (circuit breaker)</td></tr>
+  <tr><td><code>ACTOR_REALIZED_PNL_ENABLED</code></td><td><code>true</code></td><td>Realized P&L tracker</td></tr>
+  <tr><td><code>ACTOR_POSITION_SNAPSHOT_ENABLED</code></td><td><code>true</code></td><td>Position snapshot to PG</td></tr>
+</table>
+
+<h4>State</h4>
+<table>
+  <tr><th>Variable</th><th>Default</th><th>Description</th></tr>
+  <tr><td><code>STATE_SAVE_ENABLED</code></td><td><code>true</code></td><td>Save state on shutdown</td></tr>
+  <tr><td><code>STATE_LOAD_ENABLED</code></td><td><code>true</code></td><td>Load state on startup</td></tr>
+</table>
+
+<h4>Databases</h4>
+<table>
+  <tr><th>Variable</th><th>Default</th><th>Description</th></tr>
+  <tr><td><code>POSTGRES_HOST</code></td><td><code>sam-postgres</code></td><td>PostgreSQL hostname</td></tr>
+  <tr><td><code>POSTGRES_PORT</code></td><td><code>5432</code></td><td>PostgreSQL port</td></tr>
+  <tr><td><code>POSTGRES_DB</code></td><td><code>sam_trader</code></td><td>Database name</td></tr>
+  <tr><td><code>POSTGRES_USER</code></td><td><code>sam</code></td><td>Database user</td></tr>
+  <tr><td><code>POSTGRES_PASSWORD</code></td><td><code>sam_secret</code></td><td>Database password</td></tr>
+  <tr><td><code>REDIS_HOST</code></td><td><code>sam-redis</code></td><td>Redis hostname</td></tr>
+  <tr><td><code>REDIS_PORT</code></td><td><code>6379</code></td><td>Redis port</td></tr>
+  <tr><td><code>REDIS_PASSWORD</code></td><td>—</td><td>Redis password (if set)</td></tr>
+</table>
+
+<h4>Risk Engine</h4>
+<table>
+  <tr><th>Variable</th><th>Default</th><th>Description</th></tr>
+  <tr><td><code>RISK_MAX_ORDER_SUBMIT_RATE</code></td><td><code>10/sec</code></td><td>Max order submission rate</td></tr>
+  <tr><td><code>RISK_MAX_ORDER_MODIFY_RATE</code></td><td><code>10/sec</code></td><td>Max order modification rate</td></tr>
+  <tr><td><code>RISK_MAX_NOTIONAL_PER_ORDER</code></td><td><code>{}</code></td><td>JSON: per-instrument notional caps</td></tr>
+  <tr><td><code>RISK_BYPASS</code></td><td><code>false</code></td><td>Bypass all risk checks (⚠ testing only)</td></tr>
+</table>
+
+<h3>B. Bundle YAML Schema (Full)</h3>
+<pre><code>bundles:                              # Root key (required)
+  - id: string                        # Unique ID (required)
+    enabled: boolean                  # true = active (required)
+    venue: "FUTU" | "IB"             # Broker venue (required)
+    strategy:
+      path: "package.module:Class"   # Dotted path (required)
+      config:                         # Strategy-specific (required)
+        instrument_id: string        # e.g., "TSLA.NASDAQ"
+        bar_type: string             # e.g., "TSLA.NASDAQ-15-MINUTE-LAST-EXTERNAL"
+        trade_size: integer          # Shares per trade
+        # OrbStrategy extras:
+        first_candle_minutes: integer
+        entry_order_type: "MARKET" | "LIMIT" | "STOP_MARKET"
+        # MomentumStrategy extras:
+        window: integer              # Lookback bars
+        session_start: string        # "HH:MM:SS"
+        session_end: string          # "HH:MM:SS"
+        allowed_directions: ["LONG"] | ["SHORT"] | ["LONG","SHORT"]
+        tp_post_only: boolean        # false for IB
+    bracket:
+      stop_loss_ticks: integer       # Stop loss in ticks (required)
+      take_profit_ticks: integer     # Take profit in ticks (required)
+    risk:
+      max_position: integer          # Max position size (required)
+      max_daily_loss: integer        # Max daily realized loss (required)</code></pre>
+
+<h3>C. Symbology Reference</h3>
+<table>
+  <tr><th>Market</th><th>Venue</th><th>Format</th><th>Examples</th></tr>
+  <tr><td>US Equities</td><td>Futu</td><td><code>SYMBOL.MARKET</code></td><td><code>TSLA.NASDAQ</code>, <code>AAPL.NASDAQ</code>, <code>F.NYSE</code></td></tr>
+  <tr><td>US Equities</td><td>IB</td><td><code>SYMBOL.MARKET</code></td><td><code>NVDA.NASDAQ</code>, <code>SPY.NYSE</code></td></tr>
+  <tr><td>HK Equities</td><td>Futu</td><td><code>CODE.HKEX</code></td><td><code>00700.HKEX</code>, <code>09988.HKEX</code>, <code>00005.HKEX</code></td></tr>
+  <tr><td>HK Equities</td><td>IB</td><td><code>CODE.HKEX</code></td><td><code>700.HKEX</code> (note: IB may use different code format)</td></tr>
+</table>
+
+<h3>D. Health Check Commands Per Container</h3>
+<table>
+  <tr><th>Container</th><th>L1 (Process)</th><th>L2 (Socket)</th><th>L3 (Protocol)</th></tr>
+  <tr><td>sam-postgres</td><td><code>pgrep postgres</code></td><td><code>pg_isready</code></td><td><code>psql -c 'SELECT 1'</code></td></tr>
+  <tr><td>sam-redis</td><td><code>pgrep redis-server</code></td><td><code>redis-cli ping</code></td><td><code>redis-cli INFO server</code></td></tr>
+  <tr><td>sam-futu-opend</td><td><code>pgrep -x FutuOpenD</code></td><td>TCP :11111</td><td>Log scan (no auth failures)</td></tr>
+  <tr><td>sam-ib-gateway</td><td><code>pgrep java</code></td><td>TCP :4004</td><td>TCP :4004 (API readiness)</td></tr>
+  <tr><td>sam-trader</td><td><code>pgrep python</code></td><td><code>cat /proc/1/cmdline | grep python</code></td><td>Optional TCP port</td></tr>
+  <tr><td>sam-services</td><td><code>pgrep python</code></td><td>TCP :8080</td><td><code>curl -sf localhost:8080/health</code></td></tr>
+</table>
+<p>All containers use: <strong>interval 30s, timeout 10s, start-period 60s, retries 3</strong>.</p>
+
+<h3>E. Docker Compose Profile Reference</h3>
+<table>
+  <tr><th>Profile</th><th>Containers Started</th></tr>
+  <tr><td>(none / default)</td><td>sam-postgres, sam-redis, sam-trader</td></tr>
+  <tr><td><code>futu</code></td><td>+ sam-futu-opend</td></tr>
+  <tr><td><code>ib</code></td><td>+ sam-ib-gateway</td></tr>
+  <tr><td><code>services</code></td><td>+ sam-services</td></tr>
+</table>
+
+<h3>F. DST Transition Calendar (2026–2028)</h3>
+<table>
+  <tr><th>Year</th><th>DST Starts (US)</th><th>HKT offset → +12</th><th>DST Ends (US)</th><th>HKT offset → +13</th></tr>
+  <tr><td>2026</td><td>Mar 8 (Sun)</td><td>Pipeline cron shifts 1h earlier in HKT</td><td>Nov 1 (Sun)</td><td>Pipeline cron shifts 1h later in HKT</td></tr>
+  <tr><td>2027</td><td>Mar 14 (Sun)</td><td>Same</td><td>Nov 7 (Sun)</td><td>Same</td></tr>
+  <tr><td>2028</td><td>Mar 12 (Sun)</td><td>Same</td><td>Nov 5 (Sun)</td><td>Same</td></tr>
+</table>
+<div class="callout info">
+<strong>ⓘ Action Required on DST Transition Monday</strong>
+Verify that the US pre-market pipeline ran at the correct HKT time.
+The pipeline cron times in HKT shift by 1 hour. Check readiness reports exist for the session.
+</div>
+
+<hr>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- 20. QUICK REFERENCE CARD                                               -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="quickref">20. Quick Reference Card</h2>
+
+<div class="callout success">
+<strong>🖨️ Print this section and keep it at your desk.</strong>
+</div>
+
+<h3>24-Hour Timeline (Summer HKT)</h3>
+<pre><code>00:00  US MARKET OPEN (since 21:30) — automated trading ──────────────┐
+02:00  CRON: Performance analysis                                       │
+03:00  CRON: Log rotation                                               │
+04:00  US MARKET CLOSE                                                  │
+05:00  🔧 MAINTENANCE WINDOW OPENS — operator shift starts              │
+06:00  CRON: System backup                                              │
+07:00  HK Pre-Market Pipeline → report                                  │
+07:30  👤 HUMAN REVIEW: HK bundles                                      │
+07:50  Apply + restart                                                  │
+08:00  🔧 MAINTENANCE WINDOW CLOSES                                     │
+09:30  HK MARKET OPEN — active monitoring ──────────────────────────────┤
+16:00  HK MARKET CLOSE                                                  │
+16:30  US Pre-Market Pass 1: Gap Scan                                   │
+20:30  US Pre-Market Pass 2: Trended Scan                               │
+21:00  US Pre-Market Pass 3: AI + Risk + Bundles + Report              │
+21:15  👤 HUMAN REVIEW: US bundles                                      │
+21:25  Apply + restart                                                  │
+21:30  US MARKET OPEN — automated trading ──────────────────────────────┘</code></pre>
+
+<h3>Essential Commands</h3>
+<pre><code>sam health              # All containers status
+sam status              # Full system status
+sam performance --days 1 # Today's P&L
+sam kill                # 🚨 EMERGENCY STOP
+sam halt                # Close-only mode
+sam resume              # Re-enable trading
+sam backup              # Trigger backup
+sam restore YYYYMMDD   # Restore from date
+sam logs &lt;service&gt;      # View logs
+sam validate-bundles    # Check bundles.yaml
+sam apply               # Apply bundle changes
+sam snapshot            # Manual DB snapshot</code></pre>
+
+<h3>Emergency Procedure</h3>
+<pre><code>1. sam kill            # Stop everything immediately
+2. Diagnose            # sam logs, dashboard, sam status
+3. Fix                 # Disable bundle / code fix / rollback
+4. sam resume          # Re-enable trading
+5. Monitor 30 min      # Watch for recurrence</code></pre>
+
+<h3>Key URLs</h3>
+<table>
+  <tr><td>Dashboard</td><td><code>http://localhost:8080</code></td></tr>
+  <tr><td>IB Gateway VNC</td><td><code>vnc://localhost:5900</code></td></tr>
+  <tr><td>GitHub Repo</td><td><code>github.com/samdharma/sam_trader</code></td></tr>
+</table>
+
+<h3>HKT ↔ ET Quick Conversion</h3>
+<table>
+  <tr><th>HKT</th><th>ET (Summer, −12h)</th><th>ET (Winter, −13h)</th></tr>
+  <tr><td>05:00</td><td>17:00 (prev day)</td><td>16:00 (prev day)</td></tr>
+  <tr><td>08:00</td><td>20:00 (prev day)</td><td>19:00 (prev day)</td></tr>
+  <tr><td>16:00</td><td>04:00</td><td>03:00</td></tr>
+  <tr><td>21:30</td><td>09:30</td><td>08:30</td></tr>
+</table>
+
+<hr>
+
+<!-- FOOTER -->
+<div class="meta-header" style="margin-top: 3em;">
+  <span>📄 SAM Trader V3 — Operator's Guide</span>
+  <span>🕐 Last updated: 2026-05-25 03:00 HKT</span>
+  <span>📌 Version: v1.1</span>
+</div>
+
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'dark',
+    themeVariables: {
+      primaryColor: '#1f6feb',
+      primaryTextColor: '#c9d1d9',
+      primaryBorderColor: '#30363d',
+      lineColor: '#58a6ff',
+      secondaryColor: '#161b22',
+      tertiaryColor: '#0d1117'
+    },
+    flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis' }
+  });
+</script>
+
+</body>
+</html>
