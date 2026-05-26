@@ -41,6 +41,8 @@ class SamTraderConfig:
     actor_rejection_monitor_enabled: bool
     actor_realized_pnl_enabled: bool
     actor_position_snapshot_enabled: bool
+    health_monitor_market: str
+    bar_resub_market: str
 
     # State persistence
     state_save_enabled: bool
@@ -129,6 +131,8 @@ class SamTraderConfig:
                 else os.environ.get("ACTOR_JOURNAL_ENABLED", "").lower()
                 in ("1", "true", "yes")
             ),
+            health_monitor_market=os.environ.get("HEALTH_MONITOR_MARKET", ""),
+            bar_resub_market=os.environ.get("BAR_RESUB_MARKET", ""),
             state_save_enabled=os.environ.get("STATE_SAVE_ENABLED", "").lower()
             in ("1", "true", "yes"),
             state_load_enabled=os.environ.get("STATE_LOAD_ENABLED", "").lower()

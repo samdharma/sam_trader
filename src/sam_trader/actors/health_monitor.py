@@ -13,6 +13,8 @@ from nautilus_trader.common.config import ActorConfig
 from nautilus_trader.model.data import Bar
 from nautilus_trader.model.identifiers import Venue
 
+from sam_trader.services.market_calendar import MarketCalendarService
+
 
 class HealthMonitorActorConfig(ActorConfig, frozen=True):
     """Configuration for the HealthMonitorActor.
@@ -39,6 +41,10 @@ class HealthMonitorActorConfig(ActorConfig, frozen=True):
         Local market open time HH:MM.
     market_close_time : str, default "16:00"
         Local market close time HH:MM.
+    market : str, default ""
+        Market code for calendar-aware hours ("US" or "HK").
+        When set, overrides *market_timezone*/*market_open_time*/*market_close_time*
+        with the canonical calendar for that market.
 
     """
 
@@ -52,6 +58,7 @@ class HealthMonitorActorConfig(ActorConfig, frozen=True):
     market_timezone: str = "America/New_York"
     market_open_time: str = "09:30"
     market_close_time: str = "16:00"
+    market: str = ""
 
 
 class HealthMonitorActor(Actor):
@@ -73,6 +80,7 @@ class HealthMonitorActor(Actor):
         self._redis: aioredis.Redis | None = None
         self._main_loop: asyncio.AbstractEventLoop | None = None
         self._last_venue_conn: dict[str, bool] = {}
+        self._calendar: MarketCalendarService | None = None
 
     def on_start(self) -> None:
         """Set the first heartbeat alert when the actor starts."""
@@ -99,6 +107,8 @@ class HealthMonitorActor(Actor):
                 )
             except Exception as exc:  # noqa: BLE001
                 self.log.warning("HealthMonitorActor: Redis connect failed: %s", exc)
+        if self.config.market:
+            self._calendar = MarketCalendarService()
 
     def on_bar(self, bar: Bar) -> None:
         """Track the last bar received time per instrument.
@@ -325,6 +335,28 @@ class HealthMonitorActor(Actor):
 
     def _is_market_hours(self, ts: datetime) -> bool:
         """Return True if *ts* is within configured market hours."""
+        if self._calendar is not None:
+            tz = ZoneInfo(self._calendar.market_timezone(self.config.market))
+            local = ts.astimezone(tz)
+            if not self._calendar.is_trading_day(self.config.market, local.date()):
+                return False
+            open_time, close_time = self._calendar.market_hours(
+                self.config.market, local.date()
+            )
+            market_open = local.replace(
+                hour=open_time.hour,
+                minute=open_time.minute,
+                second=0,
+                microsecond=0,
+            )
+            market_close = local.replace(
+                hour=close_time.hour,
+                minute=close_time.minute,
+                second=0,
+                microsecond=0,
+            )
+            return market_open <= local < market_close
+
         tz = ZoneInfo(self.config.market_timezone)
         local = ts.astimezone(tz)
         if local.weekday() >= 5:  # Saturday=5, Sunday=6

@@ -51,6 +51,8 @@ class TestSamTraderConfig:
             "RISK_MAX_ORDER_MODIFY_RATE",
             "RISK_MAX_NOTIONAL_PER_ORDER",
             "RISK_BYPASS",
+            "HEALTH_MONITOR_MARKET",
+            "BAR_RESUB_MARKET",
         ):
             monkeypatch.delenv(key, raising=False)
 
@@ -82,6 +84,8 @@ class TestSamTraderConfig:
         assert cfg.state_load_enabled is False
         assert cfg.state_save_handshake_timeout == 30
         assert cfg.bundles_path == "config/bundles.yaml"
+        assert cfg.health_monitor_market == ""
+        assert cfg.bar_resub_market == ""
         assert cfg.postgres_host == "sam-postgres"
         assert cfg.postgres_port == 5432
         assert cfg.postgres_db == "sam_trader"
@@ -135,6 +139,8 @@ class TestSamTraderConfig:
         monkeypatch.setenv("RISK_MAX_ORDER_MODIFY_RATE", "20/00:00:10")
         monkeypatch.setenv("RISK_MAX_NOTIONAL_PER_ORDER", '{"USD": 100000}')
         monkeypatch.setenv("RISK_BYPASS", "1")
+        monkeypatch.setenv("HEALTH_MONITOR_MARKET", "US")
+        monkeypatch.setenv("BAR_RESUB_MARKET", "HK")
 
         cfg = SamTraderConfig.from_env()
 
@@ -176,6 +182,8 @@ class TestSamTraderConfig:
         assert cfg.risk_max_order_modify_rate == "20/00:00:10"
         assert cfg.risk_max_notional_per_order == '{"USD": 100000}'
         assert cfg.risk_bypass is True
+        assert cfg.health_monitor_market == "US"
+        assert cfg.bar_resub_market == "HK"
 
     def test_futu_fields_present(self) -> None:
         """Test that all required Futu fields exist on the dataclass."""
@@ -220,6 +228,8 @@ class TestSamTraderConfig:
             risk_max_order_modify_rate="100/00:00:01",
             risk_max_notional_per_order="",
             risk_bypass=False,
+            health_monitor_market="",
+            bar_resub_market="",
         )
 
         assert cfg.futu_enabled is True
@@ -272,6 +282,8 @@ class TestSamTraderConfig:
             risk_max_order_modify_rate="100/00:00:01",
             risk_max_notional_per_order="",
             risk_bypass=False,
+            health_monitor_market="",
+            bar_resub_market="",
         )
 
         with pytest.raises(FrozenInstanceError):

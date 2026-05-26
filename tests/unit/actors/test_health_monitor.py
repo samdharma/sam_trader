@@ -89,6 +89,7 @@ class TestHealthMonitorActorConfig:
         assert cfg.bar_stale_threshold == 300
         assert cfg.futu_enabled is False
         assert cfg.ib_enabled is False
+        assert cfg.market == ""
 
     def test_custom_values(self, actor_config: HealthMonitorActorConfig) -> None:
         assert actor_config.interval == 30
@@ -435,3 +436,95 @@ class TestHealthMonitorActor:
         )
         ts = datetime(2024, 1, 6, 2, 0, 0, tzinfo=timezone.utc)
         assert actor._is_market_hours(ts) is False
+
+
+class TestHealthMonitorActorCalendar:
+    """Tests for market-calendar-aware _is_market_hours."""
+
+    def test_calendar_us_weekday(self) -> None:
+        cfg = HealthMonitorActorConfig(market="US")
+        actor = HealthMonitorActor(cfg)
+        actor.register_base(
+            portfolio=TestComponentStubs.portfolio(),
+            msgbus=TestComponentStubs.msgbus(),
+            cache=TestComponentStubs.cache(),
+            clock=TestComponentStubs.clock(),
+        )
+        actor.on_start()
+        # Monday 10:00 ET = 15:00 UTC
+        ts = datetime(2024, 1, 8, 15, 0, 0, tzinfo=timezone.utc)
+        assert actor._is_market_hours(ts) is True
+
+    def test_calendar_us_holiday(self) -> None:
+        cfg = HealthMonitorActorConfig(market="US")
+        actor = HealthMonitorActor(cfg)
+        actor.register_base(
+            portfolio=TestComponentStubs.portfolio(),
+            msgbus=TestComponentStubs.msgbus(),
+            cache=TestComponentStubs.cache(),
+            clock=TestComponentStubs.clock(),
+        )
+        actor.on_start()
+        # 2024-07-04 is a US holiday (Thursday) — 10:00 ET
+        ts = datetime(2024, 7, 4, 15, 0, 0, tzinfo=timezone.utc)
+        assert actor._is_market_hours(ts) is False
+
+    def test_calendar_us_early_close(self) -> None:
+        cfg = HealthMonitorActorConfig(market="US")
+        actor = HealthMonitorActor(cfg)
+        actor.register_base(
+            portfolio=TestComponentStubs.portfolio(),
+            msgbus=TestComponentStubs.msgbus(),
+            cache=TestComponentStubs.cache(),
+            clock=TestComponentStubs.clock(),
+        )
+        actor.on_start()
+        # 2024-07-03 is the day before Independence Day — early close at 13:00 ET
+        ts = datetime(2024, 7, 3, 18, 0, 0, tzinfo=timezone.utc)  # 14:00 ET
+        assert actor._is_market_hours(ts) is False
+
+    def test_calendar_hk_weekday(self) -> None:
+        cfg = HealthMonitorActorConfig(market="HK")
+        actor = HealthMonitorActor(cfg)
+        actor.register_base(
+            portfolio=TestComponentStubs.portfolio(),
+            msgbus=TestComponentStubs.msgbus(),
+            cache=TestComponentStubs.cache(),
+            clock=TestComponentStubs.clock(),
+        )
+        actor.on_start()
+        # Monday 10:00 HKT = 02:00 UTC
+        ts = datetime(2024, 1, 8, 2, 0, 0, tzinfo=timezone.utc)
+        assert actor._is_market_hours(ts) is True
+
+    def test_calendar_hk_holiday(self) -> None:
+        cfg = HealthMonitorActorConfig(market="HK")
+        actor = HealthMonitorActor(cfg)
+        actor.register_base(
+            portfolio=TestComponentStubs.portfolio(),
+            msgbus=TestComponentStubs.msgbus(),
+            cache=TestComponentStubs.cache(),
+            clock=TestComponentStubs.clock(),
+        )
+        actor.on_start()
+        # 2024-10-01 is HK holiday (Tuesday) — 10:00 HKT
+        ts = datetime(2024, 10, 1, 2, 0, 0, tzinfo=timezone.utc)
+        assert actor._is_market_hours(ts) is False
+
+    def test_calendar_no_market_uses_legacy(self) -> None:
+        cfg = HealthMonitorActorConfig(
+            market_timezone="America/New_York",
+            market_open_time="09:30",
+            market_close_time="16:00",
+        )
+        actor = HealthMonitorActor(cfg)
+        actor.register_base(
+            portfolio=TestComponentStubs.portfolio(),
+            msgbus=TestComponentStubs.msgbus(),
+            cache=TestComponentStubs.cache(),
+            clock=TestComponentStubs.clock(),
+        )
+        actor.on_start()
+        # Holiday but no market set — legacy logic doesn't know about holidays
+        ts = datetime(2024, 7, 4, 15, 0, 0, tzinfo=timezone.utc)
+        assert actor._is_market_hours(ts) is True

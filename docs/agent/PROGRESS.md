@@ -1572,3 +1572,21 @@
 - **Files Changed**: `src/sam_trader/actors/health_monitor.py`, `src/sam_trader/services/dashboard.py`, `tests/unit/actors/test_health_monitor.py`, `tests/unit/services/test_dashboard.py`
 - **Validation Result**: PASS (46/46 targeted tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ticket ready to close.
+
+## Iteration 135
+- **Task**: TASK: Add market calendar service for US/Nasdaq and HK holidays
+- **Task ID**: sam_trader-9z3.9.25
+- **Status**: COMPLETE
+- **Decisions**:
+  1. Created `MarketCalendarService` in `src/sam_trader/services/market_calendar.py` with support for US (NYSE/NASDAQ) and HK (HKEX) markets.
+  2. Uses `holidays` library when available, with hardcoded 2024-2028 fallback holidays.
+  3. Methods: `is_trading_day()`, `is_holiday()`, `market_hours()`, `next_trading_day()`, `is_early_close()`, `market_timezone()`.
+  4. Redis caching (TTL 24h) via optional sync `redis.Redis` client; graceful degradation when Redis unavailable.
+  5. Configurable via env vars: `CUSTOM_HOLIDAYS_US/HK`, `EARLY_CLOSES_US/HK`.
+  6. Updated `backup.py` to use `MarketCalendarService` instead of its own `_HARDCODED_HOLIDAYS` and `_is_trading_holiday`.
+  7. Updated `HealthMonitorActor` and `BarResubscriptionActor` with optional `market` config field ("US" or "HK"). When set, actors use the calendar service for holiday-aware market hours and early-close detection. Legacy configurable timezone/hours preserved when `market` is empty (backward compatible).
+  8. Added `health_monitor_market` and `bar_resub_market` to `SamTraderConfig` and wired them through `main.py`.
+  9. Added env vars to `.env.example` for all new settings.
+- **Files Changed**: `src/sam_trader/services/market_calendar.py` (new), `src/sam_trader/services/backup.py`, `src/sam_trader/actors/health_monitor.py`, `src/sam_trader/actors/bar_resubscription.py`, `src/sam_trader/config.py`, `src/sam_trader/main.py`, `.env.example`, `tests/unit/services/test_market_calendar.py` (new), `tests/unit/services/test_backup.py`, `tests/unit/actors/test_health_monitor.py`, `tests/unit/actors/test_bar_resubscription.py`, `tests/unit/test_config.py`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 126/126 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ticket ready to close.

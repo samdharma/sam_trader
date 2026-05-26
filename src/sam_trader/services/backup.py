@@ -20,13 +20,7 @@ import tempfile
 from pathlib import Path
 from typing import Any, Final, cast
 
-# Optional holidays package for accurate holiday detection
-try:
-    import holidays
-
-    _HAS_HOLIDAYS = True
-except ImportError:
-    _HAS_HOLIDAYS = False
+from sam_trader.services.market_calendar import MarketCalendarService
 
 logger = logging.getLogger("sam_trader.backup")
 
@@ -45,81 +39,6 @@ FUTU_CONTAINER: Final[str] = os.getenv("FUTU_CONTAINER", "sam-futu-opend")
 CONFIG_DIR: Final[Path] = Path(os.getenv("CONFIG_DIR", "/opt/sam_trader/config"))
 DOCKER_BINARY: Final[str] = os.getenv("DOCKER_BINARY", "docker")
 
-# Hardcoded US + HK trading holidays as fallback (2024–2026)
-_HARDCODED_HOLIDAYS: set[str] = {
-    # US holidays 2024
-    "2024-01-01",
-    "2024-01-15",
-    "2024-02-19",
-    "2024-03-29",
-    "2024-05-27",
-    "2024-06-19",
-    "2024-07-04",
-    "2024-09-02",
-    "2024-11-28",
-    "2024-12-25",
-    # US holidays 2025
-    "2025-01-01",
-    "2025-01-20",
-    "2025-02-17",
-    "2025-04-18",
-    "2025-05-26",
-    "2025-06-19",
-    "2025-07-04",
-    "2025-09-01",
-    "2025-11-27",
-    "2025-12-25",
-    # US holidays 2026
-    "2026-01-01",
-    "2026-01-19",
-    "2026-02-16",
-    "2026-04-03",
-    "2026-05-25",
-    "2026-06-19",
-    "2026-07-03",
-    "2026-09-07",
-    "2026-11-26",
-    "2026-12-25",
-    # HK holidays 2024 (overlaps with some US holidays already listed above)
-    "2024-02-10",
-    "2024-02-12",
-    "2024-02-13",
-    "2024-04-01",
-    "2024-04-04",
-    "2024-05-01",
-    "2024-05-15",
-    "2024-06-10",
-    "2024-07-01",
-    "2024-09-18",
-    "2024-10-01",
-    "2024-10-11",
-    "2024-12-26",
-    # HK holidays 2025
-    "2025-01-29",
-    "2025-01-30",
-    "2025-01-31",
-    "2025-04-04",
-    "2025-04-07",
-    "2025-05-05",
-    "2025-05-31",
-    "2025-07-01",
-    "2025-10-01",
-    "2025-10-07",
-    "2025-10-29",
-    # HK holidays 2026
-    "2026-02-17",
-    "2026-02-18",
-    "2026-02-19",
-    "2026-04-06",
-    "2026-05-01",
-    "2026-07-01",
-    "2026-09-21",
-    "2026-10-01",
-    "2026-10-02",
-    "2026-10-19",
-    "2026-12-26",
-}
-
 
 class BackupError(Exception):
     """Raised when a backup or restore operation fails."""
@@ -127,15 +46,8 @@ class BackupError(Exception):
 
 def _is_trading_holiday(date_obj: datetime.date) -> bool:
     """Return True if the given date is a US or HK trading holiday."""
-    date_str = date_obj.strftime("%Y-%m-%d")
-    if _HAS_HOLIDAYS:
-        us_hols = holidays.US(years=date_obj.year)  # type: ignore[attr-defined]
-        hk_hols = holidays.HK(years=date_obj.year)  # type: ignore[attr-defined]
-        if date_obj in us_hols or date_obj in hk_hols:
-            return True
-    if date_str in _HARDCODED_HOLIDAYS:
-        return True
-    return False
+    cal = MarketCalendarService()
+    return cal.is_holiday("US", date_obj) or cal.is_holiday("HK", date_obj)
 
 
 def _run_cmd(

@@ -11,6 +11,8 @@ from nautilus_trader.common.config import ActorConfig
 from nautilus_trader.model.data import Bar, BarType
 from nautilus_trader.trading.trader import Trader
 
+from sam_trader.services.market_calendar import MarketCalendarService
+
 
 class BarResubscriptionActorConfig(ActorConfig, frozen=True):
     """Configuration for the BarResubscriptionActor.
@@ -34,6 +36,10 @@ class BarResubscriptionActorConfig(ActorConfig, frozen=True):
         re-subscription is triggered.
     check_interval_seconds : int, default 60
         How often (in seconds) to run the periodic staleness check.
+    market : str, default ""
+        Market code for calendar-aware hours ("US" or "HK").
+        When set, overrides *market_open_tz*/*market_open_time*/*market_close_time*
+        with the canonical calendar for that market.
 
     """
 
@@ -44,6 +50,7 @@ class BarResubscriptionActorConfig(ActorConfig, frozen=True):
     enabled: bool = True
     stale_timeout_seconds: int = 300
     check_interval_seconds: int = 60
+    market: str = ""
 
 
 class BarResubscriptionActor(Actor):
@@ -83,12 +90,16 @@ class BarResubscriptionActor(Actor):
         self._subscribed_at: dict[BarType, datetime] = {}
         self._market_open_timer = "bar_resubscription_market_open"
         self._stale_check_timer = "bar_resubscription_stale_check"
+        self._calendar: MarketCalendarService | None = None
 
     def on_start(self) -> None:
         """Subscribe to monitored bar types and schedule checks."""
         if not self.config.enabled:
             self.log.info("BarResubscriptionActor: disabled")
             return
+
+        if self.config.market:
+            self._calendar = MarketCalendarService()
 
         bar_types = self._resolve_bar_types()
         if not bar_types:
@@ -247,6 +258,22 @@ class BarResubscriptionActor(Actor):
 
     def _next_market_open(self, now: datetime) -> datetime:
         """Return the next occurrence of ``market_open_time`` in UTC."""
+        if self._calendar is not None:
+            tz = ZoneInfo(self._calendar.market_timezone(self.config.market))
+            now_local = now.astimezone(tz)
+            next_day = self._calendar.next_trading_day(
+                self.config.market, now_local.date()
+            )
+            open_time, _ = self._calendar.market_hours(self.config.market, next_day)
+            candidate = datetime.combine(next_day, open_time, tzinfo=tz)
+            if now_local < candidate:
+                return candidate.astimezone(timezone.utc)
+            # If we've already passed today's open, use the *next* trading day
+            next_day = self._calendar.next_trading_day(self.config.market, next_day)
+            open_time, _ = self._calendar.market_hours(self.config.market, next_day)
+            candidate = datetime.combine(next_day, open_time, tzinfo=tz)
+            return candidate.astimezone(timezone.utc)
+
         tz = ZoneInfo(self.config.market_open_tz)
         now_local = now.astimezone(tz)
         candidate = datetime.combine(
@@ -260,6 +287,28 @@ class BarResubscriptionActor(Actor):
 
     def _is_market_hours(self, ts: datetime) -> bool:
         """Return True if *ts* is within configured market hours."""
+        if self._calendar is not None:
+            tz = ZoneInfo(self._calendar.market_timezone(self.config.market))
+            local = ts.astimezone(tz)
+            if not self._calendar.is_trading_day(self.config.market, local.date()):
+                return False
+            open_time, close_time = self._calendar.market_hours(
+                self.config.market, local.date()
+            )
+            market_open = local.replace(
+                hour=open_time.hour,
+                minute=open_time.minute,
+                second=0,
+                microsecond=0,
+            )
+            market_close = local.replace(
+                hour=close_time.hour,
+                minute=close_time.minute,
+                second=0,
+                microsecond=0,
+            )
+            return market_open <= local < market_close
+
         tz = ZoneInfo(self.config.market_open_tz)
         local = ts.astimezone(tz)
         if local.weekday() >= 5:  # Saturday=5, Sunday=6

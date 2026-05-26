@@ -51,6 +51,7 @@ class TestBarResubscriptionActorConfig:
         assert cfg.enabled is True
         assert cfg.stale_timeout_seconds == 300
         assert cfg.check_interval_seconds == 60
+        assert cfg.market == ""
 
     def test_custom_values(self, actor_config: BarResubscriptionActorConfig) -> None:
         assert actor_config.market_open_time == time(9, 30)
@@ -275,6 +276,85 @@ class TestBarResubscriptionActor:
         assert (
             "bar_resubscription_stale_check" not in registered_actor.clock.timer_names
         )
+
+
+class TestBarResubscriptionActorCalendar:
+    """Tests for market-calendar-aware behavior."""
+
+    @pytest.fixture
+    def actor_us(self) -> BarResubscriptionActor:
+        bar_type = TestDataStubs.bar_5decimal_5min_bid().bar_type
+        cfg = BarResubscriptionActorConfig(
+            bar_types=[bar_type],
+            market="US",
+            enabled=True,
+        )
+        actor = BarResubscriptionActor(cfg)
+        actor.register_base(
+            portfolio=TestComponentStubs.portfolio(),
+            msgbus=TestComponentStubs.msgbus(),
+            cache=TestComponentStubs.cache(),
+            clock=TestComponentStubs.clock(),
+        )
+        return actor
+
+    def test_calendar_next_market_open_skips_holiday(
+        self, actor_us: BarResubscriptionActor
+    ) -> None:
+        actor_us.on_start()
+        # 2024-07-03 (Wed) after close -> next open should be 2024-07-05 (Fri)
+        # because 2024-07-04 is a US holiday
+        ts = datetime(2024, 7, 3, 20, 0, 0, tzinfo=timezone.utc)  # 16:00 ET
+        result = actor_us._next_market_open(ts)
+        assert result.day == 5  # Friday, skipped Thursday holiday
+
+    def test_calendar_is_market_hours_holiday(
+        self, actor_us: BarResubscriptionActor
+    ) -> None:
+        actor_us.on_start()
+        # 2024-07-04 is a US holiday (Thursday) — 10:00 ET
+        ts = datetime(2024, 7, 4, 15, 0, 0, tzinfo=timezone.utc)
+        assert actor_us._is_market_hours(ts) is False
+
+    def test_calendar_next_market_open_friday_to_monday(
+        self, actor_us: BarResubscriptionActor
+    ) -> None:
+        actor_us.on_start()
+        # Friday after close -> Monday
+        ts = datetime(2024, 7, 5, 20, 0, 0, tzinfo=timezone.utc)  # 16:00 ET Fri
+        result = actor_us._next_market_open(ts)
+        assert result.day == 8  # Monday
+
+    def test_calendar_is_market_hours_early_close(
+        self, actor_us: BarResubscriptionActor
+    ) -> None:
+        actor_us.on_start()
+        # 2024-07-03 is early close at 13:00 ET
+        ts = datetime(2024, 7, 3, 18, 0, 0, tzinfo=timezone.utc)  # 14:00 ET
+        assert actor_us._is_market_hours(ts) is False
+
+    @pytest.fixture
+    def actor_hk(self) -> BarResubscriptionActor:
+        bar_type = TestDataStubs.bar_5decimal_5min_bid().bar_type
+        cfg = BarResubscriptionActorConfig(
+            bar_types=[bar_type],
+            market="HK",
+            enabled=True,
+        )
+        actor = BarResubscriptionActor(cfg)
+        actor.register_base(
+            portfolio=TestComponentStubs.portfolio(),
+            msgbus=TestComponentStubs.msgbus(),
+            cache=TestComponentStubs.cache(),
+            clock=TestComponentStubs.clock(),
+        )
+        return actor
+
+    def test_calendar_hk_holiday(self, actor_hk: BarResubscriptionActor) -> None:
+        actor_hk.on_start()
+        # 2024-10-01 is HK holiday
+        ts = datetime(2024, 10, 1, 2, 0, 0, tzinfo=timezone.utc)  # 10:00 HKT
+        assert actor_hk._is_market_hours(ts) is False
 
 
 class TestBarResubscriptionActorHK:
