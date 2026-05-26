@@ -1,5 +1,14 @@
 > **Note: see first-entry Iteration 20 for Phase 2 config dataclasses.**
 
+## Iteration 103
+- **Task**: BUG: docker-compose.yml FUTU_ENABLED and WAIT_FOR_IB_GATEWAY defaults override .env values
+- **Task ID**: sam_trader-9z3.1.24
+- **Status**: COMPLETE
+- **Decisions**: Root cause: Docker Compose with `-f docker/docker-compose.yml` sets project directory to `docker/`, so `.env` is auto-loaded from `docker/.env` instead of root `.env`. Fixed by adding `--env-file "${SCRIPT_DIR}/.env"` to all `docker compose` commands in `deploy.sh`. Added FATAL validation in `entrypoint.sh` for `FUTU_ENABLED=true` without `FUTU_ACCOUNT_PWD_MD5` and `IB_ENABLED=true` without `TWS_USERID`/`TWS_PASSWORD` — catches the silent-false-default anti-pattern even when `--env-file` is forgotten. Also fixed pre-existing healthcheck L1 assertion in `test_phase11_deploy_structure.py` (sam-trader uses `/proc/1/cmdline` grep, not `pgrep python`).
+- **Files Changed**: `deploy.sh`, `docker/entrypoint.sh`, `tests/unit/test_entrypoint.py`, `tests/integration/test_phase11_deploy_structure.py`
+- **Validation Result**: PASS (RALPH_GATE_PASSED — 61/61 tests, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ticket closed.
+
 ## Iteration 102
 - **Task**: BUG: Futu OpenD health check L3 picks most recent file (ftlog), not GTWLog — login check always fails
 - **Task ID**: sam_trader-9z3.1.23
