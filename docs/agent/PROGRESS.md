@@ -1371,3 +1371,15 @@
 - **Files Changed**: `docker/postgres/init/01_schema.sql`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targetted; no affected tests, lint skipped)
 - **Blockers / Notes**: None.
+
+## Iteration 124
+- **Task**: TASK: Futu OpenD health check must verify login state
+- **Task ID**: sam_trader-9z3.1.22
+- **Status**: COMPLETE
+- **Decisions**:
+  - Replaced non-portable `find ... -printf` (GNU-only, fails silently on BSD/macOS) with portable `ls -t` for locating the most recent GTWLog file. This was the root cause of the 25-May sandbox bug: `find` failed silently → empty log list → skipped L3 check → script exited 0 → Docker reported healthy even though OpenD had crashed.
+  - L3 now positively requires "Login successful" in the most recent log file. If no logs exist, or if the most recent log lacks "Login successful", the container is unhealthy.
+  - Retained the failure-pattern grep as defense-in-depth on the most recent log only.
+- **Files Changed**: `docker/futu-opend/healthcheck.sh`, `tests/unit/test_futu_opend_healthcheck.py`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 13/13 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None.

@@ -4,7 +4,7 @@ set -e
 # 3-layer health check for Futu OpenD
 # L1: Process check — verify FutuOpenD is running
 # L2: Socket check — verify API port is accepting connections
-# L3: Log scan — detect login/connection failure patterns
+# L3: Protocol check — verify most recent GTWLog contains "Login successful"
 
 # --- L1: Process check ---
 if ! pgrep -x "FutuOpenD" > /dev/null 2>&1; then
@@ -18,18 +18,34 @@ if ! true > /dev/tcp/localhost/11111 2>/dev/null; then
     exit 1
 fi
 
-# --- L3: Log scan for login failure patterns ---
+# --- L3: Verify login success in most recent GTWLog ---
 LOG_DIR="/home/futu/.com.futunn.FutuOpenD/Log"
-if [ -d "$LOG_DIR" ]; then
-    # Find the most recently modified log files (up to 3)
-    RECENT_LOGS=$(find "$LOG_DIR" -maxdepth 1 -type f -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -n 3 | cut -d' ' -f2-)
+if [ ! -d "$LOG_DIR" ]; then
+    echo "UNHEALTHY: FutuOpenD log directory not found"
+    exit 1
+fi
 
-    if [ -n "$RECENT_LOGS" ]; then
-        if echo "$RECENT_LOGS" | xargs grep -iE "login fail|login failed|conn failed|authentication fail|auth fail|account login" > /dev/null 2>&1; then
-            echo "UNHEALTHY: Login failure pattern detected in FutuOpenD logs"
-            exit 1
-        fi
-    fi
+# Find the most recently modified log file (portable: ls -t works on GNU and BSD)
+MOST_RECENT_LOG=$(ls -t "$LOG_DIR" 2>/dev/null | head -n 1)
+if [ -n "$MOST_RECENT_LOG" ]; then
+    MOST_RECENT_LOG="$LOG_DIR/$MOST_RECENT_LOG"
+fi
+
+if [ -z "$MOST_RECENT_LOG" ] || [ ! -f "$MOST_RECENT_LOG" ]; then
+    echo "UNHEALTHY: No FutuOpenD log files found"
+    exit 1
+fi
+
+# Positively verify "Login successful" in the most recent log
+if ! grep -q "Login successful" "$MOST_RECENT_LOG" 2>/dev/null; then
+    echo "UNHEALTHY: Login successful not found in most recent GTWLog"
+    exit 1
+fi
+
+# Retain failure-pattern scan as defense-in-depth (most recent log only)
+if grep -iE "login fail|login failed|conn failed|authentication fail|auth fail|account login" "$MOST_RECENT_LOG" > /dev/null 2>&1; then
+    echo "UNHEALTHY: Login failure pattern detected in most recent GTWLog"
+    exit 1
 fi
 
 exit 0
