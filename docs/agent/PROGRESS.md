@@ -1383,3 +1383,16 @@
 - **Files Changed**: `docker/futu-opend/healthcheck.sh`, `tests/unit/test_futu_opend_healthcheck.py`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 13/13 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None.
+
+## Iteration 125
+- **Task**: BUG: Futu adapter conn state stuck DOWN after OpenD restart
+- **Task ID**: sam_trader-9z3.3.8
+- **Status**: COMPLETE
+- **Decisions**:
+  - Root cause: `_FutuDisconnectHandler` invalidated the global cache (closing the context) but `FutuLiveDataClient` and `FutuLiveExecutionClient` continued to hold stale references to the old closed context. On subsequent `_connect()` calls, the `if self._quote_ctx is None` guard skipped fetching a fresh context from cache, leaving subscriptions and handlers attached to a dead object.
+  - Fix: `_connect()` now checks `ContextStatus.READY` before reusing a held context. If stale, it is closed and replaced with a fresh one from `get_cached_futu_*_context()`.
+  - Fix: `_disconnect()` now explicitly sets `self._quote_ctx = None` / `self._trade_ctx = None` so the next connect cycle is guaranteed to fetch from cache.
+  - Updated test fixtures to set `status = ContextStatus.READY` on mock contexts so existing tests continue to pass with the new validation logic.
+- **Files Changed**: `src/sam_trader/adapters/futu/data.py`, `src/sam_trader/adapters/futu/execution.py`, `tests/unit/adapters/futu/test_data.py`, `tests/unit/adapters/futu/test_execution.py`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 52/52 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None.
