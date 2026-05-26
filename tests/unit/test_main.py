@@ -148,6 +148,98 @@ class TestFutuFactoryWiring:
             asyncio.set_event_loop(None)
 
 
+class TestRoutingVenues:
+    """Tests for routing venue derivation from FUTU_TRD_MARKET."""
+
+    def test_routing_venues_for_hk_market(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """When FUTU_TRD_MARKET=HK, routing contains only HKEX."""
+        monkeypatch.setenv("FUTU_ENABLED", "true")
+        monkeypatch.setenv("FUTU_OPEND_HOST", "test-futu-host")
+        monkeypatch.setenv("FUTU_OPEND_PORT", "11111")
+        monkeypatch.setenv("FUTU_TRD_ENV", "SIMULATE")
+        monkeypatch.setenv("FUTU_TRD_MARKET", "HK")
+        monkeypatch.setenv("FUTU_UNLOCK_PWD_MD5", "deadbeef")
+        monkeypatch.setenv("IB_ENABLED", "false")
+        monkeypatch.setenv("BUNDLES_PATH", "config/nonexistent_bundles.yaml")
+        monkeypatch.setenv("STATE_SAVE_ENABLED", "false")
+        monkeypatch.setenv("STATE_LOAD_ENABLED", "false")
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            node = build_trading_node()
+
+            data_cfg = node._config.data_clients["FUTU"]
+            exec_cfg = node._config.exec_clients["FUTU"]
+            assert data_cfg.routing.venues == frozenset({"HKEX"})
+            assert exec_cfg.routing.venues == frozenset({"HKEX"})
+        finally:
+            loop.close()
+            asyncio.set_event_loop(None)
+
+    def test_routing_venues_for_us_market(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """When FUTU_TRD_MARKET=US, routing contains NASDAQ and NYSE."""
+        monkeypatch.setenv("FUTU_ENABLED", "true")
+        monkeypatch.setenv("FUTU_OPEND_HOST", "test-futu-host")
+        monkeypatch.setenv("FUTU_OPEND_PORT", "11111")
+        monkeypatch.setenv("FUTU_TRD_ENV", "SIMULATE")
+        monkeypatch.setenv("FUTU_TRD_MARKET", "US")
+        monkeypatch.setenv("FUTU_UNLOCK_PWD_MD5", "deadbeef")
+        monkeypatch.setenv("IB_ENABLED", "false")
+        monkeypatch.setenv("BUNDLES_PATH", "config/nonexistent_bundles.yaml")
+        monkeypatch.setenv("STATE_SAVE_ENABLED", "false")
+        monkeypatch.setenv("STATE_LOAD_ENABLED", "false")
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            node = build_trading_node()
+
+            data_cfg = node._config.data_clients["FUTU"]
+            exec_cfg = node._config.exec_clients["FUTU"]
+            assert data_cfg.routing.venues == frozenset({"NASDAQ", "NYSE"})
+            assert exec_cfg.routing.venues == frozenset({"NASDAQ", "NYSE"})
+        finally:
+            loop.close()
+            asyncio.set_event_loop(None)
+
+    def test_routing_venues_logs_at_info(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """Startup log confirms routing venues at INFO level."""
+        monkeypatch.setenv("FUTU_ENABLED", "true")
+        monkeypatch.setenv("FUTU_OPEND_HOST", "test-futu-host")
+        monkeypatch.setenv("FUTU_OPEND_PORT", "11111")
+        monkeypatch.setenv("FUTU_TRD_ENV", "SIMULATE")
+        monkeypatch.setenv("FUTU_TRD_MARKET", "HK")
+        monkeypatch.setenv("FUTU_UNLOCK_PWD_MD5", "deadbeef")
+        monkeypatch.setenv("IB_ENABLED", "false")
+        monkeypatch.setenv("BUNDLES_PATH", "config/nonexistent_bundles.yaml")
+        monkeypatch.setenv("STATE_SAVE_ENABLED", "false")
+        monkeypatch.setenv("STATE_LOAD_ENABLED", "false")
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            with caplog.at_level(logging.INFO):
+                build_trading_node()
+
+            info_msgs = [r.message for r in caplog.records if r.levelno == logging.INFO]
+            assert any("Futu routing venues" in m for m in info_msgs)
+            assert any("HKEX" in m for m in info_msgs)
+        finally:
+            loop.close()
+            asyncio.set_event_loop(None)
+
+
 class TestDualVenueNoCrossContamination:
     """Tests that Futu and IB venues remain cleanly separated."""
 

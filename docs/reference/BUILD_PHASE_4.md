@@ -198,6 +198,21 @@ def nautilus_to_futu_code(instrument_id: InstrumentId) -> str:
     return f"{market}.{symbol}"
 ```
 
+### 4.5 Routing Venue Derivation
+
+Routing venues for the Futu data and execution clients are derived from `FUTU_TRD_MARKET` rather than hardcoded:
+
+```python
+def _routing_venues_for_market(trd_market: str) -> frozenset[str]:
+    return {
+        "US": frozenset({"NASDAQ", "NYSE"}),
+        "HK": frozenset({"HKEX"}),
+        "CN": frozenset({"SHFE", "SZSE"}),
+    }.get(trd_market, frozenset({"NASDAQ", "NYSE"}))
+```
+
+Both `FutuDataClientConfig` and `FutuExecClientConfig` receive `RoutingConfig(venues=futu_routing_venues)`. A startup INFO log confirms the derived venues.
+
 ---
 
 ## 5. Ticket Breakdown

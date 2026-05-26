@@ -1541,3 +1541,12 @@
 - **Files Changed**: None (this iteration)
 - **Validation Result**: PASS (55 targeted tests passed, ralph_validate.sh --tier=targeted green)
 - **Blockers / Notes**: Ticket was already closed by previous iteration. Ralph harness assigned a completed ticket.
+
+## Iteration 96
+- **Task**: HIGH: RoutingConfig hardcodes US venues when FUTU_TRD_MARKET=HK
+- **Task ID**: sam_trader-9z3.5.8
+- **Status**: COMPLETE
+- **Decisions**: Added `_routing_venues_for_market(trd_market: str) -> frozenset[str]` helper to `main.py` that maps "US" -> {"NASDAQ", "NYSE"}, "HK" -> {"HKEX"}, "CN" -> {"SHFE", "SZSE"}, with US fallback for unknown markets. Applied derived venues to both `FutuDataClientConfig` and `FutuExecClientConfig` via `RoutingConfig(venues=...)`. Added INFO-level startup log confirming routing venues. Updated BUILD_PHASE_4.md §4.5 with the derivation pattern.
+- **Files Changed**: `src/sam_trader/main.py`, `tests/unit/test_main.py`, `docs/reference/BUILD_PHASE_4.md`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 19/19 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ticket complete.

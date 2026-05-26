@@ -59,6 +59,15 @@ def _make_trader_id(value: str) -> str:
     return value
 
 
+def _routing_venues_for_market(trd_market: str) -> frozenset[str]:
+    """Return the set of Nautilus venues that Futu should route for a given market."""
+    return {
+        "US": frozenset({"NASDAQ", "NYSE"}),
+        "HK": frozenset({"HKEX"}),
+        "CN": frozenset({"SHFE", "SZSE"}),
+    }.get(trd_market, frozenset({"NASDAQ", "NYSE"}))
+
+
 def _make_load_ids(symbols: list[str]) -> frozenset[InstrumentId] | None:
     """Convert symbol strings to InstrumentIds where venue is explicit.
 
@@ -153,6 +162,9 @@ def build_trading_node() -> TradingNode:
                 FutuLiveExecClientFactory,
             )
 
+            futu_routing_venues = _routing_venues_for_market(cfg.futu_trd_market)
+            logger.info("Futu routing venues: %s", futu_routing_venues)
+
             data_clients["FUTU"] = FutuDataClientConfig(
                 host=cfg.futu_opend_host,
                 port=cfg.futu_opend_port,
@@ -160,7 +172,7 @@ def build_trading_node() -> TradingNode:
                 trd_market=cfg.futu_trd_market,
                 load_ids=futu_load_ids,
                 keep_alive_interval_secs=cfg.futu_keep_alive_interval_secs,
-                routing=RoutingConfig(venues=frozenset({"NASDAQ", "NYSE", "HKEX"})),
+                routing=RoutingConfig(venues=futu_routing_venues),
             )
 
             exec_clients["FUTU"] = FutuExecClientConfig(
@@ -169,6 +181,7 @@ def build_trading_node() -> TradingNode:
                 trd_env=cfg.futu_trd_env,
                 trd_market=cfg.futu_trd_market,
                 unlock_pwd_md5=cfg.futu_unlock_pwd_md5,
+                routing=RoutingConfig(venues=futu_routing_venues),
             )
 
             futu_data_factory = FutuLiveDataClientFactory
