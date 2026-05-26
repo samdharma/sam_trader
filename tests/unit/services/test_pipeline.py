@@ -99,6 +99,89 @@ class TestRunPipeline:
         assert result["bundle_path"] is None
         assert "No symbols" in result["note"]
 
+    @patch("sam_trader.services.pipeline.ReadinessReportGenerator")
+    @patch("sam_trader.services.pipeline.build_watchlist")
+    @patch("sam_trader.services.pipeline.load_watchlist_config")
+    def test_run_pipeline_skips_on_holiday(
+        self,
+        mock_load_wl: Any,
+        mock_build_wl: Any,
+        mock_report_gen_cls: Any,
+    ) -> None:
+        mock_load_wl.return_value = {"US": MagicMock(min_gap_pct=2.0)}
+        mock_build_wl.return_value = {"US": ["TSLA.NASDAQ"]}
+
+        mock_report = MagicMock()
+        mock_report.candidate_count = 0
+        mock_report.approved_count = 0
+        mock_report.rejected_count = 0
+        mock_report.bundles_generated = 0
+        mock_report.bundle_path = None
+        mock_report.regime_state = {"regime": None}
+        mock_report.trace_id = "test-trace"
+
+        mock_report_gen = MagicMock()
+        mock_report_gen.generate.return_value = mock_report
+        mock_report_gen_cls.return_value = mock_report_gen
+
+        with patch(
+            "sam_trader.services.pipeline.MarketCalendarService"
+        ) as mock_calendar_cls:
+            mock_calendar = MagicMock()
+            mock_calendar.is_trading_day.return_value = False
+            mock_calendar.holiday_name.return_value = "Independence Day"
+            mock_calendar_cls.from_env.return_value = mock_calendar
+
+            result = run_pipeline(market="US", schedule="08:30")
+
+        assert result["status"] == "success"
+        assert result["holiday_skipped"] is True
+        assert result["holiday_name"] == "Independence Day"
+        assert result["candidate_count"] == 0
+        assert result["approved_count"] == 0
+        assert result["bundles_generated"] == 0
+        mock_report_gen.save_audit.assert_called_once_with(mock_report)
+
+    @patch("sam_trader.services.pipeline.ReadinessReportGenerator")
+    @patch("sam_trader.services.pipeline.build_watchlist")
+    @patch("sam_trader.services.pipeline.load_watchlist_config")
+    def test_run_pipeline_skips_on_hk_holiday(
+        self,
+        mock_load_wl: Any,
+        mock_build_wl: Any,
+        mock_report_gen_cls: Any,
+    ) -> None:
+        mock_load_wl.return_value = {"HK": MagicMock(min_gap_pct=2.0)}
+        mock_build_wl.return_value = {"HK": ["00700.HKEX"]}
+
+        mock_report = MagicMock()
+        mock_report.candidate_count = 0
+        mock_report.approved_count = 0
+        mock_report.rejected_count = 0
+        mock_report.bundles_generated = 0
+        mock_report.bundle_path = None
+        mock_report.regime_state = {"regime": None}
+        mock_report.trace_id = "test-trace"
+
+        mock_report_gen = MagicMock()
+        mock_report_gen.generate.return_value = mock_report
+        mock_report_gen_cls.return_value = mock_report_gen
+
+        with patch(
+            "sam_trader.services.pipeline.MarketCalendarService"
+        ) as mock_calendar_cls:
+            mock_calendar = MagicMock()
+            mock_calendar.is_trading_day.return_value = False
+            mock_calendar.holiday_name.return_value = None
+            mock_calendar_cls.from_env.return_value = mock_calendar
+
+            result = run_pipeline(market="HK", schedule="08:30")
+
+        assert result["status"] == "success"
+        assert result["holiday_skipped"] is True
+        assert result["holiday_name"] == "HK market holiday"
+        assert result["candidate_count"] == 0
+
     @patch("sam_trader.services.pipeline.PreMarketGapScanner")
     @patch("sam_trader.services.pipeline.QuoteCollectionService")
     @patch("sam_trader.services.pipeline.build_watchlist")

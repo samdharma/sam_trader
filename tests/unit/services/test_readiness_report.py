@@ -715,3 +715,174 @@ class TestReadinessReportGenerator:
 
         assert "data_pipeline" in payload
         assert payload["data_pipeline"]["venue_connection_state"]["FUTU"] == "UP"
+
+    # ------------------------------------------------------------------
+    # Holiday tests
+    # ------------------------------------------------------------------
+
+    def test_holiday_banner_in_table(self) -> None:
+        result = _make_pipeline_result()
+        gen = ReadinessReportGenerator()
+        report = gen.generate(result)
+        # Manually create holiday report via pipeline result fields
+        from sam_trader.services.readiness_report import ReadinessReport
+
+        holiday_report = ReadinessReport(
+            scan_timestamp=report.scan_timestamp,
+            market="US",
+            candidate_count=0,
+            approved_count=0,
+            rejected_count=0,
+            top_recommendations=[],
+            risk_summary={},
+            regime_state={},
+            bundles_generated=0,
+            bundle_path=None,
+            audit_trail=[],
+            holiday_skipped=True,
+            holiday_name="Independence Day",
+            next_trading_day="2026-07-05",
+        )
+        table = gen.format_table(holiday_report)
+
+        assert "TODAY IS A MARKET HOLIDAY" in table
+        assert "Independence Day" in table
+        assert "(US)" in table
+        assert "No trading session" in table
+        assert "Next Trading Day : 2026-07-05" in table
+
+    def test_holiday_skips_candidate_sections(self) -> None:
+        result = _make_pipeline_result()
+        gen = ReadinessReportGenerator()
+        report = gen.generate(result)
+        from sam_trader.services.readiness_report import ReadinessReport
+
+        holiday_report = ReadinessReport(
+            scan_timestamp=report.scan_timestamp,
+            market="US",
+            candidate_count=0,
+            approved_count=0,
+            rejected_count=0,
+            top_recommendations=[],
+            risk_summary={},
+            regime_state={},
+            bundles_generated=0,
+            bundle_path=None,
+            audit_trail=[],
+            holiday_skipped=True,
+            holiday_name="Labor Day",
+            next_trading_day="",
+        )
+        table = gen.format_table(holiday_report)
+
+        assert "N/A — market holiday" in table
+        assert "Candidate Summary" in table
+        assert "Risk Summary" in table
+        assert "Market Regime" in table
+        assert "Bundle Generation" in table
+        # Normal sections should NOT have detailed content
+        assert "Portfolio Heat" not in table
+        assert "Regime     :" not in table
+
+    def test_holiday_fields_from_pipeline_result(self) -> None:
+        from sam_trader.services.pipeline_executor import PipelineResult
+
+        pipeline_result = PipelineResult(
+            approved=[],
+            rejected=[],
+            holiday_skipped=True,
+            holiday_name="Thanksgiving",
+        )
+        gen = ReadinessReportGenerator()
+        report = gen.generate(pipeline_result, market="US")
+
+        assert report.holiday_skipped is True
+        assert report.holiday_name == "Thanksgiving"
+
+    def test_holiday_next_trading_day_computed(self) -> None:
+        from sam_trader.services.pipeline_executor import PipelineResult
+
+        pipeline_result = PipelineResult(
+            approved=[],
+            rejected=[],
+            holiday_skipped=True,
+            holiday_name="Test Holiday",
+        )
+        calendar = MagicMock()
+        calendar.next_trading_day.return_value = __import__("datetime").date(2026, 1, 5)
+        gen = ReadinessReportGenerator(market_calendar=calendar)
+        report = gen.generate(pipeline_result, market="US")
+
+        assert report.next_trading_day == "2026-01-05"
+        calendar.next_trading_day.assert_called_once()
+
+    def test_holiday_report_to_dict(self) -> None:
+        from sam_trader.services.pipeline_executor import PipelineResult
+
+        pipeline_result = PipelineResult(
+            approved=[],
+            rejected=[],
+            holiday_skipped=True,
+            holiday_name="Christmas",
+        )
+        gen = ReadinessReportGenerator()
+        report = gen.generate(pipeline_result, market="US")
+        d = gen._report_to_dict(report)
+
+        assert d["holiday_skipped"] is True
+        assert d["holiday_name"] == "Christmas"
+
+    def test_holiday_webhook_slack(self) -> None:
+        from sam_trader.services.pipeline_executor import PipelineResult
+
+        pipeline_result = PipelineResult(
+            approved=[],
+            rejected=[],
+            holiday_skipped=True,
+            holiday_name="New Year's Day",
+        )
+        gen = ReadinessReportGenerator(
+            webhook_url="https://hooks.slack.com/services/xxx"
+        )
+        report = gen.generate(pipeline_result, market="US")
+        payload = gen._webhook_payload(report)
+
+        assert "TODAY IS A MARKET HOLIDAY" in payload["text"]
+        assert "New Year's Day" in payload["text"]
+
+    def test_holiday_webhook_telegram(self) -> None:
+        from sam_trader.services.pipeline_executor import PipelineResult
+
+        pipeline_result = PipelineResult(
+            approved=[],
+            rejected=[],
+            holiday_skipped=True,
+            holiday_name="National Day",
+        )
+        gen = ReadinessReportGenerator(
+            webhook_url="https://api.telegram.org/botxxx/sendMessage"
+        )
+        report = gen.generate(pipeline_result, market="HK")
+        payload = gen._webhook_payload(report)
+
+        assert "TODAY IS A MARKET HOLIDAY" in payload["text"]
+        assert "National Day" in payload["text"]
+        assert payload["parse_mode"] == "HTML"
+
+    def test_holiday_webhook_generic(self) -> None:
+        from sam_trader.services.pipeline_executor import PipelineResult
+
+        pipeline_result = PipelineResult(
+            approved=[],
+            rejected=[],
+            holiday_skipped=True,
+            holiday_name="Generic Holiday",
+        )
+        gen = ReadinessReportGenerator(webhook_url="https://example.com/hook")
+        report = gen.generate(pipeline_result, market="US")
+        payload = gen._webhook_payload(report)
+
+        assert payload["holiday_skipped"] is True
+        assert payload["holiday_name"] == "Generic Holiday"
+        assert "holiday_alert" in payload
+        assert "TODAY IS A MARKET HOLIDAY" in payload["holiday_alert"]

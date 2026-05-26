@@ -26,10 +26,11 @@ import logging
 import os
 import urllib.request
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from sam_trader.services.market_calendar import MarketCalendarService
 from sam_trader.services.pipeline_executor import PipelineCandidate, PipelineResult
 
 logger = logging.getLogger(__name__)
@@ -60,6 +61,9 @@ class ReadinessReport:
     audit_trail: list[dict[str, Any]]
     trace_id: str = ""
     data_pipeline: dict[str, Any] = field(default_factory=dict)
+    holiday_skipped: bool = False
+    holiday_name: str = ""
+    next_trading_day: str = ""
 
 
 # ---------------------------------------------------------------------------
@@ -87,12 +91,14 @@ class ReadinessReportGenerator:
         webhook_url: str | None = None,
         redis_client: Any | None = None,
         bar_stale_threshold_seconds: int = 300,
+        market_calendar: MarketCalendarService | None = None,
     ) -> None:
         self.log_dir = Path(log_dir)
         self.top_n = top_n
         self.webhook_url = webhook_url or os.getenv("READINESS_WEBHOOK_URL")
         self._redis = redis_client
         self.bar_stale_threshold_seconds = bar_stale_threshold_seconds
+        self._calendar = market_calendar
 
     # ------------------------------------------------------------------
     # Public API
@@ -122,6 +128,19 @@ class ReadinessReportGenerator:
         approved = pipeline_result.approved
         rejected = pipeline_result.rejected
 
+        # Holiday handling
+        holiday_skipped = pipeline_result.holiday_skipped
+        holiday_name = pipeline_result.holiday_name
+        next_trading_day_str = ""
+        if holiday_skipped:
+            calendar = self._calendar or MarketCalendarService.from_env()
+            try:
+                today = date.today()
+                next_day = calendar.next_trading_day(market, today)
+                next_trading_day_str = next_day.isoformat()
+            except Exception as exc:
+                logger.debug("Could not compute next_trading_day: %s", exc)
+
         top_recs = self._build_top_recommendations(approved)
         risk_summary = self._build_risk_summary(
             approved, rejected, pipeline_result.heat_result
@@ -144,6 +163,9 @@ class ReadinessReportGenerator:
             audit_trail=audit_trail,
             trace_id=pipeline_result.trace_id,
             data_pipeline=data_pipeline,
+            holiday_skipped=holiday_skipped,
+            holiday_name=holiday_name,
+            next_trading_day=next_trading_day_str,
         )
 
     def format_table(self, report: ReadinessReport) -> str:
@@ -164,6 +186,41 @@ class ReadinessReportGenerator:
         lines.append(f"Market    : {report.market}")
         lines.append(f"Trace ID  : {report.trace_id or 'N/A'}")
         lines.append("")
+
+        # Holiday banner
+        if report.holiday_skipped:
+            lines.append("!" * 60)
+            lines.append(
+                f"TODAY IS A MARKET HOLIDAY: {report.holiday_name} "
+                f"({report.market}) — No trading session"
+            )
+            if report.next_trading_day:
+                lines.append(f"Next Trading Day : {report.next_trading_day}")
+            lines.append("!" * 60)
+            lines.append("")
+
+            lines.append("Candidate Summary")
+            lines.append("-" * 60)
+            lines.append("  N/A — market holiday")
+            lines.append("")
+
+            lines.append("Risk Summary")
+            lines.append("-" * 60)
+            lines.append("  N/A — market holiday")
+            lines.append("")
+
+            lines.append("Market Regime")
+            lines.append("-" * 60)
+            lines.append("  N/A — market holiday")
+            lines.append("")
+
+            lines.append("Bundle Generation")
+            lines.append("-" * 60)
+            lines.append("  Bundles Generated : 0")
+            lines.append("  Bundle File       : N/A")
+            lines.append("")
+            lines.append("=" * 60)
+            return "\n".join(lines)
 
         # Candidate summary
         lines.append("Candidate Summary")
@@ -607,6 +664,9 @@ class ReadinessReportGenerator:
             "audit_trail": report.audit_trail,
             "trace_id": report.trace_id,
             "data_pipeline": report.data_pipeline,
+            "holiday_skipped": report.holiday_skipped,
+            "holiday_name": report.holiday_name,
+            "next_trading_day": report.next_trading_day,
         }
 
     def _webhook_payload(self, report: ReadinessReport) -> dict[str, Any]:
@@ -614,6 +674,35 @@ class ReadinessReportGenerator:
         url = self.webhook_url or ""
         dp_passed = report.data_pipeline.get("data_pipeline_passed", True)
         dp_warnings = report.data_pipeline.get("warnings", [])
+
+        # Holiday handling
+        if report.holiday_skipped:
+            holiday_msg = (
+                f"TODAY IS A MARKET HOLIDAY: {report.holiday_name} "
+                f"({report.market}) — No trading session"
+            )
+            if report.next_trading_day:
+                holiday_msg += f"\nNext Trading Day: {report.next_trading_day}"
+
+            if "slack.com" in url or "hooks.slack" in url:
+                return {
+                    "text": (
+                        "*SAM Trader V3 — Pre-Market Readiness Report*\n"
+                        f":warning: *{holiday_msg}*"
+                    ),
+                }
+            if "telegram" in url:
+                return {
+                    "chat_id": os.getenv("TELEGRAM_CHAT_ID", ""),
+                    "text": (
+                        "<b>SAM Trader V3 — Readiness Report</b>\n"
+                        f"⚠️ <b>{holiday_msg}</b>"
+                    ),
+                    "parse_mode": "HTML",
+                }
+            payload = self._report_to_dict(report)
+            payload["holiday_alert"] = holiday_msg
+            return payload
 
         # Slack formatting
         if "slack.com" in url or "hooks.slack" in url:
