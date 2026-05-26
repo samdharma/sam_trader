@@ -1,3 +1,12 @@
+## Iteration 94
+- **Task**: TASK: Add CLI data-health command for post-fix bar flow verification
+- **Task ID**: sam_trader-9z3.9.21
+- **Status**: COMPLETE
+- **Decisions**: Added `sam-trader data-health [--venue FUTU|IB] [--instrument TSLA.NASDAQ] [--threshold 300]` CLI command to `services/cli.py`. Queries Redis for `sam:bars:last:{instrument_id}` (written by HealthMonitorActor) and `sam:venue:conn:{venue}`. Reports staleness per instrument with OK/STALE/MISSING status. If `--instrument` is omitted, reads all instrument IDs from active bundles in `config/bundles.yaml`. If Redis keys are missing/stale, suggests running `sam probe-bars` (future command). Returns exit code 0 if all instruments have bars within threshold, else 1. Added `_get_active_instruments()` helper to parse bundles YAML for enabled instrument IDs. Added 7 unit tests covering OK, STALE, MISSING, JSON output, venue filter from bundles, no bundles for venue, and Redis unavailable.
+- **Files Changed**: `src/sam_trader/services/cli.py`, `tests/unit/services/test_cli.py`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 62/62 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ticket complete.
+
 ## Iteration 70
 - **Task**: P6: RejectionMonitorActor — per-instrument rejection circuit breaker
 - **Task ID**: sam_trader-9z3.7.7

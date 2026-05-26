@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import pathlib
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -1338,6 +1339,137 @@ class TestApplyCommand:
         assert rc == 1
         assert "Restart failed" in captured.err or "error" in captured.err.lower()
         mock_restart.assert_called_once()
+
+
+class TestDataHealthCommand:
+    @patch("sam_trader.services.cli._redis_cli")
+    def test_data_health_all_ok(self, mock_redis_mod: Any, capsys: Any) -> None:
+        mock_r = MagicMock()
+        now = datetime.now(timezone.utc).isoformat()
+        mock_r.get.side_effect = lambda key: {
+            "sam:bars:last:TSLA.NASDAQ": now,
+            "sam:venue:conn:FUTU": f"UP:{now}",
+        }.get(key)
+        mock_redis_mod.Redis.return_value = mock_r
+
+        rc = main(["data-health", "--instrument", "TSLA.NASDAQ", "--venue", "FUTU"])
+        captured = capsys.readouterr()
+        assert rc == 0
+        assert "HEALTHY" in captured.out or "OK" in captured.out
+        assert "TSLA.NASDAQ" in captured.out
+
+    @patch("sam_trader.services.cli._redis_cli")
+    def test_data_health_stale(self, mock_redis_mod: Any, capsys: Any) -> None:
+        mock_r = MagicMock()
+        stale = (datetime.now(timezone.utc) - timedelta(seconds=600)).isoformat()
+        mock_r.get.side_effect = lambda key: {
+            "sam:bars:last:TSLA.NASDAQ": stale,
+            "sam:venue:conn:FUTU": f"UP:{stale}",
+        }.get(key)
+        mock_redis_mod.Redis.return_value = mock_r
+
+        rc = main(["data-health", "--instrument", "TSLA.NASDAQ"])
+        captured = capsys.readouterr()
+        assert rc == 1
+        assert "STALE" in captured.out or "FAIL" in captured.out
+        assert "TSLA.NASDAQ" in captured.out
+
+    @patch("sam_trader.services.cli._redis_cli")
+    def test_data_health_missing(self, mock_redis_mod: Any, capsys: Any) -> None:
+        mock_r = MagicMock()
+        mock_r.get.return_value = None
+        mock_redis_mod.Redis.return_value = mock_r
+
+        rc = main(["data-health", "--instrument", "AAPL.NASDAQ"])
+        captured = capsys.readouterr()
+        assert rc == 1
+        assert "MISSING" in captured.out or "FAIL" in captured.out
+        assert "probe-bars" in captured.out
+
+    @patch("sam_trader.services.cli._redis_cli")
+    def test_data_health_json(self, mock_redis_mod: Any, capsys: Any) -> None:
+        mock_r = MagicMock()
+        now = datetime.now(timezone.utc).isoformat()
+        mock_r.get.side_effect = lambda key: {
+            "sam:bars:last:TSLA.NASDAQ": now,
+            "sam:venue:conn:FUTU": f"UP:{now}",
+        }.get(key)
+        mock_redis_mod.Redis.return_value = mock_r
+
+        rc = main(["--json", "data-health", "--instrument", "TSLA.NASDAQ"])
+        captured = capsys.readouterr()
+        assert rc == 0
+        data = json.loads(captured.out)
+        assert data["command"] == "data-health"
+        assert data["overall"] == "HEALTHY"
+        assert data["instruments_checked"] == 1
+        assert data["reports"][0]["status"] == "OK"
+
+    @patch("sam_trader.services.cli._redis_cli")
+    def test_data_health_venue_filter_from_bundles(
+        self, mock_redis_mod: Any, capsys: Any, tmp_path: pathlib.Path
+    ) -> None:
+        mock_r = MagicMock()
+        now = datetime.now(timezone.utc).isoformat()
+        mock_r.get.side_effect = lambda key: {
+            "sam:bars:last:TSLA.NASDAQ": now,
+            "sam:venue:conn:FUTU": f"UP:{now}",
+        }.get(key)
+        mock_redis_mod.Redis.return_value = mock_r
+
+        bundles_file = tmp_path / "bundles.yaml"
+        bundles_file.write_text(
+            "bundles:\n"
+            "  - id: tsla-orb\n"
+            "    enabled: true\n"
+            "    venue: FUTU\n"
+            "    strategy:\n"
+            "      path: sam_trader.strategies.orb:OrbStrategy\n"
+            "      config:\n"
+            "        instrument_id: TSLA.NASDAQ\n"
+        )
+        with patch("sam_trader.services.cli.DEFAULT_BUNDLES_PATH", bundles_file):
+            rc = main(["data-health", "--venue", "FUTU"])
+
+        captured = capsys.readouterr()
+        assert rc == 0
+        assert "TSLA.NASDAQ" in captured.out
+
+    @patch("sam_trader.services.cli._redis_cli")
+    def test_data_health_no_bundles_for_venue(
+        self, mock_redis_mod: Any, capsys: Any, tmp_path: pathlib.Path
+    ) -> None:
+        mock_r = MagicMock()
+        mock_redis_mod.Redis.return_value = mock_r
+
+        bundles_file = tmp_path / "bundles.yaml"
+        bundles_file.write_text(
+            "bundles:\n"
+            "  - id: tsla-orb\n"
+            "    enabled: true\n"
+            "    venue: FUTU\n"
+            "    strategy:\n"
+            "      path: sam_trader.strategies.orb:OrbStrategy\n"
+            "      config:\n"
+            "        instrument_id: TSLA.NASDAQ\n"
+        )
+        with patch("sam_trader.services.cli.DEFAULT_BUNDLES_PATH", bundles_file):
+            rc = main(["data-health", "--venue", "IB"])
+
+        captured = capsys.readouterr()
+        assert rc == 1
+        assert "No active bundles found" in captured.err
+
+    @patch("sam_trader.services.cli._redis_cli")
+    def test_data_health_redis_unavailable(
+        self, mock_redis_mod: Any, capsys: Any
+    ) -> None:
+        mock_redis_mod.Redis.side_effect = Exception("Connection refused")
+
+        rc = main(["data-health", "--instrument", "TSLA.NASDAQ"])
+        captured = capsys.readouterr()
+        assert rc == 1
+        assert "Redis connection failed" in captured.err
 
 
 class TestJsonGlobalFlag:

@@ -544,6 +544,189 @@ def health(ctx: click.Context) -> None:
     _out(ctx, result)
 
 
+@cli.command("data-health")
+@click.option(
+    "--venue",
+    default=None,
+    help="Filter by venue (FUTU or IB).",
+)
+@click.option(
+    "--instrument",
+    default=None,
+    help="Specific instrument ID (e.g., TSLA.NASDAQ).",
+)
+@click.option(
+    "--threshold",
+    default=300,
+    type=int,
+    help="Staleness threshold in seconds (default 300).",
+)
+@click.pass_context
+def data_health(
+    ctx: click.Context,
+    venue: str | None,
+    instrument: str | None,
+    threshold: int,
+) -> None:
+    """Verify market data bar flow end-to-end after restart or fix.
+
+    Queries Redis for the latest bar timestamp per instrument and reports
+    staleness.  Returns exit code 0 only if every instrument has received
+    a bar within the threshold.
+    """
+    if _redis_cli is None:
+        raise click.ClickException("redis package not available")
+
+    try:
+        r = _redis_cli.Redis(
+            host=REDIS_HOST,
+            port=int(REDIS_PORT),
+            password=REDIS_PASSWORD or None,
+            decode_responses=True,
+            socket_connect_timeout=5,
+        )
+        r.ping()
+    except Exception as exc:
+        raise click.ClickException(f"Redis connection failed: {exc}")
+
+    # Determine instruments to check
+    if instrument:
+        instruments = [(instrument, venue or "")]
+    else:
+        instruments = _get_active_instruments(DEFAULT_BUNDLES_PATH, venue_filter=venue)
+        if not instruments:
+            msg = "No active bundles found"
+            if venue:
+                msg += f" for venue={venue}"
+            raise click.ClickException(msg)
+
+    now = datetime.now(timezone.utc)
+    reports: list[dict[str, Any]] = []
+    all_healthy = True
+
+    for inst_id, inst_venue in instruments:
+        report: dict[str, Any] = {
+            "instrument_id": inst_id,
+            "venue": inst_venue,
+        }
+
+        # Check venue connection status
+        if inst_venue:
+            conn_raw = r.get(f"sam:venue:conn:{inst_venue}")
+            if conn_raw:
+                venue_conn = conn_raw.split(":")[0]
+                report["venue_connection"] = venue_conn
+            else:
+                report["venue_connection"] = "unknown"
+        else:
+            report["venue_connection"] = "unknown"
+
+        # Check bar timestamp
+        bar_raw = r.get(f"sam:bars:last:{inst_id}")
+        if bar_raw:
+            try:
+                last_ts = datetime.fromisoformat(bar_raw)
+                age_seconds = int((now - last_ts).total_seconds())
+                report["last_bar_seconds_ago"] = age_seconds
+                if age_seconds > threshold:
+                    report["status"] = "STALE"
+                    report["detail"] = (
+                        f"last bar {age_seconds}s ago " f"(threshold {threshold}s)"
+                    )
+                    all_healthy = False
+                else:
+                    report["status"] = "OK"
+                    report["detail"] = f"last bar {age_seconds}s ago"
+            except Exception as exc:
+                report["status"] = "ERROR"
+                report["detail"] = f"Invalid timestamp in Redis: {exc}"
+                all_healthy = False
+        else:
+            report["status"] = "MISSING"
+            report["detail"] = (
+                "No bar data in Redis — " "try 'sam probe-bars' (future command)"
+            )
+            all_healthy = False
+
+        reports.append(report)
+
+    result = {
+        "command": "data-health",
+        "overall": "HEALTHY" if all_healthy else "UNHEALTHY",
+        "threshold_seconds": threshold,
+        "instruments_checked": len(reports),
+        "reports": reports,
+    }
+
+    if ctx.obj.get("json"):
+        _out(ctx, result)
+    else:
+        lines = [
+            f"Data Health (threshold: {threshold}s)",
+            "=" * 50,
+        ]
+        for rep in reports:
+            status = rep["status"]
+            if status == "OK":
+                marker = "OK"
+            elif status in ("STALE", "MISSING"):
+                marker = "FAIL"
+            else:
+                marker = "WARN"
+            lines.append(f"{rep['instrument_id']:<20} [{marker}] {rep['detail']}")
+        if not all_healthy:
+            lines.append("")
+            lines.append("Tip: If bars are missing, verify sam-trader is running and")
+            lines.append(
+                "      subscribed to the instruments. Future: 'sam probe-bars'"
+            )
+        click.echo("\n".join(lines))
+
+    return 0 if all_healthy else 1  # type: ignore[return-value]
+
+
+def _get_active_instruments(
+    path: Path, venue_filter: str | None = None
+) -> list[tuple[str, str]]:
+    """Return (instrument_id, venue) tuples from enabled bundles.
+
+    Parameters
+    ----------
+    path : Path
+        Path to the bundles YAML file.
+    venue_filter : str, optional
+        If provided, only return bundles for this venue.
+
+    Returns
+    -------
+    list[tuple[str, str]]
+        List of (instrument_id, venue) tuples.
+
+    """
+    if not path.exists():
+        return []
+    try:
+        raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+        if not isinstance(raw, dict):
+            return []
+        bundles = raw.get("bundles", [])
+        if not isinstance(bundles, list):
+            return []
+        result: list[tuple[str, str]] = []
+        for b in bundles:
+            if not isinstance(b, dict) or not b.get("enabled", True):
+                continue
+            venue = str(b.get("venue", "IB"))
+            if venue_filter and venue != venue_filter:
+                continue
+            instrument_id = b.get("strategy", {}).get("config", {}).get("instrument_id")
+            if instrument_id and isinstance(instrument_id, str):
+                result.append((instrument_id, venue))
+        return result
+    except Exception:
+        return []
+
+
 def _run_preflight(skip_window: bool) -> tuple[dict[str, Any], int, list[str]]:
     """Run preflight checks and return (result_dict, exit_code, blocking_issues).
 
