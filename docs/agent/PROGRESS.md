@@ -1,3 +1,12 @@
+## Iteration 96
+- **Task**: Stale orders persist in Redis across restarts — 690 orphaned orders replayed on each start
+- **Task ID**: sam_trader-9z3.7.14
+- **Status**: COMPLETE
+- **Decisions**: Added startup guard in `build_trading_node()`: when `load_state=True` but `exec_clients` dict is empty (no Futu or IB execution clients available), log CRITICAL and override `load_state=False` for that session. This prevents stale orphaned orders from being replayed into a node with no venue to execute them. Added `sam flush-cache --force` CLI command to `services/cli.py` for emergency Redis cache cleanup. Added 4 unit tests for flush-cache (force flush, no-force abort, Redis unavailable). Added `test_skip_state_load_when_no_exec_clients` to `test_main.py` validating the guard behavior and CRITICAL log emission.
+- **Files Changed**: `src/sam_trader/main.py`, `src/sam_trader/services/cli.py`, `tests/unit/test_main.py`, `tests/unit/services/test_cli.py`, `docs/user/OPERATOR_GUIDE.md`, `docs/reference/BUILD_PHASE_6.md`
+- **Validation Result**: PASS (93/93 targeted tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ticket closed.
+
 ## Iteration 95
 - **Task**: TASK: Add active bar/quote probe CLI for independent broker verification
 - **Task ID**: sam_trader-9z3.9.23
