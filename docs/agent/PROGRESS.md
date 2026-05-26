@@ -1,3 +1,12 @@
+## Iteration 99
+- **Task**: BUG: Pipeline regime detection hardcoded to US venue
+- **Task ID**: sam_trader-9z3.10.33
+- **Status**: COMPLETE
+- **Decisions**: Fixed hardcoded `regime_venue: str = "US"` in `PipelineExecutorConfig` by passing the pipeline `market` parameter explicitly when constructing the executor. In `run_pipeline()` (pipeline.py) and the `readiness` CLI command (cli.py), changed `PipelineExecutorConfig()` to `PipelineExecutorConfig(regime_venue=market)` so regime classification matches the market being scanned (US or HK). Added `test_run_pipeline_passes_market_to_regime_venue` in `test_pipeline.py` verifying `run_pipeline(market="HK")` constructs `PipelineExecutorConfig` with `regime_venue="HK"`. Added `TestRegimeVenue` class in `test_pipeline_executor.py` with two tests verifying `_stage_regime_detection` instantiates `HMMRegimeClassifier(venue="HK")` and `HMMRegimeClassifier(venue="US")` respectively. Also fixed a pre-existing flake8 E501 line-too-long in `pipeline.py` (`holiday_name` assignment).
+- **Files Changed**: `src/sam_trader/services/pipeline.py`, `src/sam_trader/services/cli.py`, `tests/unit/services/test_pipeline.py`, `tests/unit/services/test_pipeline_executor.py`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 32/32 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ticket closed.
+
 ## Iteration 98
 - **Task**: Integrate market calendar into pipeline and readiness report
 - **Task ID**: sam_trader-9z3.10.32

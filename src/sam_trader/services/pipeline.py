@@ -101,7 +101,9 @@ def run_pipeline(
     calendar = MarketCalendarService.from_env()
     today = datetime.now(timezone.utc).date()
     if not calendar.is_trading_day(market, today):
-        holiday_name = calendar.holiday_name(market, today) or f"{market} market holiday"
+        holiday_name = calendar.holiday_name(market, today)
+        if holiday_name is None:
+            holiday_name = f"{market} market holiday"
         logger.info(
             "%s market holiday (%s), skipping gap scan",
             market,
@@ -183,7 +185,7 @@ def run_pipeline(
         }
 
     # 4. Pipeline executor
-    executor = PipelineExecutor(config=PipelineExecutorConfig())
+    executor = PipelineExecutor(config=PipelineExecutorConfig(regime_venue=market))
     pipeline_result = executor.run(
         candidates=candidates,
         trace_id=f"pipeline-{market}-{datetime.now(timezone.utc).isoformat()}",

@@ -404,6 +404,50 @@ class TestPipelineResultStructure:
         assert result.regime_prediction is not None
 
 
+class TestRegimeVenue:
+    def test_regime_venue_hk_passed_to_classifier(self) -> None:
+        from unittest.mock import MagicMock, patch
+
+        cfg = PipelineExecutorConfig(regime_venue="HK")
+        ex = PipelineExecutor(config=cfg)
+        bars = [{"close": 100.0 + i, "volume": 1_000_000} for i in range(50)]
+
+        with patch(
+            "sam_trader.services.pipeline_executor.HMMRegimeClassifier"
+        ) as mock_cls:
+            mock_clf = MagicMock()
+            mock_clf.predict.return_value = MagicMock(
+                regime=Regime.UNKNOWN, confidence=0.5, model_version="test"
+            )
+            mock_cls.return_value = mock_clf
+
+            ex._stage_regime_detection(bars, trace_id="test-hk")
+
+            mock_cls.assert_called_once_with(venue="HK")
+            mock_clf.fit.assert_called_once_with(bars)
+            mock_clf.predict.assert_called_once_with(bars)
+
+    def test_regime_venue_us_passed_to_classifier(self) -> None:
+        from unittest.mock import MagicMock, patch
+
+        cfg = PipelineExecutorConfig(regime_venue="US")
+        ex = PipelineExecutor(config=cfg)
+        bars = [{"close": 100.0 + i, "volume": 1_000_000} for i in range(50)]
+
+        with patch(
+            "sam_trader.services.pipeline_executor.HMMRegimeClassifier"
+        ) as mock_cls:
+            mock_clf = MagicMock()
+            mock_clf.predict.return_value = MagicMock(
+                regime=Regime.UNKNOWN, confidence=0.5, model_version="test"
+            )
+            mock_cls.return_value = mock_clf
+
+            ex._stage_regime_detection(bars, trace_id="test-us")
+
+            mock_cls.assert_called_once_with(venue="US")
+
+
 class TestHelpers:
     def test_infer_venue_us(self) -> None:
         assert PipelineExecutor._infer_venue("TSLA.NASDAQ") == "FUTU"

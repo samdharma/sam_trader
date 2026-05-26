@@ -80,6 +80,65 @@ class TestRunPipeline:
         mock_report_gen.generate.assert_called_once()
         mock_report_gen.save_audit.assert_called_once_with(mock_report)
 
+    @patch("sam_trader.services.pipeline.ReadinessReportGenerator")
+    @patch("sam_trader.services.pipeline.write_bundles")
+    @patch("sam_trader.services.pipeline.generate_bundles")
+    @patch("sam_trader.services.pipeline.PipelineExecutor")
+    @patch("sam_trader.services.pipeline.PreMarketGapScanner")
+    @patch("sam_trader.services.pipeline.QuoteCollectionService")
+    @patch("sam_trader.services.pipeline.build_watchlist")
+    @patch("sam_trader.services.pipeline.load_watchlist_config")
+    def test_run_pipeline_passes_market_to_regime_venue(
+        self,
+        mock_load_wl: Any,
+        mock_build_wl: Any,
+        mock_quote_svc: Any,
+        mock_scanner_cls: Any,
+        mock_executor_cls: Any,
+        mock_gen_bundles: Any,
+        mock_write_bundles: Any,
+        mock_report_gen_cls: Any,
+    ) -> None:
+        mock_load_wl.return_value = {"HK": MagicMock(min_gap_pct=2.0)}
+        mock_build_wl.return_value = {"HK": ["00700.HKEX"]}
+
+        mock_scanner = MagicMock()
+        mock_scanner.scan = AsyncMock(return_value=[MagicMock()])
+        mock_scanner_cls.return_value = mock_scanner
+
+        mock_pipeline_result = MagicMock()
+        mock_pipeline_result.approved = []
+        mock_pipeline_result.rejected = []
+        mock_pipeline_result.heat_result = None
+        mock_pipeline_result.regime_prediction = None
+        mock_pipeline_result.audit_trail = []
+        mock_pipeline_result.trace_id = "test-trace"
+
+        mock_executor = MagicMock()
+        mock_executor.run.return_value = mock_pipeline_result
+        mock_executor_cls.return_value = mock_executor
+
+        mock_report = MagicMock()
+        mock_report.candidate_count = 0
+        mock_report.approved_count = 0
+        mock_report.rejected_count = 0
+        mock_report.bundles_generated = 0
+        mock_report.bundle_path = None
+        mock_report.regime_state = {"regime": None}
+        mock_report.trace_id = "test-trace"
+
+        mock_report_gen = MagicMock()
+        mock_report_gen.generate.return_value = mock_report
+        mock_report_gen_cls.return_value = mock_report_gen
+
+        result = run_pipeline(market="HK", schedule="08:30")
+
+        assert result["market"] == "HK"
+        # Verify PipelineExecutorConfig was constructed with regime_venue="HK"
+        call_kwargs = mock_executor_cls.call_args.kwargs
+        assert "config" in call_kwargs
+        assert call_kwargs["config"].regime_venue == "HK"
+
     @patch("sam_trader.services.pipeline.load_watchlist_config")
     def test_run_pipeline_handles_empty_watchlist(
         self,

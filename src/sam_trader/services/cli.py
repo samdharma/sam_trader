@@ -1660,7 +1660,7 @@ def readiness(
             raise click.ClickException(f"Gap scan failed: {exc}")
 
         # Pipeline executor
-        executor = PipelineExecutor(config=PipelineExecutorConfig())
+        executor = PipelineExecutor(config=PipelineExecutorConfig(regime_venue=market))
         pipeline_result = executor.run(
             candidates=candidates,
             trace_id=f"readiness-{market}-{datetime.now(timezone.utc).isoformat()}",
