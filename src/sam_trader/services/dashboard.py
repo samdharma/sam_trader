@@ -11,9 +11,10 @@ import json
 import logging
 import subprocess
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Any, Awaitable, TypeVar
+from urllib.parse import parse_qs, urlparse
 
 from sam_trader.services.db_schema import validate_schema
 
@@ -110,8 +111,14 @@ tr:hover { background:#161b22; }
 </div>
 </div>
 
-<div class="card">
-<h2>MARKET DATA</h2>
+<div class="card" id="market-data-card">
+<h2 style="cursor:pointer;" onclick="toggleMarketData()">
+  MARKET DATA <span id="md-toggle">▼</span>
+</h2>
+<div id="market-data-summary" style="display:none;">
+  <span id="md-summary-text">{{market_data_summary}}</span>
+</div>
+<div id="market-data-detail" style="display:none;">
 <table>
 <thead>
   <tr>
@@ -123,6 +130,19 @@ tr:hover { background:#161b22; }
 </tbody>
 </table>
 {{venue_conn_rows}}
+<div id="recent-bars-section" style="margin-top:1rem;">
+  <h3 style="font-size:1rem; color:var(--accent);">Recent Bars</h3>
+  <table id="recent-bars-table">
+    <thead>
+      <tr>
+        <th>Instrument</th><th>Time</th><th>Open</th>
+        <th>High</th><th>Low</th><th>Close</th><th>Volume</th>
+      </tr>
+    </thead>
+    <tbody><tr><td colspan="7">Click to load details...</td></tr></tbody>
+  </table>
+</div>
+</div>
 </div>
 
 <div class="card">
@@ -174,6 +194,72 @@ tr:hover { background:#161b22; }
 <div class="footer">
 Refreshed: {{now}} UTC &nbsp;|&nbsp; Auto-refresh every 30s
 </div>
+<script>
+(function(){
+  var mdExpanded = sessionStorage.getItem('mdExpanded') === 'true';
+  var summary = document.getElementById('market-data-summary');
+  var detail = document.getElementById('market-data-detail');
+  var toggle = document.getElementById('md-toggle');
+  if (mdExpanded) {
+    summary.style.display = 'none';
+    detail.style.display = 'block';
+    toggle.textContent = '▲';
+    loadRecentBars();
+    window.mdRefreshInterval = setInterval(loadRecentBars, 10000);
+  } else {
+    summary.style.display = 'block';
+    detail.style.display = 'none';
+  }
+})();
+
+function toggleMarketData() {
+  var summary = document.getElementById('market-data-summary');
+  var detail = document.getElementById('market-data-detail');
+  var toggle = document.getElementById('md-toggle');
+  var isHidden = detail.style.display === 'none';
+  detail.style.display = isHidden ? 'block' : 'none';
+  summary.style.display = isHidden ? 'none' : 'block';
+  toggle.textContent = isHidden ? '▲' : '▼';
+  sessionStorage.setItem('mdExpanded', isHidden ? 'true' : 'false');
+  if (isHidden) {
+    loadRecentBars();
+    if (!window.mdRefreshInterval) {
+      window.mdRefreshInterval = setInterval(loadRecentBars, 10000);
+    }
+  } else {
+    if (window.mdRefreshInterval) {
+      clearInterval(window.mdRefreshInterval);
+      window.mdRefreshInterval = null;
+    }
+  }
+}
+
+async function loadRecentBars() {
+  var tbody = document.querySelector('#recent-bars-table tbody');
+  try {
+    var resp = await fetch('/api/bars/recent?seconds=300');
+    var data = await resp.json();
+    if (!data.bars || data.bars.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="7">No recent bars</td></tr>';
+      return;
+    }
+    tbody.innerHTML = data.bars.map(function(b) {
+      return '<tr>' +
+        '<td>' + (b.instrument_id || '') + '</td>' +
+        '<td>' + ((b.ts || '').split('+')[0]) + '</td>' +
+        '<td>' + (b.open || '') + '</td>' +
+        '<td>' + (b.high || '') + '</td>' +
+        '<td>' + (b.low || '') + '</td>' +
+        '<td>' + (b.close || '') + '</td>' +
+        '<td>' + (b.volume || '') + '</td>' +
+      '</tr>';
+    }).join('');
+  } catch (e) {
+    tbody.innerHTML = '<tr><td colspan="7">Error loading bars: ' +
+      (e.message || e) + '</td></tr>';
+  }
+}
+</script>
 </body>
 </html>
 """
@@ -520,6 +606,52 @@ def query_pnl_from_redis(config: DashboardConfig | None = None) -> dict[str, Any
         return {"strategies": {}, "total": 0.0, "date": "", "error": str(exc)}
 
 
+def _handle_bars_recent(path: str, config: DashboardConfig) -> dict[str, Any]:
+    """Handle GET /api/bars/recent?instrument=X&seconds=300.
+
+    Reads ``sam:bars:recent:{instrument_id}`` from Redis, filters
+    entries older than *seconds*, and returns a JSON-compatible dict.
+    """
+    parsed = urlparse(path)
+    params = parse_qs(parsed.query)
+    instrument = params.get("instrument", [None])[0]
+    try:
+        seconds = int(params.get("seconds", ["300"])[0])
+    except ValueError:
+        seconds = 300
+
+    cutoff = datetime.now(timezone.utc) - timedelta(seconds=seconds)
+    results: list[dict[str, Any]] = []
+
+    try:
+        client = _redis_client(config)
+        if instrument:
+            keys = [f"sam:bars:recent:{instrument}"]
+        else:
+            keys = []
+            for key in client.scan_iter(match="sam:bars:recent:*"):
+                key_str = key if isinstance(key, str) else key.decode()
+                keys.append(key_str)
+
+        for key in keys:
+            instr_id = key.split(":", 3)[3] if ":" in key else key
+            items = client.lrange(key, 0, 99)
+            for item in items:
+                try:
+                    data = json.loads(item if isinstance(item, str) else item.decode())
+                    ts = datetime.fromisoformat(data["ts"])
+                    if ts >= cutoff:
+                        data["instrument_id"] = instr_id
+                        results.append(data)
+                except (ValueError, KeyError, TypeError):
+                    continue
+    except Exception as exc:
+        logger.warning("bars recent query failed: %s", exc)
+
+    results.sort(key=lambda x: x["ts"], reverse=True)
+    return {"bars": results, "seconds": seconds, "count": len(results)}
+
+
 def get_dashboard_data(config: DashboardConfig | None = None) -> dict[str, Any]:
     """Aggregate all dashboard data sources."""
     cfg = config or DashboardConfig()
@@ -611,6 +743,17 @@ def _render_html(data: dict[str, Any]) -> str:
             f"</tr>"
         )
 
+    # Market data summary for collapsed view
+    md_summary: str
+    if not market_data.get("instruments"):
+        md_summary = "No instruments"
+    else:
+        count = len(market_data["instruments"])
+        min_age = min(i.get("age_seconds", 9999) for i in market_data["instruments"])
+        md_summary = (
+            f"{count} instrument{'s' if count != 1 else ''} | last bar {min_age}s ago"
+        )
+
     venue_conn_rows: list[str] = []
     venues = market_data.get("venues", [])
     if venues:
@@ -674,6 +817,7 @@ def _render_html(data: dict[str, Any]) -> str:
                 else "<tr><td colspan='4'>No bar telemetry</td></tr>"
             ),
         )
+        .replace("{{market_data_summary}}", md_summary)
         .replace("{{venue_conn_rows}}", "\n".join(venue_conn_rows))
         .replace(
             "{{fills_rows}}",
@@ -726,11 +870,15 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:  # noqa: N802
         path = self.path
+        cfg = DashboardConfig()
         if path == "/health":
             health = check_all_services()
             self._send_json(200, health)
         elif path == "/api/dashboard":
             data = get_dashboard_data()
+            self._send_json(200, data)
+        elif path.startswith("/api/bars/recent"):
+            data = _handle_bars_recent(path, cfg)
             self._send_json(200, data)
         else:
             # Serve dashboard HTML for any other path

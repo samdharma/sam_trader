@@ -215,6 +215,130 @@ class TestMarketDataEndpoint:
         assert result["venues"] == []
 
 
+class TestBarsRecentEndpoint:
+    """Tests for GET /api/bars/recent."""
+
+    def test_bars_recent_returns_all_instruments(self) -> None:
+        """_handle_bars_recent returns bars from all instruments when no filter."""
+        from datetime import datetime, timezone
+
+        now = datetime(2026, 5, 26, 12, 0, 0, tzinfo=timezone.utc)
+        bar_json = (
+            '{"ts":"' + now.isoformat() + '",'
+            '"open":"150.00","high":"151.00",'
+            '"low":"149.00","close":"150.50","volume":"1000"}'
+        )
+
+        mock_redis = MagicMock()
+        mock_redis.scan_iter.return_value = ["sam:bars:recent:TSLA.NASDAQ"]
+        mock_redis.lrange.return_value = [bar_json]
+
+        with patch(
+            "sam_trader.services.dashboard._redis_client", return_value=mock_redis
+        ):
+            with patch("sam_trader.services.dashboard.datetime") as mock_dt:
+                mock_dt.now.return_value = now
+                mock_dt.fromisoformat = datetime.fromisoformat
+                mock_dt.side_effect = lambda *a, **k: datetime(*a, **k)
+                from sam_trader.services.dashboard import _handle_bars_recent
+
+                result = _handle_bars_recent(
+                    "/api/bars/recent?seconds=300", DashboardConfig()
+                )
+
+        assert result["count"] == 1
+        assert result["seconds"] == 300
+        assert result["bars"][0]["instrument_id"] == "TSLA.NASDAQ"
+        assert result["bars"][0]["open"] == "150.00"
+        assert result["bars"][0]["volume"] == "1000"
+
+    def test_bars_recent_filters_by_instrument(self) -> None:
+        """_handle_bars_recent filters to a single instrument when provided."""
+        from datetime import datetime, timezone
+
+        now = datetime(2026, 5, 26, 12, 0, 0, tzinfo=timezone.utc)
+        bar_json = (
+            '{"ts":"' + now.isoformat() + '",'
+            '"open":"150.00","high":"151.00",'
+            '"low":"149.00","close":"150.50","volume":"1000"}'
+        )
+
+        mock_redis = MagicMock()
+        mock_redis.scan_iter.return_value = []
+        mock_redis.lrange.return_value = [bar_json]
+
+        with patch(
+            "sam_trader.services.dashboard._redis_client", return_value=mock_redis
+        ):
+            with patch("sam_trader.services.dashboard.datetime") as mock_dt:
+                mock_dt.now.return_value = now
+                mock_dt.fromisoformat = datetime.fromisoformat
+                mock_dt.side_effect = lambda *a, **k: datetime(*a, **k)
+                from sam_trader.services.dashboard import _handle_bars_recent
+
+                result = _handle_bars_recent(
+                    "/api/bars/recent?instrument=TSLA.NASDAQ&seconds=300",
+                    DashboardConfig(),
+                )
+
+        assert result["count"] == 1
+        mock_redis.lrange.assert_called_once_with("sam:bars:recent:TSLA.NASDAQ", 0, 99)
+
+    def test_bars_recent_filters_by_seconds(self) -> None:
+        """_handle_bars_recent excludes bars older than the cutoff."""
+        from datetime import datetime, timedelta, timezone
+
+        now = datetime(2026, 5, 26, 12, 0, 0, tzinfo=timezone.utc)
+        old_ts = (now - timedelta(seconds=400)).isoformat()
+        fresh_ts = (now - timedelta(seconds=60)).isoformat()
+
+        mock_redis = MagicMock()
+        mock_redis.scan_iter.return_value = ["sam:bars:recent:TSLA.NASDAQ"]
+        mock_redis.lrange.return_value = [
+            (
+                '{"ts":"' + old_ts + '",'
+                '"open":"1","high":"2","low":"0",'
+                '"close":"1","volume":"1"}'
+            ),
+            (
+                '{"ts":"' + fresh_ts + '",'
+                '"open":"2","high":"3","low":"1",'
+                '"close":"2","volume":"2"}'
+            ),
+        ]
+
+        with patch(
+            "sam_trader.services.dashboard._redis_client", return_value=mock_redis
+        ):
+            with patch("sam_trader.services.dashboard.datetime") as mock_dt:
+                mock_dt.now.return_value = now
+                mock_dt.fromisoformat = datetime.fromisoformat
+                mock_dt.side_effect = lambda *a, **k: datetime(*a, **k)
+                from sam_trader.services.dashboard import _handle_bars_recent
+
+                result = _handle_bars_recent(
+                    "/api/bars/recent?seconds=300", DashboardConfig()
+                )
+
+        assert result["count"] == 1
+        assert result["bars"][0]["open"] == "2"
+
+    def test_bars_recent_returns_empty_on_redis_error(self) -> None:
+        """Redis errors yield empty bars list without raising."""
+        mock_redis = MagicMock()
+        mock_redis.scan_iter.side_effect = Exception("connection refused")
+
+        with patch(
+            "sam_trader.services.dashboard._redis_client", return_value=mock_redis
+        ):
+            from sam_trader.services.dashboard import _handle_bars_recent
+
+            result = _handle_bars_recent("/api/bars/recent", DashboardConfig())
+
+        assert result["bars"] == []
+        assert result["count"] == 0
+
+
 class TestPnlEndpoint:
     """Tests for P&L data from Redis."""
 
@@ -335,6 +459,67 @@ class TestHtmlRendering:
         assert "No fills today" in html
         assert "No open positions" in html
         assert "No P&L data" in html
+
+    def test_html_renders_market_data_summary(self) -> None:
+        """Collapsed Market Data panel shows compact summary text."""
+        from sam_trader.services.dashboard import _render_html
+
+        html = _render_html(
+            {
+                "health": {"status": "healthy", "services": {}},
+                "fills": [],
+                "positions": [],
+                "market_data": {
+                    "instruments": [
+                        {
+                            "instrument_id": "TSLA.NASDAQ",
+                            "last_ts": "13:30:00",
+                            "age_seconds": 45,
+                            "staleness": "fresh",
+                        },
+                        {
+                            "instrument_id": "NVDA.NASDAQ",
+                            "last_ts": "13:28:00",
+                            "age_seconds": 165,
+                            "staleness": "stale",
+                        },
+                    ],
+                    "counts": {},
+                    "venues": [],
+                    "timestamp": "",
+                },
+                "pnl": {"strategies": {}, "total": 0.0, "date": ""},
+                "timestamp": "",
+            }
+        )
+        assert "2 instruments | last bar 45s ago" in html
+        assert 'id="market-data-summary"' in html
+        assert 'id="market-data-detail"' in html
+        assert "Recent Bars" in html
+        assert "toggleMarketData" in html
+        assert "loadRecentBars" in html
+        assert "/api/bars/recent?seconds=300" in html
+
+    def test_html_renders_no_instruments_summary(self) -> None:
+        """When no instruments are present, summary shows 'No instruments'."""
+        from sam_trader.services.dashboard import _render_html
+
+        html = _render_html(
+            {
+                "health": {"status": "healthy", "services": {}},
+                "fills": [],
+                "positions": [],
+                "market_data": {
+                    "instruments": [],
+                    "counts": {},
+                    "venues": [],
+                    "timestamp": "",
+                },
+                "pnl": {"strategies": {}, "total": 0.0, "date": ""},
+                "timestamp": "",
+            }
+        )
+        assert "No instruments" in html
 
 
 class TestDashboardServer:
@@ -508,6 +693,42 @@ class TestDashboardServer:
         assert "TODAY'S FILLS" in html
         assert "CURRENT POSITIONS" in html
         assert "P&L SUMMARY" in html
+
+    def test_get_api_bars_recent_via_http(self, server_port: int) -> None:
+        """GET /api/bars/recent over HTTP returns JSON with filtered bars."""
+        from datetime import datetime, timezone
+
+        now = datetime(2026, 5, 26, 12, 0, 0, tzinfo=timezone.utc)
+        bar_json = (
+            '{"ts":"' + now.isoformat() + '",'
+            '"open":"150.00","high":"151.00",'
+            '"low":"149.00","close":"150.50","volume":"1000"}'
+        )
+
+        with patch("sam_trader.services.dashboard._redis_client") as mock_redis_cls:
+            mock_client = MagicMock()
+            mock_client.scan_iter.return_value = ["sam:bars:recent:TSLA.NASDAQ"]
+            mock_client.lrange.return_value = [bar_json]
+            mock_redis_cls.return_value = mock_client
+
+            with patch("sam_trader.services.dashboard.datetime") as mock_dt:
+                mock_dt.now.return_value = now
+                mock_dt.fromisoformat = datetime.fromisoformat
+                mock_dt.side_effect = lambda *a, **k: datetime(*a, **k)
+
+                conn = HTTPConnection("127.0.0.1", server_port, timeout=5)
+                conn.request(
+                    "GET", "/api/bars/recent?instrument=TSLA.NASDAQ&seconds=300"
+                )
+                resp = conn.getresponse()
+                body = json.loads(resp.read().decode())
+                conn.close()
+
+        assert resp.status == 200
+        assert body["count"] == 1
+        assert body["seconds"] == 300
+        assert body["bars"][0]["instrument_id"] == "TSLA.NASDAQ"
+        assert body["bars"][0]["open"] == "150.00"
 
 
 class TestDashboardStartup:

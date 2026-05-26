@@ -110,6 +110,7 @@ class HealthMonitorActor(Actor):
         now = self.clock.utc_now()
         self._last_bar_times[instrument_id] = now
         self._write_bar_telemetry_to_redis(instrument_id, now)
+        self._write_bar_recent_to_redis(instrument_id, bar, now)
 
     def _build_heartbeat_msg(
         self,
@@ -235,6 +236,49 @@ class HealthMonitorActor(Actor):
             )
         except Exception as exc:  # noqa: BLE001
             self.log.warning(f"HealthMonitorActor: Redis bar telemetry failed: {exc}")
+
+    def _write_bar_recent_to_redis(
+        self, instrument_id: str, bar: Bar, timestamp: datetime
+    ) -> None:
+        """Persist full bar OHLCV to a Redis list for dashboard detail view.
+
+        Fire-and-forget: schedules async Redis commands via the event loop
+        captured in ``on_start`` so that ``on_bar`` never blocks.
+        Keeps the most recent 100 bars per instrument with a 24-hour TTL.
+        """
+        redis = self._redis
+        if redis is None or self._main_loop is None:
+            return
+        import json
+
+        try:
+            bar_json = json.dumps(
+                {
+                    "ts": timestamp.isoformat(),
+                    "open": str(bar.open),
+                    "high": str(bar.high),
+                    "low": str(bar.low),
+                    "close": str(bar.close),
+                    "volume": str(bar.volume),
+                }
+            )
+
+            async def _push() -> None:
+                pipe = redis.pipeline()
+                await pipe.lpush(  # type: ignore[misc]
+                    f"sam:bars:recent:{instrument_id}", bar_json
+                )
+                await pipe.ltrim(  # type: ignore[misc]
+                    f"sam:bars:recent:{instrument_id}", 0, 99
+                )
+                await pipe.expire(  # type: ignore[misc]
+                    f"sam:bars:recent:{instrument_id}", 86400
+                )
+                await pipe.execute()  # type: ignore[misc]
+
+            self._main_loop.create_task(_push())
+        except Exception as exc:  # noqa: BLE001
+            self.log.warning(f"HealthMonitorActor: Redis bar recent list failed: {exc}")
 
     def _write_venue_conn_to_redis(
         self, venue_name: str, connected: bool, timestamp: datetime

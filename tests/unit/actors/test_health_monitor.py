@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from nautilus_trader.test_kit.stubs.component import TestComponentStubs
@@ -74,6 +74,11 @@ def mock_redis() -> AsyncMock:
     redis.hincrby = AsyncMock(return_value=1)
     redis.set = AsyncMock(return_value=True)
     redis.close = AsyncMock(return_value=None)
+    redis.pipeline = MagicMock(return_value=redis)
+    redis.lpush = AsyncMock(return_value=1)
+    redis.ltrim = AsyncMock(return_value=True)
+    redis.expire = AsyncMock(return_value=True)
+    redis.execute = AsyncMock(return_value=[1, True, True])
     return redis
 
 
@@ -143,6 +148,51 @@ class TestHealthMonitorActor:
                 assert hcall[0][0].startswith("sam:bars:count:")
                 assert hcall[0][1] == instrument_id
                 assert hcall[0][2] == 1
+
+        asyncio.run(_test())
+
+    def test_on_bar_writes_redis_recent_list(
+        self,
+        redis_registered_actor: HealthMonitorActor,
+        mock_redis: AsyncMock,
+    ) -> None:
+        async def _test() -> None:
+            with patch(
+                "sam_trader.actors.health_monitor.aioredis.Redis",
+                return_value=mock_redis,
+            ):
+                redis_registered_actor.on_start()
+                await asyncio.sleep(0.01)
+
+                bar = TestDataStubs.bar_5decimal_5min_bid()
+                redis_registered_actor.on_bar(bar)
+                await asyncio.sleep(0.01)
+
+                instrument_id = str(bar.bar_type.instrument_id)
+                mock_redis.pipeline.assert_called_once()
+                mock_redis.lpush.assert_awaited_once()
+                lcall = mock_redis.lpush.call_args
+                assert lcall[0][0] == f"sam:bars:recent:{instrument_id}"
+                import json
+
+                payload = json.loads(lcall[0][1])
+                assert "ts" in payload
+                assert "open" in payload
+                assert "high" in payload
+                assert "low" in payload
+                assert "close" in payload
+                assert "volume" in payload
+
+                mock_redis.ltrim.assert_awaited_once()
+                tcall = mock_redis.ltrim.call_args
+                assert tcall[0][0] == f"sam:bars:recent:{instrument_id}"
+                assert tcall[0][1] == 0
+                assert tcall[0][2] == 99
+
+                mock_redis.expire.assert_awaited_once()
+                ecall = mock_redis.expire.call_args
+                assert ecall[0][0] == f"sam:bars:recent:{instrument_id}"
+                assert ecall[0][1] == 86400
 
         asyncio.run(_test())
 

@@ -1559,3 +1559,16 @@
 - **Files Changed**: `src/sam_trader/main.py`, `tests/unit/test_main.py`, `docs/reference/BUILD_PHASE_4.md`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 19/19 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ticket complete.
+
+## Iteration 97
+- **Task**: TASK: Add expandable bar receipt details panel to dashboard
+- **Task ID**: sam_trader-9z3.9.24
+- **Status**: COMPLETE
+- **Decisions**: 
+  - Added `_write_bar_recent_to_redis` to HealthMonitorActor that LPUSHes full bar OHLCV JSON to `sam:bars:recent:{instrument_id}` Redis list, with LTRIM to keep last 100 and 24h TTL.
+  - Added `_handle_bars_recent` to dashboard backend supporting `GET /api/bars/recent?instrument=X&seconds=300` (instrument optional). Filters by timestamp cutoff, returns sorted JSON array.
+  - Made MARKET DATA card collapsible: collapsed shows compact summary ("N instruments | last bar Xs ago"), expanded shows existing summary table plus new Recent Bars OHLCV detail table.
+  - Inline JavaScript handles toggle (sessionStorage persistence), lazy AJAX fetch on expand, and 10s auto-refresh while expanded.
+- **Files Changed**: `src/sam_trader/actors/health_monitor.py`, `src/sam_trader/services/dashboard.py`, `tests/unit/actors/test_health_monitor.py`, `tests/unit/services/test_dashboard.py`
+- **Validation Result**: PASS (46/46 targeted tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ticket ready to close.
