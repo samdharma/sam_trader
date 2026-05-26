@@ -124,7 +124,7 @@ class TestFutuOpenDStartupXmlGeneration:
         assert root.findtext("api_port") == "11111"
         assert root.findtext("login_account") == "test_id"
         assert root.findtext("login_pwd_md5") == "md5hash"
-        assert root.findtext("lang") == "chs"
+        assert root.findtext("lang") == "en"
         assert root.findtext("log_level") == "info"
         assert root.findtext("push_proto_type") == "0"
         assert root.findtext("telnet_ip") == "192.168.1.10"
@@ -207,7 +207,7 @@ class TestEnsureBinary:
     def test_ensure_binary_finds_cached_binary(self, monkeypatch, tmp_path):
         """If the binary already exists in the volume, return it without downloading."""
         start = _load_start_module()
-        version = os.environ.get("FUTU_OPEND_VER", "10.5.6508")
+        version = os.environ.get("FUTU_OPEND_VER", "10.6.6608")
         expected_dir = tmp_path / f"Futu_OpenD_{version}_Ubuntu18.04"
         expected_dir.mkdir()
         binary = expected_dir / "FutuOpenD"
@@ -226,7 +226,7 @@ class TestEnsureBinary:
         monkeypatch.setattr(start, "VOLUME_DIR", str(tmp_path))
 
         # Create a fake tar.gz containing a dummy FutuOpenD binary
-        version = os.environ.get("FUTU_OPEND_VER", "10.5.6508")
+        version = os.environ.get("FUTU_OPEND_VER", "10.6.6608")
         inner_dir = f"Futu_OpenD_{version}_Ubuntu18.04"
         import tarfile
 

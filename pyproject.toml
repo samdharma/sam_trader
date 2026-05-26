@@ -27,7 +27,7 @@ dependencies = [
     "nautilus_trader==1.227.0",
     "pyyaml",
     "asyncpg",
-    "futu-api",
+    "futu-api==10.6.6608",
     "nautilus-ibapi==10.45.1",
     "holidays",
     "redis>=5.0",

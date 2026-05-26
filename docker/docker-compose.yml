@@ -45,6 +45,7 @@ services:
       - FUTU_ENABLED=${FUTU_ENABLED:-false}
       - FUTU_OPEND_HOST=${FUTU_OPEND_HOST:-sam-futu-opend}
       - FUTU_OPEND_PORT=${FUTU_OPEND_PORT:-11111}
+      - FUTU_OPEND_VER=${FUTU_OPEND_VER:-10.6.6608}
       - FUTU_ACCOUNT_PWD_MD5=${FUTU_ACCOUNT_PWD_MD5:-}
       - FUTU_TRD_ENV=${FUTU_TRD_ENV:-SIMULATE}
       - FUTU_TRD_MARKET=${FUTU_TRD_MARKET:-US}
@@ -126,6 +127,7 @@ services:
       FUTU_OPEND_PORT: ${FUTU_OPEND_PORT:-11111}
       FUTU_OPEND_TELNET_PORT: ${FUTU_OPEND_TELNET_PORT:-22222}
       FUTU_OPEND_LANG: ${FUTU_OPEND_LANG:-en}
+      FUTU_OPEND_VER: ${FUTU_OPEND_VER:-10.6.6608}
     volumes:
       - futu_opend_data:/home/futu/.com.futunn.FutuOpenD
       - ../docker/futu-opend/futu.pem:/.futu/futu.pem:ro
@@ -199,6 +201,7 @@ services:
       - BACKUP_DIR=/opt/sam_trader/backups
       - BACKUP_RETENTION_DAYS=${BACKUP_RETENTION_DAYS:-30}
       - FUTU_CONTAINER=sam-futu-opend
+      - FUTU_OPEND_VER=${FUTU_OPEND_VER:-10.6.6608}
       - CONFIG_DIR=/opt/sam_trader/config
     profiles:
       - services

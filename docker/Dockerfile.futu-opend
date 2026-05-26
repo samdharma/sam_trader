@@ -16,7 +16,7 @@
 
 FROM debian:stable-slim
 
-ARG FUTU_OPEND_VER=10.5.6508
+ARG FUTU_OPEND_VER=10.6.6608  # MUST match futu-api SDK version in docker/requirements.txt and pyproject.toml
 ARG FUTU_DOWNLOAD_URL=https://softwaredownload.futunn.com/Futu_OpenD_${FUTU_OPEND_VER}_Ubuntu18.04.tar.gz
 
 # Install dependencies: ca-certificates, curl, libssl3, tini, procps

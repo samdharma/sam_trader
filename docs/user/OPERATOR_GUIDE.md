@@ -501,5 +501,40 @@ docker exec sam-services sam <command>
 
 ---
 
-*Last updated: 2026-05-25 — Added §4.8 false CONNECTIVITY_LOSS troubleshooting (sandbox readiness)*  
+### 4.9 SHA Handshake Failure — `proto_id:1001 check sha error`
+
+**Symptoms:**
+- `sam-trader` logs show: `init connect fail: conn=0(1) msg=proto_id:1001 conn_id:0 check sha error!`
+- `TimeoutError: Futu context did not reach READY within 10.0s (status=CONNECTED)`
+- HealthMonitorActor heartbeat shows `venues=[FUTU(conn=DOWN)]`
+- No market data or order execution flows
+
+**Root cause:** The `sam-futu-opend` container binary version does not match the
+`futu-api` SDK version installed in `sam-trader` / `sam-services`.
+Futu enforces strict protocol-version matching.
+
+**Fix:**
+
+```bash
+# 1. Verify the mismatch
+docker exec sam-trader python -c "import futu; print(futu.__version__)"
+docker exec sam-futu-opend sh -c 'echo $FUTU_OPEND_VER'
+
+# 2. If they differ, rebuild the OpenD image with the correct version
+#    (edit docker/Dockerfile.futu-opend ARG FUTU_OPEND_VER to match)
+docker compose -f docker/docker-compose.yml build --no-cache sam-futu-opend
+
+# 3. Restart the stack
+./deploy.sh --with-futu --with-services restart
+
+# 4. Confirm in trader logs
+#    "Futu quote context ready: host=sam-futu-opend port=11111 env=SIMULATE sdk=10.6.6608 opend=10.6.6608"
+```
+
+**Prevention:**
+- `pyproject.toml`, `docker/requirements.txt`, and `docker/Dockerfile.futu-opend`
+  are kept in sync via the `test_version_consistency` unit test.
+- Never change one file without updating the others.
+
+*Last updated: 2026-05-26 — Added §4.9 SHA handshake troubleshooting (version mismatch)*  
 *See also: [`DEPLOY_GUIDE.md`](./DEPLOY_GUIDE.md), [`BUNDLE_GUIDE.md`](./BUNDLE_GUIDE.md)*

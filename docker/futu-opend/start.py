@@ -6,7 +6,7 @@ import subprocess
 import sys
 import xml.etree.ElementTree as ET
 
-FUTU_OPEND_VER = os.environ.get("FUTU_OPEND_VER", "10.5.6508")
+FUTU_OPEND_VER = os.environ.get("FUTU_OPEND_VER", "10.6.6608")
 _DEFAULT_DOWNLOAD_URL = (
     f"https://softwaredownload.futunn.com/"
     f"Futu_OpenD_{FUTU_OPEND_VER}_Ubuntu18.04.tar.gz"
@@ -107,7 +107,7 @@ def ensure_binary() -> str:
         )
         sys.exit(1)
 
-    version = os.environ.get("FUTU_OPEND_VER", "10.5.6508")
+    version = os.environ.get("FUTU_OPEND_VER", "10.6.6608")
     download_url = os.environ.get(
         "FUTU_DOWNLOAD_URL",
         f"https://softwaredownload.futunn.com/Futu_OpenD_{version}_Ubuntu18.04.tar.gz",
@@ -125,6 +125,7 @@ def ensure_binary() -> str:
         expected_binary = os.path.join(expected_dir, "FutuOpenD")
     if os.path.isfile(expected_binary) and os.access(expected_binary, os.X_OK):
         print(f"Using cached Futu OpenD binary: {expected_binary}")
+        print(f"Futu OpenD version: {version}")
         return expected_binary
 
     # Download
@@ -171,6 +172,7 @@ def ensure_binary() -> str:
 
     os.chmod(expected_binary, 0o755)
     print(f"Futu OpenD ready: {expected_binary}")
+    print(f"Futu OpenD version: {version}")
     return expected_binary
 
 

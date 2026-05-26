@@ -56,6 +56,23 @@
 | `subscription_manager.py` | `src/sam_trader/adapters/futu/subscription_manager.py` | Quota tracking per `DataType`. Priority-based allocation. Idle release. Thread-safe. |
 | `common.py` | `src/sam_trader/adapters/futu/common.py` | Symbology helpers: `instrument_id_to_futu_security()`, `futu_security_to_instrument_id()`. |
 
+### 2.1 Version Alignment Note
+
+The Futu OpenD binary version **must** match the `futu-api` SDK version exactly.
+A mismatch causes a SHA protocol handshake failure on `proto_id:1001`:
+
+```
+init connect fail: conn=0(1) msg=proto_id:1001 conn_id:0 check sha error!
+```
+
+**Keep these three values in sync:**
+- `ARG FUTU_OPEND_VER` in `docker/Dockerfile.futu-opend`
+- `futu-api==X.Y.Z` in `docker/requirements.txt` and `pyproject.toml`
+- Default fallback in `docker/futu-opend/start.py`
+
+Both `sam-trader` and `sam-services` receive `FUTU_OPEND_VER` via `docker-compose.yml`
+so that `connection.py` can log both SDK and OpenD versions on every connect.
+
 ---
 
 ## 3. Pre-Discovered Reference — Nautilus Types

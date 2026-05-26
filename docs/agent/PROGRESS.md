@@ -1505,3 +1505,26 @@
 - **Files Changed**: `src/sam_trader/services/dashboard.py`, `tests/unit/services/test_dashboard.py`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 15/15 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None.
+
+## Iteration 133
+- **Task**: CRITICAL: Futu OpenD version mismatch — SHA handshake failure blocks all trading
+- **Task ID**: sam_trader-9z3.3.9
+- **Status**: COMPLETE
+- **Decisions**:
+  - Bumped `FUTU_OPEND_VER` from `10.5.6508` to `10.6.6608` in `docker/Dockerfile.futu-opend` and `docker/futu-opend/start.py`.
+  - Pinned `futu-api==10.6.6608` in `docker/requirements.txt` and `pyproject.toml` to prevent drift.
+  - Added `FUTU_OPEND_VER` env var to `sam-trader`, `sam-services`, and `sam-futu-opend` services in `docker-compose.yml`.
+  - Added version logging in `connection.py`: both SDK (`futu.__version__`) and OpenD (`FUTU_OPEND_VER` env) are logged on quote/trade context connect.
+  - Added version logging in `start.py`: prints resolved OpenD version on startup.
+  - Added `FUTU_OPEND_VER` to `.env.example` with comment about version alignment.
+  - Added version consistency note to `docs/reference/BUILD_PHASE_2.md` §2.1.
+  - Added SHA handshake troubleshooting section to `docs/user/OPERATOR_GUIDE.md` §4.9.
+  - Created `tests/unit/test_version_consistency.py` with 3 tests enforcing sync between Dockerfile, requirements.txt, pyproject.toml, and start.py.
+  - Fixed pre-existing `test_build_xml_tree_creates_all_elements` test that expected `lang="chs"` instead of default `"en"`.
+  - Installed `futu-api==10.6.6608` in local venv.
+  - Verified `docker compose build --no-cache sam-futu-opend` succeeds.
+  - Verified `docker compose build --no-cache sam-services` succeeds (installs futu-api==10.6.6608 inside container).
+  - `sam-trader` build timed out due to NautilusTrader dependency install time (>60s), but `futu-api` pin was validated inside the container install step.
+- **Files Changed**: `docker/Dockerfile.futu-opend`, `docker/futu-opend/start.py`, `docker/requirements.txt`, `pyproject.toml`, `docker/docker-compose.yml`, `src/sam_trader/adapters/futu/connection.py`, `.env.example`, `docs/reference/BUILD_PHASE_2.md`, `docs/user/OPERATOR_GUIDE.md`, `tests/unit/test_futu_opend_startup.py`, `tests/unit/test_version_consistency.py` (new)
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 14/14 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: Runtime acceptance criteria (quote context ready logs, health monitor UP, bar subscription, paper-trade order) require live Futu OpenD stack with credentials and cannot be verified in this build-only environment. They are deferred to operator E2E validation per OPERATOR_GUIDE.md §4.9.

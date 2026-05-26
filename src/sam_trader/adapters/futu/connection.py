@@ -14,6 +14,7 @@ import threading
 import time
 from typing import Any
 
+import futu
 from futu import (
     RET_OK,
     ContextStatus,
@@ -220,8 +221,14 @@ def get_cached_futu_quote_context(
     ret = ctx.set_handler(_FutuDisconnectHandler(key, is_trade=False))
     if ret != RET_OK:
         logger.warning("Failed to set disconnect handler on quote context %s", key)
+    opend_ver = os.environ.get("FUTU_OPEND_VER", "unknown")
     logger.info(
-        "Futu quote context ready: host=%s port=%s env=%s", host, port, trade_env
+        "Futu quote context ready: host=%s port=%s env=%s sdk=%s opend=%s",
+        host,
+        port,
+        trade_env,
+        futu.__version__,
+        opend_ver,
     )
     return ctx
 
@@ -294,12 +301,15 @@ def get_cached_futu_trade_context(
     ret = ctx.set_handler(_FutuDisconnectHandler(key, is_trade=True))
     if ret != RET_OK:
         logger.warning("Failed to set disconnect handler on trade context %s", key)
+    opend_ver = os.environ.get("FUTU_OPEND_VER", "unknown")
     logger.info(
-        "Futu trade context ready: host=%s port=%s env=%s market=%s",
+        "Futu trade context ready: host=%s port=%s env=%s market=%s sdk=%s opend=%s",
         host,
         port,
         trade_env,
         trd_market,
+        futu.__version__,
+        opend_ver,
     )
     return ctx
 
