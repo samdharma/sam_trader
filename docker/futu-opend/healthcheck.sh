@@ -25,11 +25,9 @@ if [ ! -d "$LOG_DIR" ]; then
     exit 1
 fi
 
-# Find the most recently modified log file (portable: ls -t works on GNU and BSD)
-MOST_RECENT_LOG=$(ls -t "$LOG_DIR" 2>/dev/null | head -n 1)
-if [ -n "$MOST_RECENT_LOG" ]; then
-    MOST_RECENT_LOG="$LOG_DIR/$MOST_RECENT_LOG"
-fi
+# Find the most recently modified GTWLog file (portable: ls -t works on GNU and BSD)
+# Filter to GTWLog_* only — .ftlog and Monitor.log don't contain "Login successful"
+MOST_RECENT_LOG=$(ls -t "$LOG_DIR"/GTWLog_* 2>/dev/null | head -n 1)
 
 if [ -z "$MOST_RECENT_LOG" ] || [ ! -f "$MOST_RECENT_LOG" ]; then
     echo "UNHEALTHY: No FutuOpenD log files found"

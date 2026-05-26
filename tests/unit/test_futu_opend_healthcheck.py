@@ -52,10 +52,7 @@ if [ ! -d "$LOG_DIR" ]; then
     exit 1
 fi
 
-MOST_RECENT_LOG=$(ls -t "$LOG_DIR" 2>/dev/null | head -n 1)
-if [ -n "$MOST_RECENT_LOG" ]; then
-    MOST_RECENT_LOG="$LOG_DIR/$MOST_RECENT_LOG"
-fi
+MOST_RECENT_LOG=$(ls -t "$LOG_DIR"/GTWLog_* 2>/dev/null | head -n 1)
 
 if [ -z "$MOST_RECENT_LOG" ] || [ ! -f "$MOST_RECENT_LOG" ]; then
     echo "UNHEALTHY: No FutuOpenD log files found"
@@ -147,3 +144,38 @@ exit 0
         result = self._run_l3_logic(log_dir)
         assert result.returncode == 1
         assert "Login successful not found" in result.stdout
+
+    def test_l3_ftlog_files_ignored_picks_gtwlog(self, tmp_path: Path):
+        """Reproduces the 26-May bug: .ftlog files are more recently
+        modified but should be ignored — only GTWLog_* is evaluated."""
+        log_dir = tmp_path / "Log"
+        log_dir.mkdir()
+
+        # GTWLog created first (older)
+        gtw_log = log_dir / "GTWLog_20260526.txt"
+        gtw_log.write_text("Login successful\n")
+
+        # .ftlog created second (newer) — this was being picked by old healthcheck
+        ftlog = log_dir / "FutuOpenD_8_20260526.ftlog"
+        ftlog.write_text("binary-ish internal log data\n")
+
+        result = self._run_l3_logic(log_dir)
+        assert (
+            result.returncode == 0
+        ), f"Expected exit 0 (healthy), got {result.returncode}: {result.stdout}"
+
+    def test_l3_no_gtwlog_with_ftlog_present_fails(self, tmp_path: Path):
+        """If only .ftlog files exist (no GTWLog_*), the health check
+        should report unhealthy — no log files found."""
+        log_dir = tmp_path / "Log"
+        log_dir.mkdir()
+
+        ftlog = log_dir / "FutuOpenD_8_20260526.ftlog"
+        ftlog.write_text("binary data\n")
+
+        monitor = log_dir / "Monitor.log"
+        monitor.write_text("monitoring data\n")
+
+        result = self._run_l3_logic(log_dir)
+        assert result.returncode == 1
+        assert "No FutuOpenD log files found" in result.stdout

@@ -59,9 +59,10 @@ All containers use the **same timing parameters** for consistency:
 |-------|---------|
 | L1 | `pgrep -x FutuOpenD` |
 | L2 | TCP connect to `localhost:11111` |
-| L3 | Log scan for login/connection failure patterns |
+| L3 | Log scan of most recent GTWLog for "Login successful" + failure patterns |
 
-> Implemented in `docker/futu-opend/healthcheck.sh` (copied into the image).
+> Implemented in `docker/futu-opend/healthcheck.sh` (copied into the image).  
+> Filters to `GTWLog_*` files only — `.ftlog` (internal binary logs) and `Monitor.log` are excluded because they don't contain login status text.
 
 ### sam-ib-gateway (IB Gateway)
 
