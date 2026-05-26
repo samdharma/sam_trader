@@ -110,12 +110,14 @@ class FutuLiveExecutionClient(LiveExecutionClient):
         instrument_provider: InstrumentProvider,
         config: FutuExecClientConfig,
         account_id: AccountId | None = None,
+        venue: Venue | None = None,
     ) -> None:
-        account_id = account_id or AccountId("FUTU-001")
+        account_id = account_id or AccountId(f"FUTU-{config.client_id}")
+        client_id = ClientId(account_id.get_issuer())
         super().__init__(
             loop=loop,
-            client_id=ClientId(account_id.get_issuer()),
-            venue=FUTU_VENUE,
+            client_id=client_id,
+            venue=venue or FUTU_VENUE,
             oms_type=OmsType.NETTING,
             account_type=AccountType.MARGIN,
             base_currency=Currency.from_str("USD"),

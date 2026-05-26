@@ -13,13 +13,14 @@ from nautilus_trader.cache.cache import Cache
 from nautilus_trader.common.component import LiveClock, MessageBus
 from nautilus_trader.common.config import InstrumentProviderConfig
 from nautilus_trader.live.factories import LiveDataClientFactory, LiveExecClientFactory
-from nautilus_trader.model.identifiers import AccountId
+from nautilus_trader.model.identifiers import AccountId, Venue
 
 from sam_trader.adapters.futu.config import FutuDataClientConfig, FutuExecClientConfig
 from sam_trader.adapters.futu.connection import (
     get_cached_futu_quote_context,
     get_cached_futu_trade_context,
 )
+from sam_trader.adapters.futu.constants import FUTU_VENUE
 from sam_trader.adapters.futu.data import FutuLiveDataClient
 from sam_trader.adapters.futu.execution import FutuLiveExecutionClient
 from sam_trader.adapters.futu.instrument_provider import FutuInstrumentProvider
@@ -179,6 +180,13 @@ class FutuLiveExecClientFactory(LiveExecClientFactory):
             config=InstrumentProviderConfig(load_ids=load_ids),
         )
         account_id = AccountId(f"FUTU-{config.client_id}")
+        # Use a synthetic venue per market so Nautilus can register multiple
+        # Futu exec clients simultaneously without venue collision.
+        venue = (
+            FUTU_VENUE
+            if config.trd_market == "US"
+            else Venue(f"FUTU_{config.trd_market}")
+        )
         return FutuLiveExecutionClient(
             loop=loop,
             client=trade_ctx,
@@ -188,4 +196,5 @@ class FutuLiveExecClientFactory(LiveExecClientFactory):
             instrument_provider=instrument_provider,
             config=config,
             account_id=account_id,
+            venue=venue,
         )

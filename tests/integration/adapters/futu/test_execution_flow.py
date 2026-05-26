@@ -12,7 +12,7 @@ from unittest.mock import MagicMock, patch
 
 import pandas as pd
 import pytest
-from futu import RET_OK
+from futu import RET_OK, ContextStatus
 from nautilus_trader.common.component import LiveClock
 from nautilus_trader.common.providers import InstrumentProvider
 from nautilus_trader.core.uuid import UUID4
@@ -46,6 +46,7 @@ def event_loop():
 def mock_trade_ctx() -> MagicMock:
     """Return a mock OpenSecTradeContext."""
     ctx = MagicMock()
+    ctx.status = ContextStatus.READY
     ctx.place_order.return_value = (RET_OK, pd.DataFrame({"order_id": ["12345"]}))
     ctx.modify_order.return_value = (RET_OK, "")
     ctx.get_acc_list.return_value = (RET_OK, pd.DataFrame())

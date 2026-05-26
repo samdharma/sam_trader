@@ -94,7 +94,7 @@ if (
 # Global caches
 # ---------------------------------------------------------------------------
 _QUOTE_CACHE: dict[tuple[str, int, str], OpenQuoteContext] = {}
-_TRADE_CACHE: dict[tuple[str, int, str], OpenSecTradeContext] = {}
+_TRADE_CACHE: dict[tuple[str, int, str, str], OpenSecTradeContext] = {}
 _CACHE_LOCK = threading.Lock()
 
 _DEFAULT_CONNECT_TIMEOUT = 10.0
@@ -103,7 +103,7 @@ _DEFAULT_CONNECT_TIMEOUT = 10.0
 class _FutuDisconnectHandler(SysNotifyHandlerBase):
     """Invalidate cached contexts when Futu notifies us of a disconnect."""
 
-    def __init__(self, key: tuple[str, int, str], *, is_trade: bool = False) -> None:
+    def __init__(self, key: tuple[Any, ...], *, is_trade: bool = False) -> None:
         super().__init__()
         self._key = key
         self._is_trade = is_trade
@@ -137,30 +137,33 @@ class _FutuDisconnectHandler(SysNotifyHandlerBase):
         return ret, content
 
 
-def _invalidate_context(key: tuple[str, int, str], *, is_trade: bool) -> None:
+def _invalidate_context(key: tuple[str, ...], *, is_trade: bool) -> None:
     """Remove a context from its cache and close it to stop auto-reconnect."""
     with _CACHE_LOCK:
         cache = _TRADE_CACHE if is_trade else _QUOTE_CACHE
-        ctx = cache.pop(key, None)
+        ctx = cache.pop(key, None)  # type: ignore[arg-type]
         if ctx is None:
             return
 
+    market_str = key[3] if len(key) > 3 else "N/A"
     try:
         ctx.close()
         logger.info(
-            "Closed Futu %s context on disconnect: host=%s port=%s env=%s",
+            "Closed Futu %s context on disconnect: host=%s port=%s env=%s market=%s",
             "trade" if is_trade else "quote",
             key[0],
             key[1],
             key[2],
+            market_str,
         )
     except Exception:
         logger.exception(
-            "Error closing Futu %s context: host=%s port=%s env=%s",
+            "Error closing Futu %s context: host=%s port=%s env=%s market=%s",
             "trade" if is_trade else "quote",
             key[0],
             key[1],
             key[2],
+            market_str,
         )
 
 
@@ -266,7 +269,8 @@ def get_cached_futu_trade_context(
         The trading market filter (e.g. 'US', 'HK', 'CN').
 
     """
-    key = (host, port, trade_env)
+    market_str = str(trd_market).upper()
+    key = (host, port, trade_env, market_str)
     market_enum = _parse_trd_market(trd_market)
     with _CACHE_LOCK:
         ctx = _TRADE_CACHE.get(key)
@@ -329,7 +333,7 @@ def close_futu_contexts() -> None:
         except Exception:
             logger.exception("Error closing Futu quote context: %s", key)
 
-    for key, ctx in trade_items:
+    for key, ctx in trade_items:  # type: ignore[assignment]
         try:
             ctx.close()
             logger.info("Closed Futu trade context: %s", key)

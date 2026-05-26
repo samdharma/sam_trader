@@ -209,12 +209,12 @@ class TestDisconnectHandler:
         mock_cls.return_value = mock_ctx
 
         get_cached_futu_trade_context("h1", 11111, "SIMULATE")
-        assert ("h1", 11111, "SIMULATE") in _TRADE_CACHE
+        assert ("h1", 11111, "SIMULATE", "US") in _TRADE_CACHE
 
         handler = mock_ctx.set_handler.call_args[0][0]
         handler.on_recv_rsp(MagicMock())
 
-        assert ("h1", 11111, "SIMULATE") not in _TRADE_CACHE
+        assert ("h1", 11111, "SIMULATE", "US") not in _TRADE_CACHE
         mock_ctx.close.assert_called_once()
 
     @patch("sam_trader.adapters.futu.connection.OpenQuoteContext")
