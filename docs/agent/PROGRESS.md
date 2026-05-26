@@ -1483,3 +1483,16 @@
 - **Files Changed**: `src/sam_trader/services/db_schema.py` (new), `src/sam_trader/services/dashboard.py`, `tests/unit/services/test_db_schema.py` (new), `tests/unit/services/test_dashboard.py`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 18/18 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Phase 8 hardening complete.
+
+## Iteration 132
+- **Task**: TASK: Add Market Data panel to dashboard for bar flow observability
+- **Task ID**: sam_trader-9z3.9.22
+- **Status**: COMPLETE
+- **Decisions**:
+  - Added `query_market_data_from_redis()` that reads `sam:bars:last:*`, `sam:bars:count:{date}`, and `sam:venue:conn:*` keys written by HealthMonitorActor (iteration 127).
+  - Staleness classification: fresh (<2min green), stale (<5min yellow), old (>5min red).
+  - Venue connection state rendered as small colored dots below the instrument table.
+  - No new dependencies — reuses existing synchronous Redis client pattern from dashboard.
+- **Files Changed**: `src/sam_trader/services/dashboard.py`, `tests/unit/services/test_dashboard.py`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 15/15 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None.
