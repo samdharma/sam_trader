@@ -100,6 +100,7 @@ def build_trading_node() -> TradingNode:
     # into Futu's instrument provider before clients connect.
     strategies: list = []
     instrument_ids: list[str] = []
+    bar_type_strs: list[str] = []
     futu_load_ids: frozenset | None = None
     try:
         all_bundles = load_bundles(cfg.bundles_path)
@@ -108,6 +109,9 @@ def build_trading_node() -> TradingNode:
             ins_id = bundle.config.get("instrument_id")
             if ins_id and isinstance(ins_id, str) and ins_id not in instrument_ids:
                 instrument_ids.append(ins_id)
+            bts = bundle.config.get("bar_type")
+            if bts and isinstance(bts, str) and bts not in bar_type_strs:
+                bar_type_strs.append(bts)
         futu_load_ids = _make_load_ids(instrument_ids)
         # Filter bundles by enabled venue to prevent cross-venue contamination.
         # A bundle for a disabled venue would try to subscribe through a
@@ -326,6 +330,7 @@ def build_trading_node() -> TradingNode:
                     "market_timezone": health_tz,
                     "market": cfg.health_monitor_market,
                     "market_calendar_enabled": cfg.market_calendar_enabled,
+                    "bar_type_strs": bar_type_strs,
                 },
             )
         )

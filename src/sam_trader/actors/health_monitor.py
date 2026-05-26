@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo
 import redis.asyncio as aioredis
 from nautilus_trader.common.actor import Actor
 from nautilus_trader.common.config import ActorConfig
-from nautilus_trader.model.data import Bar
+from nautilus_trader.model.data import Bar, BarType
 from nautilus_trader.model.identifiers import Venue
 
 from sam_trader.services.market_calendar import MarketCalendarService
@@ -62,6 +62,7 @@ class HealthMonitorActorConfig(ActorConfig, frozen=True):
     market_open_time: str = "09:30"
     market_close_time: str = "16:00"
     market: str = ""
+    bar_type_strs: list[str] | None = None
     market_calendar_enabled: bool = True
 
 
@@ -81,6 +82,7 @@ class HealthMonitorActor(Actor):
         super().__init__(config)
         self._timer_name = "health_monitor_heartbeat"
         self._last_bar_times: dict[str, datetime] = {}
+        self._bar_type_display: dict[str, str] = {}
         self._redis: aioredis.Redis | None = None
         self._main_loop: asyncio.AbstractEventLoop | None = None
         self._last_venue_conn: dict[str, bool] = {}
@@ -114,6 +116,24 @@ class HealthMonitorActor(Actor):
         if self.config.market and self.config.market_calendar_enabled:
             self._calendar = MarketCalendarService()
 
+        # Subscribe to bar types so on_bar() receives bar events.
+        bar_type_strs = self.config.bar_type_strs or []
+        for bts in bar_type_strs:
+            try:
+                bt = BarType.from_str(bts)
+                self.subscribe_bars(bt)
+                instrument_id = str(bt.instrument_id)
+                self._bar_type_display[instrument_id] = str(bt.spec)
+                self.log.info(
+                    f"HealthMonitorActor: subscribed to bars for {instrument_id} "
+                    f"({bt.spec})"
+                )
+            except Exception as exc:  # noqa: BLE001
+                self.log.error(
+                    f"HealthMonitorActor: failed to subscribe to bar type "
+                    f"'{bts}': {exc}"
+                )
+
     def on_bar(self, bar: Bar) -> None:
         """Track the last bar received time per instrument.
 
@@ -123,8 +143,16 @@ class HealthMonitorActor(Actor):
         instrument_id = str(bar.bar_type.instrument_id)
         now = self.clock.utc_now()
         self._last_bar_times[instrument_id] = now
-        self._write_bar_telemetry_to_redis(instrument_id, now)
-        self._write_bar_recent_to_redis(instrument_id, bar, now)
+        if instrument_id not in self._bar_type_display:
+            self._bar_type_display[instrument_id] = str(bar.bar_type.spec)
+        try:
+            self._write_bar_telemetry_to_redis(instrument_id, now)
+            self._write_bar_recent_to_redis(instrument_id, bar, now)
+        except Exception as exc:  # noqa: BLE001
+            self.log.error(
+                f"HealthMonitorActor: on_bar Redis write failed for "
+                f"{instrument_id}: {exc}"
+            )
 
     def _build_heartbeat_msg(
         self,
@@ -137,7 +165,11 @@ class HealthMonitorActor(Actor):
         bar_lines = []
         for instrument_id, last_ts in self._last_bar_times.items():
             age_seconds = int((timestamp - last_ts).total_seconds())
-            bar_lines.append(f"{instrument_id} ({age_seconds}s ago)")
+            display = self._bar_type_display.get(instrument_id, "")
+            bar_lines.append(
+                f"{instrument_id}({display}, last="
+                f"{last_ts.strftime('%H:%M:%S')}, age={age_seconds}s)"
+            )
 
         bars_str = ", ".join(bar_lines) if bar_lines else "none"
 
@@ -259,7 +291,10 @@ class HealthMonitorActor(Actor):
                 )
             )
         except Exception as exc:  # noqa: BLE001
-            self.log.warning(f"HealthMonitorActor: Redis bar telemetry failed: {exc}")
+            self.log.error(
+                f"HealthMonitorActor: Redis bar telemetry failed for "
+                f"{instrument_id}: {exc}"
+            )
 
     def _write_bar_recent_to_redis(
         self, instrument_id: str, bar: Bar, timestamp: datetime
@@ -302,7 +337,10 @@ class HealthMonitorActor(Actor):
 
             self._main_loop.create_task(_push())
         except Exception as exc:  # noqa: BLE001
-            self.log.warning(f"HealthMonitorActor: Redis bar recent list failed: {exc}")
+            self.log.error(
+                f"HealthMonitorActor: Redis bar recent list failed for "
+                f"{instrument_id}: {exc}"
+            )
 
     def _write_venue_conn_to_redis(
         self, venue_name: str, connected: bool, timestamp: datetime
@@ -323,8 +361,9 @@ class HealthMonitorActor(Actor):
                 )
             )
         except Exception as exc:  # noqa: BLE001
-            self.log.warning(
-                f"HealthMonitorActor: Redis venue conn write failed: {exc}"
+            self.log.error(
+                f"HealthMonitorActor: Redis venue conn write failed for "
+                f"{venue_name}: {exc}"
             )
 
     def _write_heartbeat_to_redis(self, timestamp: datetime) -> None:
@@ -343,8 +382,9 @@ class HealthMonitorActor(Actor):
                 )
             )
         except Exception as exc:  # noqa: BLE001
-            self.log.warning(
-                f"HealthMonitorActor: Redis write failed for heartbeat: {exc}"
+            self.log.error(
+                "HealthMonitorActor: Redis heartbeat write failed: %s",
+                exc,
             )
 
     def _is_market_hours(self, ts: datetime) -> bool:

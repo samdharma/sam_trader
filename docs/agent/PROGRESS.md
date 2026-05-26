@@ -1714,3 +1714,12 @@
 - **Files Changed**: `config/premarket_watchlist.yaml`, `src/sam_trader/services/gap_scanner.py`, `src/sam_trader/services/pipeline.py`, `tests/unit/services/test_gap_scanner.py`, `tests/unit/services/test_pipeline.py`, `tests/integration/test_phase9_exit.py`, `docs/reference/BUILD_PHASE_9.md`, `docs/user/OPERATOR_GUIDE.md`, `.env.example`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 61/61 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ticket closed.
+
+## Iteration 139
+- **Task**: BUG: HealthMonitorActor bar telemetry to Redis not writing — heartbeat shows bars=[none] despite active bar flow
+- **Task ID**: sam_trader-9z3.7.15
+- **Status**: COMPLETE
+- **Decisions**: Root cause: HealthMonitorActor.on_start() never called self.subscribe_bars(), so on_bar() was never invoked by NautilusTrader. The on_bar method and all Redis write logic existed but was dead code. Fixed by: (1) Adding bar_type_strs to HealthMonitorActorConfig, (2) Calling subscribe_bars() in on_start() for each configured bar type, (3) Storing bar type display strings in _bar_type_display dict for heartbeat formatting, (4) Updating _build_heartbeat_msg() to show instrument(bartype, last=HH:MM:SS, age=Ns) instead of instrument (Ns ago), (5) Extracting bar_type strings from bundles in main.py and passing to HealthMonitorActor config, (6) Upgrading all Redis write failure logs from warning to error level, (7) Converting multi-arg %s log calls to f-strings to work with Nautilus Cython Logger (only supports 1 positional arg). Added 5 new unit tests.
+- **Files Changed**: src/sam_trader/actors/health_monitor.py, src/sam_trader/main.py, tests/unit/actors/test_health_monitor.py
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 37/37 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ticket closed.

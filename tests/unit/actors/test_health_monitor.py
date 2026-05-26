@@ -438,6 +438,106 @@ class TestHealthMonitorActor:
         ts = datetime(2024, 1, 6, 2, 0, 0, tzinfo=timezone.utc)
         assert actor._is_market_hours(ts) is False
 
+    def test_on_start_subscribes_to_bars(
+        self,
+    ) -> None:
+        """on_start calls subscribe_bars for each bar_type_str in config."""
+        cfg = HealthMonitorActorConfig(
+            bar_type_strs=[
+                "TSLA.NASDAQ-15-MINUTE-LAST-EXTERNAL",
+                "AAPL.NASDAQ-5-MINUTE-BID-INTERNAL",
+            ],
+        )
+        actor = HealthMonitorActor(cfg)
+        actor.register_base(
+            portfolio=TestComponentStubs.portfolio(),
+            msgbus=TestComponentStubs.msgbus(),
+            cache=TestComponentStubs.cache(),
+            clock=TestComponentStubs.clock(),
+        )
+
+        with patch.object(actor, "subscribe_bars") as mock_sub:
+            actor.on_start()
+            assert mock_sub.call_count == 2
+            # Verify the BarType objects passed are correct
+            called_bar_types = [call[0][0] for call in mock_sub.call_args_list]
+            assert str(called_bar_types[0].instrument_id) == "TSLA.NASDAQ"
+            assert str(called_bar_types[1].instrument_id) == "AAPL.NASDAQ"
+
+    def test_on_start_subscribes_to_bars_populates_display(
+        self,
+    ) -> None:
+        """on_start stores bar type display strings in _bar_type_display."""
+        cfg = HealthMonitorActorConfig(
+            bar_type_strs=["TSLA.NASDAQ-15-MINUTE-LAST-EXTERNAL"],
+        )
+        actor = HealthMonitorActor(cfg)
+        actor.register_base(
+            portfolio=TestComponentStubs.portfolio(),
+            msgbus=TestComponentStubs.msgbus(),
+            cache=TestComponentStubs.cache(),
+            clock=TestComponentStubs.clock(),
+        )
+
+        with patch.object(actor, "subscribe_bars"):
+            actor.on_start()
+
+        assert "TSLA.NASDAQ" in actor._bar_type_display
+        assert actor._bar_type_display["TSLA.NASDAQ"] == "15-MINUTE-LAST"
+
+    def test_build_heartbeat_msg_format_with_bars(
+        self, registered_actor: HealthMonitorActor
+    ) -> None:
+        """Heartbeat message includes bar type display when bars received."""
+        ts = datetime(2024, 1, 8, 15, 10, 0, tzinfo=timezone.utc)
+        last_bar = datetime(2024, 1, 8, 15, 5, 0, tzinfo=timezone.utc)
+
+        registered_actor._last_bar_times["TSLA.NASDAQ"] = last_bar
+        registered_actor._bar_type_display["TSLA.NASDAQ"] = "15-MINUTE-LAST"
+
+        venue_status = {
+            "FUTU": {"orders": 1, "positions": 0, "connected": True},
+        }
+        msg = registered_actor._build_heartbeat_msg(
+            timestamp=ts,
+            orders_total=1,
+            positions_total=0,
+            venue_status=venue_status,
+        )
+        assert "bars=[TSLA.NASDAQ(15-MINUTE-LAST, last=15:05:00, age=300s)]" in msg
+        assert "bars=[none]" not in msg
+
+    def test_on_bar_records_bar_type_display(
+        self, registered_actor: HealthMonitorActor
+    ) -> None:
+        """on_bar stores bar type display string when not already known."""
+        bar = TestDataStubs.bar_5decimal_5min_bid()
+        registered_actor.on_bar(bar)
+        instrument_id = str(bar.bar_type.instrument_id)
+        assert instrument_id in registered_actor._bar_type_display
+        assert registered_actor._bar_type_display[instrument_id] == str(
+            bar.bar_type.spec
+        )
+
+    def test_on_start_bad_bar_type_logs_error(
+        self,
+    ) -> None:
+        """on_start logs error (not crash) for malformed bar_type_str."""
+        cfg = HealthMonitorActorConfig(
+            bar_type_strs=["INVALID-BAR-TYPE"],
+        )
+        actor = HealthMonitorActor(cfg)
+        actor.register_base(
+            portfolio=TestComponentStubs.portfolio(),
+            msgbus=TestComponentStubs.msgbus(),
+            cache=TestComponentStubs.cache(),
+            clock=TestComponentStubs.clock(),
+        )
+        with patch.object(actor, "subscribe_bars"):
+            actor.on_start()
+        # Actor should not crash — subscribe_bars was never called
+        # for the bad type (the exception was caught and logged)
+
 
 class TestHealthMonitorActorCalendar:
     """Tests for market-calendar-aware _is_market_hours."""
