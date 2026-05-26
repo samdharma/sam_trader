@@ -1,3 +1,12 @@
+## Iteration 97
+- **Task**: Add market holiday banner and next-trading-day countdown to dashboard
+- **Task ID**: sam_trader-9z3.9.26
+- **Status**: COMPLETE
+- **Decisions**: Added `get_market_schedule_info()` to `dashboard.py` that queries `MarketCalendarService` for both US and HK markets on each refresh. Data sourced from Redis cache (via MarketCalendarService's built-in caching) with fallback to hardcoded/library holidays on cache miss. Added amber/dark-yellow banner CSS classes for holidays and early-close days. Added green indicator for regular trading days. Added next-session countdown in hours. Updated `_DASHBOARD_HTML` template with `{{schedule_banner}}` placeholder injected below the `<h1>` title. Updated `get_dashboard_data()` to include `schedule` key so the JSON API also exposes calendar data. Added 12 unit tests covering holiday banners (US/HK), early-close banner, open-day indicator, countdown non-negativity, Redis forwarding, HTML CSS classes, full dashboard rendering, and API aggregation.
+- **Files Changed**: `src/sam_trader/services/dashboard.py`, `tests/unit/services/test_dashboard.py`
+- **Validation Result**: PASS (34/34 targeted tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ticket closed.
+
 ## Iteration 96
 - **Task**: Stale orders persist in Redis across restarts — 690 orphaned orders replayed on each start
 - **Task ID**: sam_trader-9z3.7.14

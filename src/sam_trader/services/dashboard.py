@@ -11,12 +11,13 @@ import json
 import logging
 import subprocess
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Any, Awaitable, TypeVar
 from urllib.parse import parse_qs, urlparse
 
 from sam_trader.services.db_schema import validate_schema
+from sam_trader.services.market_calendar import MarketCalendarService
 
 T = TypeVar("T")
 
@@ -39,6 +40,16 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
   --green:#3fb950; --red:#f85149; --muted:#8b949e;
   --border:#30363d;
 }
+.schedule-section { margin-bottom:1rem; }
+.schedule-banner {
+  padding:.75rem 1rem; border-radius:6px; margin-bottom:.5rem;
+  font-weight:600;
+}
+.schedule-banner.holiday { background:#d29922; color:#0d1117; }
+.schedule-banner.early { background:#d29922; color:#0d1117; }
+.schedule-indicator { font-size:.9rem; margin-bottom:.25rem; }
+.schedule-indicator.open { color:var(--green); }
+.schedule-countdown { color:var(--muted); font-size:.85rem; }
 * { box-sizing:border-box; }
 body {
   margin:0; padding:1rem;
@@ -92,6 +103,8 @@ tr:hover { background:#161b22; }
 </head>
 <body>
 <h1>🚀 SAM Trader Dashboard</h1>
+
+{{schedule_banner}}
 
 <div class="card">
 <h2>SYSTEM HEALTH</h2>
@@ -652,6 +665,67 @@ def _handle_bars_recent(path: str, config: DashboardConfig) -> dict[str, Any]:
     return {"bars": results, "seconds": seconds, "count": len(results)}
 
 
+def get_market_schedule_info(config: DashboardConfig | None = None) -> dict[str, Any]:
+    """Query MarketCalendarService and return schedule banner fragments.
+
+    Data is sourced from Redis cache when available, falling back to
+    ``MarketCalendarService`` hardcoded/library holidays on cache miss.
+    """
+    cfg = config or DashboardConfig()
+    try:
+        redis_client = _redis_client(cfg)
+    except Exception as exc:
+        logger.debug("market schedule redis unavailable: %s", exc)
+        redis_client = None
+
+    svc = MarketCalendarService(redis_client=redis_client)
+    today = date.today()
+    banners: list[str] = []
+    indicators: list[str] = []
+    countdowns: list[str] = []
+
+    for market in ("US", "HK"):
+        try:
+            if svc.is_holiday(market, today):
+                name = svc.holiday_name(market, today) or "Holiday"
+                banners.append(
+                    f"🚫 {market} Market Holiday: {name} \u2014 Markets Closed"
+                )
+            elif svc.is_early_close(market, today):
+                _open, close_t = svc.market_hours(market, today)
+                banners.append(
+                    f"\u26a0\ufe0f Early Close Today ({market}): "
+                    f"{close_t.strftime('%H:%M')}"
+                )
+            else:
+                indicators.append(f"\u2705 {market} Markets Open Today")
+
+            next_day = svc.next_trading_day(market, today)
+            tz_name = svc.market_timezone(market)
+            try:
+                from zoneinfo import ZoneInfo
+
+                tz: Any = ZoneInfo(tz_name)
+            except Exception:
+                tz = timezone.utc
+            now_local = datetime.now(tz)
+            next_open_local = datetime.combine(next_day, time(9, 30), tzinfo=tz)
+            hours_until = int((next_open_local - now_local).total_seconds() / 3600)
+            if hours_until < 0:
+                hours_until = 0
+            countdowns.append(
+                f"Next {market} session: {next_day.isoformat()} in {hours_until}h"
+            )
+        except Exception as exc:
+            logger.debug("market schedule query failed for %s: %s", market, exc)
+
+    return {
+        "banners": banners,
+        "indicators": indicators,
+        "countdowns": countdowns,
+    }
+
+
 def get_dashboard_data(config: DashboardConfig | None = None) -> dict[str, Any]:
     """Aggregate all dashboard data sources."""
     cfg = config or DashboardConfig()
@@ -661,6 +735,7 @@ def get_dashboard_data(config: DashboardConfig | None = None) -> dict[str, Any]:
         "fills": query_fills(cfg),
         "positions": query_positions(cfg),
         "pnl": query_pnl_from_redis(cfg),
+        "schedule": get_market_schedule_info(cfg),
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
@@ -686,6 +761,23 @@ def _fmt_pnl(v: float) -> str:
 
 def _pnl_class(v: float) -> str:
     return "positive" if v >= 0 else "negative"
+
+
+def _render_schedule_html(schedule: dict[str, Any]) -> str:
+    """Render schedule banner HTML from MarketCalendarService result."""
+    parts: list[str] = []
+    for banner in schedule.get("banners", []):
+        cls = "holiday" if "Holiday" in banner else "early"
+        parts.append(f'<div class="schedule-banner {cls}">{banner}</div>')
+    for indicator in schedule.get("indicators", []):
+        parts.append(f'<div class="schedule-indicator open">{indicator}</div>')
+    for countdown in schedule.get("countdowns", []):
+        parts.append(f'<div class="schedule-countdown">{countdown}</div>')
+    if not parts:
+        parts.append(
+            '<div class="schedule-indicator open">' "\u2705 Markets Open Today" "</div>"
+        )
+    return '<div class="schedule-section">\n' + "\n".join(parts) + "\n</div>"
 
 
 def _render_html(data: dict[str, Any]) -> str:
@@ -800,8 +892,11 @@ def _render_html(data: dict[str, Any]) -> str:
 
     total_pnl = pnl_data.get("total", 0.0)
 
+    schedule_html = _render_schedule_html(data.get("schedule", {}))
+
     return (
-        _DASHBOARD_HTML.replace("{{pg_status}}", _svc_status("postgres"))
+        _DASHBOARD_HTML.replace("{{schedule_banner}}", schedule_html)
+        .replace("{{pg_status}}", _svc_status("postgres"))
         .replace("{{pg_status_class}}", _svc_class("postgres"))
         .replace("{{redis_status}}", _svc_status("redis"))
         .replace("{{redis_status_class}}", _svc_class("redis"))

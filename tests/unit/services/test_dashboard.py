@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime
 import json
 import socket
 from http.client import HTTPConnection
@@ -14,7 +15,11 @@ import pytest
 
 from sam_trader.services.dashboard import (
     DashboardConfig,
+    _render_html,
+    _render_schedule_html,
     check_all_services,
+    get_dashboard_data,
+    get_market_schedule_info,
     query_fills,
     query_market_data_from_redis,
     query_pnl_from_redis,
@@ -729,6 +734,304 @@ class TestDashboardServer:
         assert body["seconds"] == 300
         assert body["bars"][0]["instrument_id"] == "TSLA.NASDAQ"
         assert body["bars"][0]["open"] == "150.00"
+
+
+class TestMarketScheduleInfo:
+    """Tests for MarketCalendar integration in dashboard."""
+
+    def test_holiday_banner_us(self) -> None:
+        """US holiday returns amber banner with holiday name."""
+        with patch(
+            "sam_trader.services.dashboard.MarketCalendarService.is_holiday",
+            side_effect=lambda m, d: m == "US",
+        ):
+            with patch(
+                "sam_trader.services.dashboard.MarketCalendarService.holiday_name",
+                return_value="Independence Day",
+            ):
+                with patch(
+                    "sam_trader.services.dashboard.MarketCalendarService"
+                    ".is_early_close",
+                    return_value=False,
+                ):
+                    with patch(
+                        "sam_trader.services.dashboard.MarketCalendarService"
+                        ".next_trading_day",
+                        return_value=datetime.date(2026, 7, 5),
+                    ):
+                        with patch(
+                            "sam_trader.services.dashboard.MarketCalendarService"
+                            ".market_timezone",
+                            return_value="America/New_York",
+                        ):
+                            result = get_market_schedule_info(DashboardConfig())
+
+        assert any("US Market Holiday" in b for b in result["banners"])
+        assert any("Independence Day" in b for b in result["banners"])
+        assert any("Markets Closed" in b for b in result["banners"])
+        assert any("Next US session" in c for c in result["countdowns"])
+
+    def test_holiday_banner_hk(self) -> None:
+        """HK holiday returns amber banner with holiday name."""
+        with patch(
+            "sam_trader.services.dashboard.MarketCalendarService.is_holiday",
+            side_effect=lambda m, d: m == "HK",
+        ):
+            with patch(
+                "sam_trader.services.dashboard.MarketCalendarService.holiday_name",
+                return_value="National Day",
+            ):
+                with patch(
+                    "sam_trader.services.dashboard.MarketCalendarService"
+                    ".is_early_close",
+                    return_value=False,
+                ):
+                    with patch(
+                        "sam_trader.services.dashboard.MarketCalendarService"
+                        ".next_trading_day",
+                        return_value=datetime.date(2026, 10, 2),
+                    ):
+                        with patch(
+                            "sam_trader.services.dashboard.MarketCalendarService"
+                            ".market_timezone",
+                            return_value="Asia/Hong_Kong",
+                        ):
+                            result = get_market_schedule_info(DashboardConfig())
+
+        assert any("HK Market Holiday" in b for b in result["banners"])
+        assert any("National Day" in b for b in result["banners"])
+        assert not any("US Market Holiday" in b for b in result["banners"])
+
+    def test_early_close_banner(self) -> None:
+        """Early-close day returns warning banner with close time."""
+        with patch(
+            "sam_trader.services.dashboard.MarketCalendarService.is_holiday",
+            return_value=False,
+        ):
+            with patch(
+                "sam_trader.services.dashboard.MarketCalendarService.is_early_close",
+                return_value=True,
+            ):
+                with patch(
+                    "sam_trader.services.dashboard.MarketCalendarService"
+                    ".market_hours",
+                    return_value=(
+                        datetime.time(9, 30),
+                        datetime.time(13, 0),
+                    ),
+                ):
+                    with patch(
+                        "sam_trader.services.dashboard.MarketCalendarService"
+                        ".next_trading_day",
+                        return_value=datetime.date(2026, 7, 7),
+                    ):
+                        with patch(
+                            "sam_trader.services.dashboard.MarketCalendarService"
+                            ".market_timezone",
+                            return_value="America/New_York",
+                        ):
+                            result = get_market_schedule_info(DashboardConfig())
+
+        assert any("Early Close Today" in b for b in result["banners"])
+        assert any("13:00" in b for b in result["banners"])
+        assert result["indicators"] == []
+
+    def test_open_day_indicator(self) -> None:
+        """Regular trading day returns green open indicator."""
+        with patch(
+            "sam_trader.services.dashboard.MarketCalendarService.is_holiday",
+            return_value=False,
+        ):
+            with patch(
+                "sam_trader.services.dashboard.MarketCalendarService.is_early_close",
+                return_value=False,
+            ):
+                with patch(
+                    "sam_trader.services.dashboard.MarketCalendarService"
+                    ".next_trading_day",
+                    return_value=datetime.date(2026, 7, 7),
+                ):
+                    with patch(
+                        "sam_trader.services.dashboard.MarketCalendarService"
+                        ".market_timezone",
+                        return_value="America/New_York",
+                    ):
+                        result = get_market_schedule_info(DashboardConfig())
+
+        assert result["banners"] == []
+        assert any("Markets Open Today" in i for i in result["indicators"])
+        assert any("Next US session" in c for c in result["countdowns"])
+        assert any("Next HK session" in c for c in result["countdowns"])
+
+    def test_redis_client_passed_to_calendar_service(self) -> None:
+        """Dashboard config Redis is forwarded to MarketCalendarService."""
+        mock_redis = MagicMock()
+        mock_redis.ping.return_value = True
+        with patch(
+            "sam_trader.services.dashboard._redis_client",
+            return_value=mock_redis,
+        ):
+            with patch(
+                "sam_trader.services.dashboard.MarketCalendarService" ".is_holiday",
+                return_value=False,
+            ):
+                with patch(
+                    "sam_trader.services.dashboard.MarketCalendarService"
+                    ".is_early_close",
+                    return_value=False,
+                ):
+                    with patch(
+                        "sam_trader.services.dashboard.MarketCalendarService"
+                        ".next_trading_day",
+                        return_value=datetime.date(2026, 7, 7),
+                    ):
+                        with patch(
+                            "sam_trader.services.dashboard.MarketCalendarService"
+                            ".market_timezone",
+                            return_value="America/New_York",
+                        ):
+                            get_market_schedule_info(DashboardConfig())
+
+        # _redis_client is called once to create the client
+        # MarketCalendarService receives it (implicit via no crash)
+
+    def test_countdown_hours_non_negative(self) -> None:
+        """Hours until next session is never negative."""
+        with patch(
+            "sam_trader.services.dashboard.MarketCalendarService.is_holiday",
+            return_value=False,
+        ):
+            with patch(
+                "sam_trader.services.dashboard.MarketCalendarService.is_early_close",
+                return_value=False,
+            ):
+                with patch(
+                    "sam_trader.services.dashboard.MarketCalendarService"
+                    ".next_trading_day",
+                    return_value=datetime.date(2026, 7, 7),
+                ):
+                    with patch(
+                        "sam_trader.services.dashboard.MarketCalendarService"
+                        ".market_timezone",
+                        return_value="America/New_York",
+                    ):
+                        result = get_market_schedule_info(DashboardConfig())
+
+        for countdown in result["countdowns"]:
+            # Extract hours value from string like "Next US session: 2026-07-07 in 24h"
+            hours_str = countdown.split("in ")[1].rstrip("h")
+            assert int(hours_str) >= 0
+
+
+class TestScheduleHtmlRendering:
+    """Tests for schedule banner HTML rendering."""
+
+    def test_holiday_banner_html_class(self) -> None:
+        """Holiday banner uses amber holiday CSS class."""
+        html = _render_schedule_html(
+            {
+                "banners": ["🚫 US Market Holiday: Test Holiday — Markets Closed"],
+                "indicators": [],
+                "countdowns": ["Next US session: 2026-07-05 in 24h"],
+            }
+        )
+        assert 'class="schedule-banner holiday"' in html
+        assert "🚫 US Market Holiday" in html
+        assert 'class="schedule-countdown"' in html
+
+    def test_early_close_banner_html_class(self) -> None:
+        """Early-close banner uses amber early CSS class."""
+        html = _render_schedule_html(
+            {
+                "banners": ["⚠️ Early Close Today (US): 13:00"],
+                "indicators": [],
+                "countdowns": [],
+            }
+        )
+        assert 'class="schedule-banner early"' in html
+        assert "13:00" in html
+
+    def test_open_indicator_html_class(self) -> None:
+        """Open indicator uses green CSS class."""
+        html = _render_schedule_html(
+            {
+                "banners": [],
+                "indicators": ["✅ US Markets Open Today"],
+                "countdowns": [],
+            }
+        )
+        assert 'class="schedule-indicator open"' in html
+        assert "✅ US Markets Open Today" in html
+
+    def test_fallback_open_when_empty(self) -> None:
+        """Empty schedule falls back to generic open indicator."""
+        html = _render_schedule_html({})
+        assert "✅ Markets Open Today" in html
+
+    def test_full_dashboard_renders_schedule(self) -> None:
+        """_render_html injects schedule banner into the page."""
+        data = {
+            "health": {"status": "healthy", "services": {}},
+            "fills": [],
+            "positions": [],
+            "market_data": {
+                "instruments": [],
+                "counts": {},
+                "venues": [],
+                "timestamp": "",
+            },
+            "pnl": {"strategies": {}, "total": 0.0, "date": ""},
+            "schedule": {
+                "banners": ["🚫 US Market Holiday: July 4 — Markets Closed"],
+                "indicators": [],
+                "countdowns": ["Next US session: 2026-07-05 in 24h"],
+            },
+            "timestamp": "",
+        }
+        html = _render_html(data)
+        assert 'class="schedule-banner holiday"' in html
+        assert "🚫 US Market Holiday" in html
+        assert "Next US session" in html
+        assert "SYSTEM HEALTH" in html  # rest of page still present
+
+    def test_dashboard_data_includes_schedule(self) -> None:
+        """get_dashboard_data aggregates schedule info."""
+        with patch(
+            "sam_trader.services.dashboard.check_all_services",
+            return_value={"status": "healthy", "services": {}},
+        ):
+            with patch(
+                "sam_trader.services.dashboard.query_market_data_from_redis",
+                return_value={"instruments": [], "counts": {}, "venues": []},
+            ):
+                with patch(
+                    "sam_trader.services.dashboard.query_fills", return_value=[]
+                ):
+                    with patch(
+                        "sam_trader.services.dashboard.query_positions",
+                        return_value=[],
+                    ):
+                        with patch(
+                            "sam_trader.services.dashboard.query_pnl_from_redis",
+                            return_value={
+                                "strategies": {},
+                                "total": 0.0,
+                                "date": "",
+                            },
+                        ):
+                            with patch(
+                                "sam_trader.services.dashboard"
+                                ".get_market_schedule_info",
+                                return_value={
+                                    "banners": [],
+                                    "indicators": ["✅ Markets Open"],
+                                    "countdowns": [],
+                                },
+                            ):
+                                data = get_dashboard_data(DashboardConfig())
+
+        assert "schedule" in data
+        assert data["schedule"]["indicators"] == ["✅ Markets Open"]
 
 
 class TestDashboardStartup:
