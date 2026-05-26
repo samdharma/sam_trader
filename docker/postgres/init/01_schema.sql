@@ -8,9 +8,6 @@
 --   - slippage column on fills (execution quality tracking)
 --   - performance_stats table (Nautilus PortfolioAnalyzer results)
 
--- Idempotent migration for existing databases
-ALTER TABLE fills ADD COLUMN IF NOT EXISTS slippage NUMERIC(24, 8);
-
 CREATE TABLE IF NOT EXISTS orders (
     id              SERIAL PRIMARY KEY,
     client_order_id VARCHAR(64)  NOT NULL UNIQUE,
@@ -49,6 +46,9 @@ CREATE TABLE IF NOT EXISTS fills (
     ts_event        TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
     ts_init         TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
+
+-- Idempotent migration for existing databases (must run after table exists)
+ALTER TABLE fills ADD COLUMN IF NOT EXISTS slippage NUMERIC(24, 8);
 
 CREATE INDEX IF NOT EXISTS idx_fills_ts_event ON fills(ts_event);
 CREATE INDEX IF NOT EXISTS idx_fills_instrument ON fills(instrument_id);
