@@ -1,5 +1,14 @@
 > **Note: see first-entry Iteration 20 for Phase 2 config dataclasses.**
 
+## Iteration 104
+- **Task**: TASK: Add max_trades_per_day and trade_cooldown_seconds to OrbStrategy
+- **Task ID**: sam_trader-9z3.8.11
+- **Status**: COMPLETE
+- **Decisions**: Added `max_trades_per_day: int = 0` and `trade_cooldown_seconds: int = 0` to `OrbStrategyConfig`. Both default to 0 (disabled/backward-compatible). Check `_max_trades_per_day_reached()` and `_in_cooldown()` in `on_bar` before `_start_confirmation`. `_in_cooldown()` accepts optional `now_ns` parameter for testability because Cython `LiveClock.timestamp_ns` is read-only. Fixed double-counting of `_trades_today` (removed increment from `on_order_filled` — was counting both at submission and at fill). `_last_flat_time_ns` recorded when position goes flat, persisted in save/load. Params flow from `bundles.yaml` `risk:` section via existing `config.setdefault()` merge in bundle loader. `MomentumStrategy` audited — firehose risk substantially lower due to 20-bar momentum smoothing and position-in-trade blocker. No code changes needed for MomentumStrategy.
+- **Files Changed**: `src/sam_trader/strategies/orb.py`, `config/bundles.example.yaml`, `tests/unit/strategies/test_orb.py`
+- **Validation Result**: PASS (RALPH_GATE_PASSED — 44/44 tests, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None.
+
 ## Iteration 103
 - **Task**: BUG: docker-compose.yml FUTU_ENABLED and WAIT_FOR_IB_GATEWAY defaults override .env values
 - **Task ID**: sam_trader-9z3.1.24
