@@ -320,6 +320,8 @@ class OrbStrategy(Strategy):
             return
 
         if not self._range_established:
+            if not self._in_range_accumulation_window():
+                return
             self._update_range(bar)
             return
 

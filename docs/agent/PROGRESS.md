@@ -1,3 +1,12 @@
+## Iteration 100
+- **Task**: BUG: OrbStrategy _in_range_accumulation_window defined but never called in on_bar — session_start is dead code
+- **Task ID**: sam_trader-9z3.8.10
+- **Status**: COMPLETE
+- **Decisions**: Added `_in_range_accumulation_window()` check in `OrbStrategy.on_bar()` before `_update_range()`. When `session_start` is set (e.g., "09:30"), bars before that time are ignored. When `session_start=""` (default), the check returns True (backward-compatible). Audited `MomentumStrategy` — no bug, already has `_in_session()` guard in `on_bar()`. Updated template with session-start pattern comment. Added 3 unit tests: disabled session_start allows all bars, pre-market bars ignored, None session_start_time allows bars.
+- **Files Changed**: `src/sam_trader/strategies/orb.py`, `src/sam_trader/strategies/_template.py`, `tests/unit/strategies/test_orb.py`, `docs/reference/BUILD_PHASE_7.md`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 37/37 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None.
+
 ## Iteration 99
 - **Task**: BUG: Pipeline regime detection hardcoded to US venue
 - **Task ID**: sam_trader-9z3.10.33

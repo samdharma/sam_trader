@@ -694,6 +694,73 @@ class TestFillHandling:
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# Session start
+# ---------------------------------------------------------------------------
+
+
+class TestSessionStart:
+    def test_session_start_disabled_allows_all_bars(self) -> None:
+        """When ``session_start=""`` (default), accumulate from first bar."""
+        strategy = OrbStrategy(_make_config(session_start="", first_candle_minutes=10))
+        _register_strategy(strategy)
+        _mock_instrument(strategy)
+        strategy.on_start()
+        strategy._in_range_accumulation_window = (  # type: ignore[method-assign]
+            MagicMock(return_value=True)
+        )
+
+        assert strategy._range_established is False
+        strategy.on_bar(_make_bar("100.00", "101.00", "99.00", "100.50"))
+        # Bar should be accumulated; range_high/_low updated
+        assert strategy._bars_seen == 1
+        assert strategy._range_high == 101.0
+        assert strategy._range_low == 99.0
+
+    def test_session_start_ignores_pre_market_bars(self) -> None:
+        """When ``session_start="09:30"``, bars before 09:30 are ignored."""
+        strategy = OrbStrategy(
+            _make_config(session_start="09:30", first_candle_minutes=10)
+        )
+        _register_strategy(strategy)
+        _mock_instrument(strategy)
+        strategy.on_start()
+
+        # Mock _get_et_time to return 09:29 (before session_start)
+        from datetime import time
+
+        strategy._get_et_time = MagicMock(  # type: ignore[method-assign]
+            return_value=time(9, 29, 0)
+        )
+
+        strategy.on_bar(_make_bar("100.00", "101.00", "99.00", "100.50"))
+        assert strategy._bars_seen == 0  # bar ignored
+        assert strategy._range_high is None
+
+        # Now mock 09:30 (at session_start) — bar should be accumulated
+        strategy._get_et_time = MagicMock(  # type: ignore[method-assign]
+            return_value=time(9, 30, 0)
+        )
+        strategy.on_bar(_make_bar("100.00", "101.00", "99.50", "100.00"))
+        assert strategy._bars_seen == 1
+        assert strategy._range_high == 101.0
+        assert strategy._range_low == 99.5
+
+    def test_session_start_when_none_allows_bars(self) -> None:
+        """When ``_session_start_time`` is ``None``, accumulation is always allowed."""
+        strategy = OrbStrategy(_make_config(session_start="", first_candle_minutes=10))
+        _register_strategy(strategy)
+        _mock_instrument(strategy)
+        strategy.on_start()
+
+        # With no session_start config, _session_start_time is None
+        assert strategy._session_start_time is None
+        assert strategy._in_range_accumulation_window() is True
+
+        strategy.on_bar(_make_bar("100.00", "101.00", "99.00", "100.50"))
+        assert strategy._bars_seen == 1
+
+
 class TestTimezone:
     def test_nasdaq_uses_eastern_time(self) -> None:
         strategy = OrbStrategy(_make_config(instrument_id="AAPL.NASDAQ"))

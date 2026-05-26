@@ -246,4 +246,4 @@ This enables immediate fallback to long-only without code changes.
 
 ---
 
-*Last updated: 2026-05-24 — Status updated to Complete during gap audit; ticket summary added*
+*Last updated: 2026-05-26 — Fixed OrbStrategy _in_range_accumulation_window dead code (session_start gate now checked in on_bar before _update_range). MomentumStrategy already has _in_session() guard — not affected. Template updated with session-start pattern comment.*

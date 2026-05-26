@@ -200,6 +200,20 @@ class TemplateStrategy(Strategy):
         if bar.is_single_price():
             return
 
+        # -- Session time guards -----------------------------------------------
+        # If your strategy accumulates data before trading (e.g. an opening
+        # range), gate accumulation behind a session start check.  Example:
+        #
+        #   if not self._range_established:
+        #       if not self._in_range_accumulation_window():
+        #           return
+        #       self._update_range(bar)
+        #       return
+        #
+        # The ``_in_range_accumulation_window()`` / ``_in_session()`` pattern
+        # compares the current clock time against ``config.session_start``.
+        # Without this guard, pre-market bars are incorrectly included.
+
         # -- Update indicators / state -----------------------------------------
         close_price = float(bar.close)
         self._closes.append(close_price)
