@@ -1,5 +1,14 @@
 > **Note: see first-entry Iteration 20 for Phase 2 config dataclasses.**
 
+## Iteration 105
+- **Task**: BUG: sam-services health check fails despite dashboard responding on :8080
+- **Task ID**: sam_trader-9z3.9.27
+- **Status**: COMPLETE
+- **Decisions**: Root cause: docker-compose.yml's sam-services healthcheck L2 (`true > /dev/tcp/localhost/8080`) runs in `/bin/sh` (dash on Debian), which does NOT support `/dev/tcp/` — this is a bash-only feature. The Dockerfile.services version correctly wraps L2 with `bash -c`. But docker-compose.yml's `healthcheck:` directive overrides the Dockerfile's HEALTHCHECK, and its L2 lacked the `bash -c` wrapper. Fixed by aligning docker-compose.yml L2 with the Dockerfile version: `bash -c 'true > /dev/tcp/localhost/8080' 2>/dev/null`. L1 (`pgrep python`) works fine (procps installed, substring match on `python3`). L3 (`|| true`) is intentionally non-failing per HEALTHCHECK_PATTERN.md.
+- **Files Changed**: `docker/docker-compose.yml`
+- **Validation Result**: PASS (RALPH_GATE_PASSED, all 66 targeted tests pass)
+- **Blockers / Notes**: None.
+
 ## Iteration 104
 - **Task**: TASK: Add max_trades_per_day and trade_cooldown_seconds to OrbStrategy
 - **Task ID**: sam_trader-9z3.8.11

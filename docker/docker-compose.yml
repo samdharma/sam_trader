@@ -206,7 +206,7 @@ services:
     profiles:
       - services
     healthcheck:
-      test: ["CMD-SHELL", "pgrep python > /dev/null 2>&1 && true > /dev/tcp/localhost/8080 2>/dev/null && (curl -sf http://localhost:8080/health > /dev/null 2>&1 || true)"]
+      test: ["CMD-SHELL", "pgrep python > /dev/null 2>&1 && bash -c 'true > /dev/tcp/localhost/8080' 2>/dev/null && (curl -sf http://localhost:8080/health > /dev/null 2>&1 || true)"]
       interval: 30s
       timeout: 10s
       retries: 3
