@@ -1615,3 +1615,12 @@
 - **Files Changed**: `src/sam_trader/services/market_calendar.py`, `src/sam_trader/actors/health_monitor.py`, `src/sam_trader/actors/bar_resubscription.py`, `src/sam_trader/config.py`, `src/sam_trader/main.py`, `.env.example`, `tests/unit/actors/test_health_monitor.py`, `tests/unit/actors/test_bar_resubscription.py`, `tests/unit/test_config.py`
 - **Validation Result**: PASS (133/133 targeted tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ticket ready to close.
+
+## Iteration 98
+- **Task**: BUG: Pre-market pipeline crashes on pass_number > 2
+- **Task ID**: sam_trader-9z3.10.30
+- **Status**: COMPLETE
+- **Decisions**: Relaxed gap scanner pass_number validation from `in (1, 2)` to `>= 1` so extended pre-market windows (pass 3+) do not crash the pipeline. Pass >= 2 enables trend detection (was pass == 2 only). AI scoring engine applies the same late-pass bonus for pass >= 2. CLI validation aligned. Minimal change — no new dependencies, no breaking changes.
+- **Files Changed**: `src/sam_trader/services/gap_scanner.py`, `src/sam_trader/services/ai_scoring.py`, `src/sam_trader/services/cli.py`, `src/sam_trader/services/pipeline.py`, `tests/unit/services/test_gap_scanner.py`, `tests/unit/services/test_ai_scoring.py`
+- **Validation Result**: PASS (92/92 targeted tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ticket closed.
