@@ -1683,6 +1683,49 @@ class TestProbeCommand:
         assert call_kwargs["bar_type_str"] == "TSLA.NASDAQ-5-MINUTE-LAST-EXTERNAL"
 
 
+class TestFlushCacheCommand:
+    @patch("sam_trader.services.cli._redis_cli")
+    def test_flush_cache_force(self, mock_redis_mod: Any, capsys: Any) -> None:
+        """Flush cache with --force deletes all keys."""
+        mock_r = MagicMock()
+        mock_r.ping.return_value = True
+        mock_r.dbsize.return_value = 42
+        mock_redis_mod.Redis.return_value = mock_r
+
+        rc = main(["flush-cache", "--force"])
+        captured = capsys.readouterr()
+        assert rc == 0
+        assert "flushed" in captured.out
+        assert "42" in captured.out
+        mock_r.flushdb.assert_called_once()
+
+    @patch("sam_trader.services.cli._redis_cli")
+    def test_flush_cache_no_force_aborts(
+        self, mock_redis_mod: Any, capsys: Any
+    ) -> None:
+        """Flush cache without --force aborts in non-interactive mode."""
+        mock_r = MagicMock()
+        mock_r.ping.return_value = True
+        mock_redis_mod.Redis.return_value = mock_r
+
+        rc = main(["flush-cache"])
+        # click.confirm with abort=True exits non-zero in non-interactive mode
+        assert rc != 0
+        mock_r.flushdb.assert_not_called()
+
+    @patch("sam_trader.services.cli._redis_cli")
+    def test_flush_cache_redis_unavailable(
+        self, mock_redis_mod: Any, capsys: Any
+    ) -> None:
+        """Flush cache reports error when Redis is unreachable."""
+        mock_redis_mod.Redis.side_effect = Exception("Connection refused")
+
+        rc = main(["flush-cache", "--force"])
+        captured = capsys.readouterr()
+        assert rc != 0
+        assert "Redis connection failed" in captured.err
+
+
 class TestJsonGlobalFlag:
     @patch("sam_trader.services.cli._run")
     def test_json_flag_on_status(self, mock_run: Any, capsys: Any) -> None:

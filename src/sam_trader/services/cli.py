@@ -1004,6 +1004,52 @@ def restart(ctx: click.Context, force: bool) -> None:
     _out(ctx, result)
 
 
+@cli.command("flush-cache")
+@click.option("--force", is_flag=True, help="Skip confirmation prompt.")
+@click.pass_context
+def flush_cache(ctx: click.Context, force: bool) -> None:
+    """Emergency flush of the Redis cache database.
+
+    Removes ALL keys from the selected Redis DB, clearing stale orders,
+    strategy state, and any other cached data.  Use only when the node
+    cannot start because of orphaned orders persisted across restarts.
+    """
+    if _redis_cli is None:
+        raise click.ClickException("redis package not available")
+
+    try:
+        r = _redis_cli.Redis(
+            host=REDIS_HOST,
+            port=int(REDIS_PORT),
+            password=REDIS_PASSWORD or None,
+            decode_responses=True,
+            socket_connect_timeout=5,
+        )
+        r.ping()
+    except Exception as exc:
+        raise click.ClickException(f"Redis connection failed: {exc}")
+
+    if not force:
+        click.confirm(
+            "This will delete ALL keys in the Redis cache database. Continue?",
+            abort=True,
+        )
+
+    try:
+        before_count = r.dbsize()
+    except Exception:
+        before_count = "unknown"
+
+    r.flushdb()
+
+    result = {
+        "command": "flush-cache",
+        "status": "flushed",
+        "keys_before": before_count,
+    }
+    _out(ctx, result)
+
+
 def _run_verify() -> dict[str, Any]:
     """Post-restart verification: health checks + state-loaded confirmation.
 

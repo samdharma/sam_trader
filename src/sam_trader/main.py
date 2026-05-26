@@ -406,11 +406,27 @@ def build_trading_node() -> TradingNode:
         )
         logger.info("PositionSnapshotActor registered")
 
+    # Guard: prevent stale order replay when no execution clients exist.
+    # If the broker is disconnected, strategies may have generated orders
+    # that were saved to Redis. Loading them without an exec client would
+    # create orphan orders that the ExecEngine rejects.
+    load_state = cfg.state_load_enabled
+    if load_state and not exec_clients:
+        logger.critical(
+            "STATE LOAD ABORTED: load_state=True but ZERO execution clients "
+            "are registered (futu_enabled=%s, ib_enabled=%s). "
+            "Stale orders from Redis will NOT be replayed. "
+            "To clear stale state manually: sam flush-cache",
+            cfg.futu_enabled,
+            cfg.ib_enabled,
+        )
+        load_state = False
+
     node_config = TradingNodeConfig(
         trader_id=_make_trader_id(cfg.trader_id),
         logging=LoggingConfig(log_level=cfg.log_level.upper()),
         cache=cache_config,
-        load_state=cfg.state_load_enabled,
+        load_state=load_state,
         save_state=cfg.state_save_enabled,
         data_clients=data_clients,
         exec_clients=exec_clients,

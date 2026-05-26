@@ -218,7 +218,39 @@ node_config = TradingNodeConfig(
 
 ---
 
-## 7. Phase 6 EXIT Integration Test
+## 7. Stale State Guard & Phase 6 EXIT Integration Test
+
+### 7.1 Startup Guard: Skip State Load When No Exec Clients
+
+> **Ticket:** `sam_trader-9z3.7.14` — Stale orders persist in Redis across restarts
+
+**Problem:** When a broker connection fails, strategies continue generating orders.
+These orders are serialized to Redis via `save_state()` and replayed on restart via
+`load_state()`, creating a growing pool of orphaned orders that the `ExecEngine` rejects.
+
+**Guard implemented in `main.py`:**
+
+```python
+load_state = cfg.state_load_enabled
+if load_state and not exec_clients:
+    logger.critical(
+        "STATE LOAD ABORTED: load_state=True but ZERO execution clients ..."
+    )
+    load_state = False
+```
+
+**Behavior:**
+- If `STATE_LOAD_ENABLED=true` but **zero** execution clients are registered
+  (both Futu and IB disabled or unavailable), the node logs a **CRITICAL** message
+  and sets `load_state=False` for this session.
+- `save_state` is **unaffected** — the node will still persist state on shutdown
+  once exec clients are available again.
+- The operator can clear stale state manually with the emergency CLI:
+  `sam flush-cache --force`
+
+**Unit test:** `tests/unit/test_main.py::test_skip_state_load_when_no_exec_clients`
+
+### 7.2 Phase 6 EXIT Integration Test
 
 **File:** `tests/integration/test_phase6_exit.py` (created 2026-05-24)
 

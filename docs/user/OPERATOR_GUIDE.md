@@ -523,7 +523,7 @@ docker exec sam-services sam <command>
 | `kill` | Emergency kill switch |
 | `halt` | Halt trading |
 | `resume` | Resume trading |
-| `safety-monitor` | Run circuit-breaker checks |
+| `flush-cache` | Emergency Redis cache flush (stale order cleanup) |
 
 ### 5.3 Options
 
@@ -537,7 +537,34 @@ docker exec sam-services sam <command>
 | `--strategy <id>` | `sam performance` | Filter by strategy |
 | `--days <n>` | `sam performance` | Lookback days (default 30) |
 
-### 5.4 Cron Schedule (Inside `sam-services`)
+### 5.4 Migration: Sandbox → Production
+
+When moving from a sandbox / paper-trading environment to production,
+**flush the Redis cache** before the first production start.  This
+prevents stale paper orders from being replayed into the live broker.
+
+```bash
+# 1. Stop the trading node
+./deploy.sh stop
+
+# 2. Flush Redis cache (emergency command)
+docker exec sam-services sam flush-cache --force
+
+# 3. Verify cache is empty
+docker exec sam-redis redis-cli dbsize
+# Expected: (integer) 0
+
+# 4. Start production stack
+./deploy.sh --with-futu --with-services start
+```
+
+> **Why this matters:**  In sandbox mode strategies may have generated
+> hundreds of orders that were persisted to Redis.  If the node restarts
+> with `load_state=True` but no execution client is available, the startup
+> guard will log CRITICAL and skip the load automatically.  However, a
+> manual flush guarantees a completely clean slate for the production cutover.
+
+### 5.5 Cron Schedule (Inside `sam-services`)
 
 | Time (HKT) | Command | Purpose |
 |------------|---------|---------|

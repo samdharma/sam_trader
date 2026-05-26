@@ -5,10 +5,12 @@ from __future__ import annotations
 import asyncio
 import logging
 import pathlib
+from unittest.mock import MagicMock
 
 import pytest
 from nautilus_trader.live.node import TradingNode
 
+import sam_trader.main as main_module
 from sam_trader.main import build_trading_node
 
 
@@ -747,3 +749,38 @@ class TestEmptyBundlesWarning:
         finally:
             loop.close()
             asyncio.set_event_loop(None)
+
+
+class TestStateLoadGuard:
+    """Tests for stale-order guard when no execution clients are available."""
+
+    def test_skip_state_load_when_no_exec_clients(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """When load_state=True but no exec clients: CRITICAL log + load_state=False."""
+        monkeypatch.setenv("IB_ENABLED", "false")
+        monkeypatch.setenv("FUTU_ENABLED", "false")
+        monkeypatch.setenv("BUNDLES_PATH", "config/nonexistent_bundles.yaml")
+        monkeypatch.setenv("STATE_SAVE_ENABLED", "true")
+        monkeypatch.setenv("STATE_LOAD_ENABLED", "true")
+        monkeypatch.setenv("REDIS_HOST", "test-redis")
+        monkeypatch.setenv("REDIS_PORT", "6380")
+        # Avoid real TradingNode instantiation that connects to Redis
+        monkeypatch.setattr(
+            main_module,
+            "TradingNode",
+            lambda config: MagicMock(_config=config),
+        )
+
+        with caplog.at_level(logging.CRITICAL):
+            node = build_trading_node()
+
+        assert node._config.load_state is False
+        assert node._config.save_state is True  # save_state unaffected
+
+        critical_records = [r for r in caplog.records if r.levelno == logging.CRITICAL]
+        assert len(critical_records) == 1
+        assert "STATE LOAD ABORTED" in critical_records[0].message
+        assert "ZERO execution clients" in critical_records[0].message
