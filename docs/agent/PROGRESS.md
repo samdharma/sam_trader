@@ -1,3 +1,12 @@
+## Iteration 98
+- **Task**: Integrate market calendar into pipeline and readiness report
+- **Task ID**: sam_trader-9z3.10.32
+- **Status**: COMPLETE
+- **Decisions**: Added `holiday_skipped` and `holiday_name` fields to `PipelineResult`. In `run_pipeline()`, check `MarketCalendarService.is_trading_day()` before gap scan; if holiday, log INFO with holiday name, construct a `PipelineResult(holiday_skipped=True)`, generate readiness report, save audit, and return gracefully. Cron still triggers for audit but pipeline body is a no-op on holidays. Updated `ReadinessReport` dataclass with `holiday_skipped`, `holiday_name`, `next_trading_day`. `ReadinessReportGenerator.generate()` computes next_trading_day via `MarketCalendarService.next_trading_day()` when holiday mode is active. `format_table()` shows prominent "!!!" holiday banner and skips candidate/risk/regime sections (marked N/A). `_webhook_payload()` handles holiday mode for Slack, Telegram, and generic webhooks. Added 14 unit tests covering US holiday skip, HK holiday skip, normal trading day, holiday banner formatting, N/A sections, next_trading_day computation, report dict serialization, and holiday webhook payloads.
+- **Files Changed**: `src/sam_trader/services/pipeline.py`, `src/sam_trader/services/pipeline_executor.py`, `src/sam_trader/services/readiness_report.py`, `tests/unit/services/test_pipeline.py`, `tests/unit/services/test_pipeline_executor.py`, `tests/unit/services/test_readiness_report.py`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 65/65 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ticket closed.
+
 ## Iteration 97
 - **Task**: Add market holiday banner and next-trading-day countdown to dashboard
 - **Task ID**: sam_trader-9z3.9.26
