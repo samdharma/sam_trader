@@ -1362,3 +1362,12 @@
 - **Files Changed**: `docs/reference/SAM_TRADER_V3_PLAN.md`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; no affected tests, lint skipped)
 - **Blockers / Notes**: None.
+
+## Iteration 123
+- **Task**: BUG: PostgreSQL init script aborts on fresh database
+- **Task ID**: sam_trader-9z3.1.21
+- **Status**: COMPLETE
+- **Decisions**: Moved the `ALTER TABLE fills ADD COLUMN IF NOT EXISTS slippage` statement from the top of `01_schema.sql` to immediately after the `CREATE TABLE IF NOT EXISTS fills` block. On a fresh database the table does not exist, so the ALTER TABLE failed and aborted the entire init script due to `ON_ERROR_STOP=1`. The reordering fixes fresh-database bootstrap while preserving the idempotent migration path for existing databases.
+- **Files Changed**: `docker/postgres/init/01_schema.sql`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targetted; no affected tests, lint skipped)
+- **Blockers / Notes**: None.
