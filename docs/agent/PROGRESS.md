@@ -1,3 +1,12 @@
+## Iteration 101
+- **Task**: BUG: OpenSecTradeContext passes is_encrypt=None — all trade orders rejected when FUTU_OPEND_IP=0.0.0.0
+- **Task ID**: sam_trader-9z3.4.11
+- **Status**: COMPLETE
+- **Decisions**: Fixed monkey-patched `_patched_otcb_init` to conditionally pass `is_encrypt` to `OpenContextBase.__init__`. When `is_encrypt=None` (default) and RSA key file exists at `/.futu/futu.pem`, auto-enable with `is_encrypt=True`. When RSA key doesn't exist, omit `is_encrypt` entirely — let Futu SDK auto-detect from `SysConfig`. Explicit `is_encrypt=False` or `is_encrypt=True` from callers are always respected. Added 4 unit tests covering: RSA key exists → `is_encrypt=True`, no RSA key → `is_encrypt` not passed, explicit `is_encrypt=False` respected, explicit `is_encrypt=True` passed through.
+- **Files Changed**: `src/sam_trader/adapters/futu/connection.py`, `tests/unit/adapters/futu/test_connection.py`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 26/26 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Integration test (place_order with RSA) requires live Futu OpenD.
+
 ## Iteration 100
 - **Task**: BUG: OrbStrategy _in_range_accumulation_window defined but never called in on_bar — session_start is dead code
 - **Task ID**: sam_trader-9z3.8.10

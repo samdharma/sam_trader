@@ -79,14 +79,30 @@ if (
         self._OpenTradeContextBase__need_general_sec_acc = (
             need_general_sec_acc  # noqa: SLF001
         )
-        OpenContextBase.__init__(
-            self,
-            host,
-            port,
-            is_encrypt=is_encrypt,
-            is_async_connect=True,
-            ai_type=ai_type,
-        )
+        # Determine is_encrypt: respect explicit setting,
+        # auto-enable when RSA key is available (required for
+        # cross-network connections, e.g. FUTU_OPEND_IP=0.0.0.0).
+        _encrypt = is_encrypt
+        if _encrypt is None and os.path.isfile(_RSA_KEY_PATH):
+            _encrypt = True
+
+        if _encrypt is not None:
+            OpenContextBase.__init__(
+                self,
+                host,
+                port,
+                is_encrypt=_encrypt,
+                is_async_connect=True,
+                ai_type=ai_type,
+            )
+        else:
+            OpenContextBase.__init__(
+                self,
+                host,
+                port,
+                is_async_connect=True,
+                ai_type=ai_type,
+            )
 
     OpenTradeContextBase.__init__ = _patched_otcb_init  # type: ignore[method-assign]
     logger.debug("Patched OpenTradeContextBase to support is_async_connect=True")

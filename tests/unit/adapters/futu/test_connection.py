@@ -367,6 +367,101 @@ class TestCloseFutuContexts:
         mock_t1.close.assert_called_once()
 
 
+class TestTradeContextEncryption:
+    """Verify monkey-patched OpenTradeContextBase passes is_encrypt correctly."""
+
+    def test_is_encrypt_true_when_rsa_key_exists(self) -> None:
+        """When RSA key file exists and is_encrypt not explicitly set,
+        is_encrypt=True should be passed to OpenContextBase.__init__."""
+        from sam_trader.adapters.futu.connection import (
+            _RSA_KEY_PATH,
+            OpenContextBase,
+            OpenTradeContextBase,
+        )
+
+        with patch.object(OpenContextBase, "__init__", return_value=None) as mock_init:
+            with patch("os.path.isfile", return_value=True) as mock_isfile:
+                instance = MagicMock()
+                OpenTradeContextBase.__init__(
+                    instance,
+                    trd_mkt="US",
+                    host="127.0.0.1",
+                    port=11111,
+                )
+
+        mock_isfile.assert_called_once_with(_RSA_KEY_PATH)
+        # is_encrypt=True should be passed to OpenContextBase
+        call_kwargs = mock_init.call_args.kwargs
+        assert call_kwargs["is_encrypt"] is True
+        assert call_kwargs["is_async_connect"] is True
+
+    def test_is_encrypt_not_passed_when_no_rsa_key(self) -> None:
+        """When RSA key file does NOT exist and is_encrypt not explicitly set,
+        is_encrypt should NOT be passed to OpenContextBase.__init__."""
+        from sam_trader.adapters.futu.connection import (
+            OpenContextBase,
+            OpenTradeContextBase,
+        )
+
+        with patch.object(OpenContextBase, "__init__", return_value=None) as mock_init:
+            with patch("os.path.isfile", return_value=False):
+                instance = MagicMock()
+                OpenTradeContextBase.__init__(
+                    instance,
+                    trd_mkt="US",
+                    host="127.0.0.1",
+                    port=11111,
+                )
+
+        # is_encrypt should NOT be in the kwargs
+        call_kwargs = mock_init.call_args.kwargs
+        assert "is_encrypt" not in call_kwargs
+        assert call_kwargs["is_async_connect"] is True
+
+    def test_explicit_is_encrypt_false_respected(self) -> None:
+        """When caller explicitly passes is_encrypt=False,
+        it should be respected even if RSA key exists."""
+        from sam_trader.adapters.futu.connection import (
+            OpenContextBase,
+            OpenTradeContextBase,
+        )
+
+        with patch.object(OpenContextBase, "__init__", return_value=None) as mock_init:
+            with patch("os.path.isfile", return_value=True):
+                instance = MagicMock()
+                OpenTradeContextBase.__init__(
+                    instance,
+                    trd_mkt="US",
+                    host="127.0.0.1",
+                    port=11111,
+                    is_encrypt=False,
+                )
+
+        call_kwargs = mock_init.call_args.kwargs
+        assert call_kwargs["is_encrypt"] is False
+
+    def test_explicit_is_encrypt_true_passed_through(self) -> None:
+        """When caller passes is_encrypt=True, it should be passed through."""
+        from sam_trader.adapters.futu.connection import (
+            OpenContextBase,
+            OpenTradeContextBase,
+        )
+
+        with patch.object(OpenContextBase, "__init__", return_value=None) as mock_init:
+            with patch("os.path.isfile", return_value=False):
+                instance = MagicMock()
+                OpenTradeContextBase.__init__(
+                    instance,
+                    trd_mkt="US",
+                    host="0.0.0.0",
+                    port=11111,
+                    is_encrypt=True,
+                )
+
+        call_kwargs = mock_init.call_args.kwargs
+        assert call_kwargs["is_encrypt"] is True
+
+
 class TestMultipleEnvironments:
     @patch("sam_trader.adapters.futu.connection.OpenQuoteContext")
     @patch("sam_trader.adapters.futu.connection.OpenSecTradeContext")
