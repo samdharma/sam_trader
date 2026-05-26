@@ -377,6 +377,29 @@ class TestSamPipelineRun:
         assert "SAM Trader V3" in result.output or result.output == ""
 
 
+class TestHKPipeline:
+    """HK market pipeline produces non-zero candidates."""
+
+    def test_hk_pipeline_produces_candidates(self, event_loop):
+        quotes = {
+            InstrumentId.from_str("00700.HKEX"): _make_tick(
+                "00700.HKEX", "400.00", "400.05"
+            ),
+            InstrumentId.from_str("09988.HKEX"): _make_tick(
+                "09988.HKEX", "80.00", "80.02"
+            ),
+        }
+        quote_svc = FakeQuoteService(quotes)
+        prev_loader = FakePrevCloseLoader({"00700.HKEX": 390.0, "09988.HKEX": 85.0})
+        cfg = GapScannerConfig(market="HK", min_gap_pct=1.0)
+        scanner = PreMarketGapScanner(cfg, quote_svc, prev_loader)
+
+        candidates = event_loop.run_until_complete(
+            scanner.scan(["00700.HKEX", "09988.HKEX"], pass_number=1)
+        )
+        assert len(candidates) >= 1
+
+
 class TestAuditTrail:
     """AC 7: Audit trail complete for all stages."""
 

@@ -305,15 +305,27 @@ class PreMarketGapScanner:
 
         # 1. Collect real-time quotes
         quotes = await self._collect_quotes(watchlist)
+        logger.info("quote_collected=%d", len(quotes))
+
+        if not quotes:
+            logger.info("0 candidates (market closed)")
+            return []
 
         # 2. Load previous closes
         prev_closes = await self._load_prev_closes(watchlist)
+        logger.info(
+            "prev_close_success=%d/%d",
+            len(prev_closes),
+            len(watchlist),
+        )
 
         # 3. Compute raw gap candidates
         candidates = self._compute_gaps(quotes, prev_closes, pass_number)
+        logger.info("raw_gaps=%d", len(candidates))
 
         # 4. Apply filters
         filtered = self._apply_filters(candidates)
+        logger.info("after_filters=%d", len(filtered))
 
         # 5. Trend detection (Pass 2+)
         if pass_number >= 2:

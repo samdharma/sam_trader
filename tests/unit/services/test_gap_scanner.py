@@ -311,6 +311,57 @@ class TestScanPass1:
         )
         assert len(result) == 1
 
+    def test_scan_empty_quotes_returns_market_closed(self, event_loop):
+        quote_svc = FakeQuoteService({})
+        prev_loader = FakePrevCloseLoader({"TSLA.NASDAQ": 145.0})
+        cfg = GapScannerConfig(min_gap_pct=1.0)
+        scanner = PreMarketGapScanner(cfg, quote_svc, prev_loader)
+
+        result = event_loop.run_until_complete(
+            scanner.scan(["TSLA.NASDAQ"], pass_number=1)
+        )
+        assert result == []
+
+    def test_scan_logs_diagnostics(self, event_loop, caplog):
+        import logging
+
+        quotes = {
+            InstrumentId.from_str("TSLA.NASDAQ"): _make_tick(
+                "TSLA.NASDAQ", "150.00", "150.05"
+            ),
+            InstrumentId.from_str("AAPL.NASDAQ"): _make_tick(
+                "AAPL.NASDAQ", "180.00", "180.02"
+            ),
+        }
+        quote_svc = FakeQuoteService(quotes)
+        prev_loader = FakePrevCloseLoader({"TSLA.NASDAQ": 145.0, "AAPL.NASDAQ": 185.0})
+        cfg = GapScannerConfig(min_gap_pct=1.0)
+        scanner = PreMarketGapScanner(cfg, quote_svc, prev_loader)
+
+        with caplog.at_level(logging.INFO, logger="sam_trader.services.gap_scanner"):
+            event_loop.run_until_complete(
+                scanner.scan(["TSLA.NASDAQ", "AAPL.NASDAQ"], pass_number=1)
+            )
+
+        assert "quote_collected=2" in caplog.text
+        assert "prev_close_success=2/2" in caplog.text
+        assert "raw_gaps=2" in caplog.text
+        assert "after_filters=2" in caplog.text
+
+    def test_scan_empty_quotes_logs_market_closed(self, event_loop, caplog):
+        import logging
+
+        quote_svc = FakeQuoteService({})
+        prev_loader = FakePrevCloseLoader({})
+        cfg = GapScannerConfig(min_gap_pct=1.0)
+        scanner = PreMarketGapScanner(cfg, quote_svc, prev_loader)
+
+        with caplog.at_level(logging.INFO, logger="sam_trader.services.gap_scanner"):
+            event_loop.run_until_complete(scanner.scan(["TSLA.NASDAQ"], pass_number=1))
+
+        assert "quote_collected=0" in caplog.text
+        assert "0 candidates (market closed)" in caplog.text
+
 
 # ---------------------------------------------------------------------------
 # Trend detection (Pass 2)

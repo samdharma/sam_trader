@@ -1659,3 +1659,20 @@
 - **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 28/28 targeted tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ticket closed and pushed to origin.
 
+
+## Iteration 138
+- **Task**: Pipeline produces 0 candidates — HK watchlist empty, US market closed at run time
+- **Task ID**: sam_trader-9z3.10.34
+- **Status**: COMPLETE
+- **Decisions**: 
+  1. Populated `config/premarket_watchlist.yaml` with 4 HK symbols (00700, 09988, 09618, 01810) and set `premarket_only: false` for HK since Hong Kong has no pre-market session.
+  2. Added per-stage diagnostic logging to `PreMarketGapScanner.scan()`: `quote_collected=N`, `prev_close_success=N/M`, `raw_gaps=N`, `after_filters=N`. When quotes dict is empty, scanner logs `0 candidates (market closed)` and returns early.
+  3. Added `0 candidates (market closed)` log in `run_pipeline()` when gap scan returns empty candidates list.
+  4. Added HK pipeline integration test (`TestHKPipeline::test_hk_pipeline_produces_candidates`) verifying mocked HK quotes + prev closes yield non-zero candidates.
+  5. Added unit tests for diagnostic logging (`test_scan_logs_diagnostics`) and empty-quotes market-closed behavior (`test_scan_empty_quotes_logs_market_closed`, `test_scan_empty_quotes_returns_market_closed`).
+  6. Updated `docs/reference/BUILD_PHASE_9.md` §3.3 with HK watchlist setup reference.
+  7. Updated `docs/user/OPERATOR_GUIDE.md` with new §1.8 "Watchlist Population" covering US dynamic mode and HK static symbol requirements.
+  8. Updated `.env.example` with HK schedule comment.
+- **Files Changed**: `config/premarket_watchlist.yaml`, `src/sam_trader/services/gap_scanner.py`, `src/sam_trader/services/pipeline.py`, `tests/unit/services/test_gap_scanner.py`, `tests/unit/services/test_pipeline.py`, `tests/integration/test_phase9_exit.py`, `docs/reference/BUILD_PHASE_9.md`, `docs/user/OPERATOR_GUIDE.md`, `.env.example`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 61/61 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ticket closed.

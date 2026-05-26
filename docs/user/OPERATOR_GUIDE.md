@@ -144,6 +144,38 @@ docker exec sam-services sam gapscan --market US --pass 1
 docker exec sam-services sam watchlist --market US
 ```
 
+### 1.8 Watchlist Population
+
+The pipeline scans symbols defined in `config/premarket_watchlist.yaml`.
+
+**US market** — symbols can be left empty to auto-generate from active bundles:
+```yaml
+watchlist:
+  US:
+    symbols: []        # auto-populated from config/bundles.yaml
+    premarket_only: true
+```
+
+**HK market** — must be populated statically because Hong Kong has no
+pre-market session and dynamic bundle extraction will yield zero symbols:
+```yaml
+watchlist:
+  HK:
+    symbols:
+      - "00700.HKEX"    # Tencent
+      - "09988.HKEX"    # Alibaba
+      - "09618.HKEX"    # JD.com
+      - "01810.HKEX"    # Xiaomi
+    premarket_only: false
+```
+
+Switch the pipeline to HK by setting the environment variables:
+```bash
+# In .env or docker-compose override
+PIPELINE_MARKET=HK
+PIPELINE_SCHEDULE=09:00   # HKT, 30 min before HK market open
+```
+
 ---
 
 ## 2. Market Hours (09:30–16:00 US/Eastern)

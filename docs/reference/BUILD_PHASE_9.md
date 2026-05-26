@@ -154,6 +154,32 @@ class QuoteCollectionService:
 with `InteractiveBrokersDataClientConfig` + `InteractiveBrokersInstrumentProviderConfig`.
 Graceful `RuntimeError` if `ibapi` is not installed.
 
+### 3.3 HK Watchlist Setup
+
+The pre-market watchlist (`config/premarket_watchlist.yaml`) must contain static
+HK symbols because Hong Kong does **not** have a pre-market session, so dynamic
+bundle extraction is insufficient.
+
+Required HK symbols (minimum):
+
+```yaml
+watchlist:
+  HK:
+    symbols:
+      - "00700.HKEX"    # Tencent
+      - "09988.HKEX"    # Alibaba
+      - "09618.HKEX"    # JD.com
+      - "01810.HKEX"    # Xiaomi
+    min_gap_pct: 1.5
+    max_candidates: 30
+    premarket_only: false   # HK has no pre-market session
+```
+
+Set `PIPELINE_MARKET=HK` and `PIPELINE_SCHEDULE=09:00` (HKT) when scanning the
+HK market. The gap scanner emits per-stage diagnostic counts
+(`quote_collected=N`, `prev_close_success=N`, `raw_gaps=N`, `after_filters=N`)
+for observability.
+
 ### 3.3 Key Nautilus Types
 
 ```python

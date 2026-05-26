@@ -12,8 +12,13 @@ watchlist:
     premarket_only: true
 
   HK:
-    # Static symbol list — leave empty to auto-generate from active bundles
-    symbols: []
+    # Static symbol list — populated because HK has no pre-market session
+    # and dynamic bundle extraction may not include HK symbols.
+    symbols:
+      - "00700.HKEX"    # Tencent
+      - "09988.HKEX"    # Alibaba
+      - "09618.HKEX"    # JD.com
+      - "01810.HKEX"    # Xiaomi
     min_gap_pct: 1.5
     max_candidates: 30
-    premarket_only: true
+    premarket_only: false  # HK does not have a pre-market session

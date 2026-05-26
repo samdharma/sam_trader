@@ -184,6 +184,9 @@ def run_pipeline(
             "error": f"Gap scan failed: {exc}",
         }
 
+    if not candidates:
+        logger.info("0 candidates (market closed)")
+
     # 4. Pipeline executor
     executor = PipelineExecutor(config=PipelineExecutorConfig(regime_venue=market))
     pipeline_result = executor.run(

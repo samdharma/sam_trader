@@ -263,3 +263,60 @@ class TestRunPipeline:
 
         assert result["status"] == "error"
         assert "Gap scan failed" in result["error"]
+
+    @patch("sam_trader.services.pipeline.ReadinessReportGenerator")
+    @patch("sam_trader.services.pipeline.PipelineExecutor")
+    @patch("sam_trader.services.pipeline.PreMarketGapScanner")
+    @patch("sam_trader.services.pipeline.QuoteCollectionService")
+    @patch("sam_trader.services.pipeline.build_watchlist")
+    @patch("sam_trader.services.pipeline.load_watchlist_config")
+    def test_run_pipeline_logs_market_closed_when_no_candidates(
+        self,
+        mock_load_wl: Any,
+        mock_build_wl: Any,
+        mock_quote_svc: Any,
+        mock_scanner_cls: Any,
+        mock_executor_cls: Any,
+        mock_report_gen_cls: Any,
+        caplog: Any,
+    ) -> None:
+        import logging
+
+        mock_load_wl.return_value = {"US": MagicMock(min_gap_pct=2.0)}
+        mock_build_wl.return_value = {"US": ["TSLA.NASDAQ"]}
+
+        mock_scanner = MagicMock()
+        mock_scanner.scan = AsyncMock(return_value=[])
+        mock_scanner_cls.return_value = mock_scanner
+
+        mock_pipeline_result = MagicMock()
+        mock_pipeline_result.approved = []
+        mock_pipeline_result.rejected = []
+        mock_pipeline_result.heat_result = None
+        mock_pipeline_result.regime_prediction = None
+        mock_pipeline_result.audit_trail = []
+        mock_pipeline_result.trace_id = "test-trace"
+
+        mock_executor = MagicMock()
+        mock_executor.run.return_value = mock_pipeline_result
+        mock_executor_cls.return_value = mock_executor
+
+        mock_report = MagicMock()
+        mock_report.candidate_count = 0
+        mock_report.approved_count = 0
+        mock_report.rejected_count = 0
+        mock_report.bundles_generated = 0
+        mock_report.bundle_path = None
+        mock_report.regime_state = {"regime": None}
+        mock_report.trace_id = "test-trace"
+
+        mock_report_gen = MagicMock()
+        mock_report_gen.generate.return_value = mock_report
+        mock_report_gen_cls.return_value = mock_report_gen
+
+        with caplog.at_level(logging.INFO, logger="sam_trader.pipeline"):
+            result = run_pipeline(market="US", schedule="08:30")
+
+        assert result["status"] == "success"
+        assert result["candidate_count"] == 0
+        assert "0 candidates (market closed)" in caplog.text
