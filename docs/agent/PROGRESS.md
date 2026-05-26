@@ -1449,3 +1449,15 @@
 - **Files Changed**: `src/sam_trader/strategies/orb.py`, `src/sam_trader/strategies/momentum.py`, `tests/unit/strategies/test_orb.py`, `tests/unit/strategies/test_momentum.py`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 67/67 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Phase 7 bug fix complete.
+
+## Iteration 130
+- **Task**: BUG: sam-services container health check fails due to missing pgrep
+- **Task ID**: sam_trader-9z3.9.19
+- **Status**: COMPLETE
+- **Decisions**: 
+  - Added `procps` to the apt-get install list in `Dockerfile.services` so the L1 health check `pgrep python` works (exit 0 instead of 127).
+  - Updated `tests/unit/test_dockerfile_services.py` to assert `procps` is present in system dependencies.
+  - Also fixed an outdated test assertion (`test_cmd_starts_cron_and_http_server`) that expected `http.server 8080`; the actual CMD uses `python3 -m sam_trader.services.dashboard`.
+- **Files Changed**: `docker/Dockerfile.services`, `tests/unit/test_dockerfile_services.py`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 11/11 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Phase 8 bug fix complete.

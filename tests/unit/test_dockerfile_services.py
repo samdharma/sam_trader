@@ -23,6 +23,7 @@ def test_system_dependencies_installed(dockerfile_text: str) -> None:
     assert "cron" in dockerfile_text
     assert "postgresql-client" in dockerfile_text
     assert "redis-tools" in dockerfile_text
+    assert "procps" in dockerfile_text
 
 
 @pytest.mark.unit
@@ -78,4 +79,4 @@ def test_port_8080_exposed(dockerfile_text: str) -> None:
 @pytest.mark.unit
 def test_cmd_starts_cron_and_http_server(dockerfile_text: str) -> None:
     assert "cron" in dockerfile_text
-    assert "http.server 8080" in dockerfile_text
+    assert "sam_trader.services.dashboard" in dockerfile_text
