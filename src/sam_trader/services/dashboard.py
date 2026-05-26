@@ -15,6 +15,8 @@ from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Any, Awaitable, TypeVar
 
+from sam_trader.services.db_schema import validate_schema
+
 T = TypeVar("T")
 
 logger = logging.getLogger(__name__)
@@ -611,6 +613,11 @@ def main() -> int:
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(message)s",
     )
+    if not validate_schema():
+        # Do not start the dashboard when the schema is missing —
+        # this surfaces the init failure immediately rather than
+        # generating repeated WARNING logs every 30 seconds.
+        return 1
     run_server()
     return 0
 

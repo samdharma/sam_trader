@@ -7,6 +7,7 @@ import socket
 from http.client import HTTPConnection
 from threading import Thread
 from time import sleep
+from typing import Any, Iterator
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -231,7 +232,7 @@ class TestDashboardServer:
     """Integration-style tests against a real HTTP server on a random port."""
 
     @pytest.fixture(scope="class")
-    def server_port(self) -> int:
+    def server_port(self) -> Iterator[int]:
         """Spin up the dashboard server on localhost and return its port."""
         # Find a free port
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -240,10 +241,25 @@ class TestDashboardServer:
         sock.close()
 
         config = DashboardConfig(host="127.0.0.1", port=port)
-        thread = Thread(target=run_server, args=(config,), daemon=True)
-        thread.start()
-        sleep(0.3)  # Let the server start
-        return port
+
+        # Patch external health checks so the daemon thread never blocks on
+        # real network connections (prevents TimeoutError in downstream tests).
+        with patch(
+            "sam_trader.services.dashboard._pg_status",
+            return_value={"status": "UP"},
+        ):
+            with patch(
+                "sam_trader.services.dashboard._redis_status",
+                return_value={"status": "UP"},
+            ):
+                with patch(
+                    "sam_trader.services.dashboard._docker_container_status",
+                    return_value={"status": "running", "health": "healthy"},
+                ):
+                    thread = Thread(target=run_server, args=(config,), daemon=True)
+                    thread.start()
+                    sleep(0.3)  # Let the server start
+                    yield port
 
     def test_get_health_via_http(self, server_port: int) -> None:
         """GET /health over HTTP returns valid JSON."""
@@ -361,3 +377,33 @@ class TestDashboardServer:
         assert "TODAY'S FILLS" in html
         assert "CURRENT POSITIONS" in html
         assert "P&L SUMMARY" in html
+
+
+class TestDashboardStartup:
+    """Tests for dashboard main() startup behaviour including schema validation."""
+
+    @patch("sam_trader.services.dashboard.validate_schema", return_value=True)
+    @patch("sam_trader.services.dashboard.run_server")
+    def test_main_starts_server_when_schema_valid(
+        self, mock_run: Any, mock_validate: Any
+    ) -> None:
+        """main() starts the HTTP server when schema validation passes."""
+        from sam_trader.services.dashboard import main
+
+        result = main()
+        assert result == 0
+        mock_validate.assert_called_once()
+        mock_run.assert_called_once()
+
+    @patch("sam_trader.services.dashboard.validate_schema", return_value=False)
+    @patch("sam_trader.services.dashboard.run_server")
+    def test_main_exits_without_server_when_schema_invalid(
+        self, mock_run: Any, mock_validate: Any
+    ) -> None:
+        """main() returns 1 and does NOT start the server when schema is missing."""
+        from sam_trader.services.dashboard import main
+
+        result = main()
+        assert result == 1
+        mock_validate.assert_called_once()
+        mock_run.assert_not_called()
