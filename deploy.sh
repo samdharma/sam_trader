@@ -6,6 +6,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 COMPOSE_FILE="${SCRIPT_DIR}/docker/docker-compose.yml"
+ENV_FILE="${SCRIPT_DIR}/.env"
 
 WITH_FUTU=false
 WITH_IB=false
@@ -96,7 +97,7 @@ run_build() {
   cd "${SCRIPT_DIR}"
   echo "INFO: Building Docker images..."
   mapfile -t profiles < <(_profile_args)
-  docker compose -f "${COMPOSE_FILE}" "${profiles[@]}" build
+  docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" "${profiles[@]}" build
   echo "INFO: Build complete"
 }
 
@@ -104,7 +105,7 @@ wait_for_healthy() {
   local service="$1" max="${2:-30}"
   echo "INFO: Waiting for ${service} to become healthy..."
   for ((i = 1; i <= max; i++)); do
-    if docker compose -f "${COMPOSE_FILE}" ps "$service" 2>/dev/null | grep -q "healthy"; then
+    if docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" ps "$service" 2>/dev/null | grep -q "healthy"; then
       echo "INFO: ${service} is healthy"; return 0
     fi
     sleep 2
@@ -117,29 +118,29 @@ start_stack() {
   mapfile -t profiles < <(_profile_args)
 
   echo "INFO: Starting core infrastructure (postgres, redis)"
-  docker compose -f "${COMPOSE_FILE}" up -d sam-postgres sam-redis
+  docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" up -d sam-postgres sam-redis
   wait_for_healthy sam-postgres
   wait_for_healthy sam-redis
 
   if [[ "$WITH_FUTU" == true ]]; then
     echo "INFO: Starting Futu OpenD"
-    docker compose -f "${COMPOSE_FILE}" "${profiles[@]}" up -d sam-futu-opend
+    docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" "${profiles[@]}" up -d sam-futu-opend
     wait_for_healthy sam-futu-opend 60
   fi
 
   if [[ "$WITH_IB" == true ]]; then
     echo "INFO: Starting IB Gateway"
-    docker compose -f "${COMPOSE_FILE}" "${profiles[@]}" up -d sam-ib-gateway
+    docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" "${profiles[@]}" up -d sam-ib-gateway
     wait_for_healthy sam-ib-gateway 60
   fi
 
   echo "INFO: Starting sam-trader"
-  docker compose -f "${COMPOSE_FILE}" "${profiles[@]}" up -d sam-trader
+  docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" "${profiles[@]}" up -d sam-trader
   wait_for_healthy sam-trader 60
 
   if [[ "$WITH_SERVICES" == true ]]; then
     echo "INFO: Starting sam-services"
-    docker compose -f "${COMPOSE_FILE}" "${profiles[@]}" up -d sam-services
+    docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" "${profiles[@]}" up -d sam-services
     wait_for_healthy sam-services 60
   fi
 
@@ -150,7 +151,7 @@ start_stack() {
 stop_stack() {
   cd "${SCRIPT_DIR}"
   echo "INFO: Stopping all containers"
-  docker compose -f "${COMPOSE_FILE}" --profile futu --profile ib --profile services down
+  docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" --profile futu --profile ib --profile services down
   echo "INFO: Stack stopped"
 }
 

@@ -146,3 +146,109 @@ class TestEntrypoint:
 
         assert result.returncode != 0
         assert "PostgreSQL not ready" in result.stdout
+
+    def test_entrypoint_fatals_when_futu_enabled_but_no_password(self):
+        """AC: If .env is missing, FUTU_ENABLED=true with no password must fatal."""
+        pg_port = _find_free_port()
+        redis_port = _find_free_port()
+
+        _start_mock_server(pg_port)
+        _start_mock_server(redis_port)
+
+        env = {
+            **os.environ,
+            "POSTGRES_HOST": "127.0.0.1",
+            "POSTGRES_PORT": str(pg_port),
+            "REDIS_HOST": "127.0.0.1",
+            "REDIS_PORT": str(redis_port),
+            "WAIT_TIMEOUT": "5",
+            "WAIT_FOR_FUTU_OPEND": "0",
+            "WAIT_FOR_IB_GATEWAY": "0",
+            "FUTU_ENABLED": "true",
+            # FUTU_ACCOUNT_PWD_MD5 deliberately unset
+        }
+
+        result = subprocess.run(
+            ["/bin/bash", str(ENTRYPOINT), "true"],
+            capture_output=True,
+            text=True,
+            env=env,
+            cwd=str(PROJECT_ROOT),
+        )
+
+        assert result.returncode != 0, (
+            f"Expected non-zero exit when FUTU_ENABLED=true but no password.\n"
+            f"stdout: {result.stdout}\nstderr: {result.stderr}"
+        )
+        assert "FUTU_ENABLED=true" in result.stderr
+        assert "FUTU_ACCOUNT_PWD_MD5 is empty" in result.stderr
+
+    def test_entrypoint_fatals_when_ib_enabled_but_no_credentials(self):
+        """AC: If .env is missing, IB_ENABLED=true with no credentials must fatal."""
+        pg_port = _find_free_port()
+        redis_port = _find_free_port()
+
+        _start_mock_server(pg_port)
+        _start_mock_server(redis_port)
+
+        env = {
+            **os.environ,
+            "POSTGRES_HOST": "127.0.0.1",
+            "POSTGRES_PORT": str(pg_port),
+            "REDIS_HOST": "127.0.0.1",
+            "REDIS_PORT": str(redis_port),
+            "WAIT_TIMEOUT": "5",
+            "WAIT_FOR_FUTU_OPEND": "0",
+            "WAIT_FOR_IB_GATEWAY": "0",
+            "IB_ENABLED": "true",
+            # TWS_USERID and TWS_PASSWORD deliberately unset
+        }
+
+        result = subprocess.run(
+            ["/bin/bash", str(ENTRYPOINT), "true"],
+            capture_output=True,
+            text=True,
+            env=env,
+            cwd=str(PROJECT_ROOT),
+        )
+
+        assert result.returncode != 0, (
+            f"Expected non-zero exit when IB_ENABLED=true but no credentials.\n"
+            f"stdout: {result.stdout}\nstderr: {result.stderr}"
+        )
+        assert "IB_ENABLED=true" in result.stderr
+        assert "TWS_USERID or TWS_PASSWORD is empty" in result.stderr
+
+    def test_entrypoint_succeeds_when_futu_enabled_with_password(self):
+        """AC: FUTU_ENABLED=true with FUTU_ACCOUNT_PWD_MD5 set should succeed."""
+        pg_port = _find_free_port()
+        redis_port = _find_free_port()
+
+        _start_mock_server(pg_port)
+        _start_mock_server(redis_port)
+
+        env = {
+            **os.environ,
+            "POSTGRES_HOST": "127.0.0.1",
+            "POSTGRES_PORT": str(pg_port),
+            "REDIS_HOST": "127.0.0.1",
+            "REDIS_PORT": str(redis_port),
+            "WAIT_TIMEOUT": "5",
+            "WAIT_FOR_FUTU_OPEND": "0",
+            "WAIT_FOR_IB_GATEWAY": "0",
+            "FUTU_ENABLED": "true",
+            "FUTU_ACCOUNT_PWD_MD5": "deadbeef",
+        }
+
+        result = subprocess.run(
+            ["/bin/bash", str(ENTRYPOINT), "true"],
+            capture_output=True,
+            text=True,
+            env=env,
+            cwd=str(PROJECT_ROOT),
+        )
+
+        assert result.returncode == 0, (
+            f"Expected success when FUTU_ENABLED=true with password set.\n"
+            f"stdout: {result.stdout}\nstderr: {result.stderr}"
+        )

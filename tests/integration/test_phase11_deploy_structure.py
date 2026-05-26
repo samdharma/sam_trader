@@ -213,10 +213,10 @@ class TestHealthCheckPattern:
         assert "/health" in test_cmd
 
     def test_sam_trader_healthcheck_has_l1_l2(self, compose: dict[str, Any]) -> None:
-        """sam-trader: L1=pgrep python, L2=cmdline grep python|sam_trader."""
+        """sam-trader: L1=python PID 1 check, L2=cmdline grep python."""
         test_cmd = " ".join(compose["services"]["sam-trader"]["healthcheck"]["test"])
-        assert "pgrep python" in test_cmd
-        assert "python" in test_cmd or "sam_trader" in test_cmd
+        assert "python" in test_cmd
+        assert "/proc/1/cmdline" in test_cmd
 
 
 # ── TestProfileGating ─────────────────────────────────────────────────────────
@@ -280,6 +280,28 @@ class TestDeployE2EFlow:
         assert pg > 0 and redis > 0 and trader > 0
         assert pg < trader, "postgres must start before trader"
         assert redis < trader, "redis must start before trader"
+
+    def test_deploy_sh_uses_env_file_flag(self, deploy_sh_text: str) -> None:
+        """AC: All docker compose commands in deploy.sh must use --env-file."""
+        # Only match actual docker compose invocations (not version checks or docs)
+        compose_lines = [
+            line
+            for line in deploy_sh_text.splitlines()
+            if "docker compose " in line
+            and (
+                "-f" in line
+                or "up" in line
+                or "down" in line
+                or "build" in line
+                or "ps" in line
+            )
+            and "version" not in line
+        ]
+        assert len(compose_lines) > 0, "deploy.sh must have docker compose commands"
+        for line in compose_lines:
+            assert (
+                "--env-file " in line
+            ), f"docker compose command missing --env-file:\n  {line.strip()}"
 
 
 # ── TestEnvConsistency ────────────────────────────────────────────────────────

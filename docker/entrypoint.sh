@@ -89,4 +89,30 @@ sys.exit(1)
 "
 fi
 
+# ── Environment consistency validation ──────────────────────────
+# Guard against missing .env (docker compose -f sets project-dir to docker/,
+# so root .env may not be auto-loaded).
+
+if [[ "${FUTU_ENABLED:-false}" == "true" ]]; then
+    if [[ -z "${FUTU_ACCOUNT_PWD_MD5:-}" ]]; then
+        echo "FATAL: FUTU_ENABLED=true but FUTU_ACCOUNT_PWD_MD5 is empty." >&2
+        echo "       Your .env may not be loaded by Docker Compose." >&2
+        echo "       Ensure deploy.sh uses --env-file, or run:" >&2
+        echo "         docker compose --env-file .env -f docker/docker-compose.yml up" >&2
+        exit 1
+    fi
+fi
+
+if [[ "${IB_ENABLED:-false}" == "true" ]]; then
+    if [[ -z "${TWS_USERID:-}" || -z "${TWS_PASSWORD:-}" ]]; then
+        echo "FATAL: IB_ENABLED=true but TWS_USERID or TWS_PASSWORD is empty." >&2
+        echo "       Your .env may not be loaded by Docker Compose." >&2
+        echo "       Ensure deploy.sh uses --env-file, or run:" >&2
+        echo "         docker compose --env-file .env -f docker/docker-compose.yml up" >&2
+        exit 1
+    fi
+fi
+
+# ── End validation ───────────────────────────────────────────────
+
 exec "$@"
