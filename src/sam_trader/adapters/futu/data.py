@@ -10,7 +10,7 @@ import asyncio
 import logging
 from typing import Any
 
-from futu import RET_OK, OpenQuoteContext, SubType
+from futu import RET_OK, ContextStatus, OpenQuoteContext, SubType
 from nautilus_trader.common.component import LiveClock, MessageBus
 from nautilus_trader.common.providers import InstrumentProvider
 from nautilus_trader.data.messages import (
@@ -137,7 +137,12 @@ class FutuLiveDataClient(LiveMarketDataClient):
     # -----------------------------------------------------------------------
 
     async def _connect(self) -> None:
-        if self._quote_ctx is None:
+        if self._quote_ctx is None or self._quote_ctx.status != ContextStatus.READY:
+            if self._quote_ctx is not None:
+                try:
+                    self._quote_ctx.close()
+                except Exception:
+                    pass
             self._quote_ctx = get_cached_futu_quote_context(
                 self._config.host,
                 self._config.port,
@@ -148,12 +153,8 @@ class FutuLiveDataClient(LiveMarketDataClient):
         if self._instrument_provider is not None:
             load_ids = getattr(self._config, "load_ids", None)
             if load_ids:
-                self._log.info(
-                    f"Loading {len(load_ids)} instrument(s): {load_ids}"
-                )
-                await self._instrument_provider.load_ids_async(
-                    list(load_ids)
-                )
+                self._log.info(f"Loading {len(load_ids)} instrument(s): {load_ids}")
+                await self._instrument_provider.load_ids_async(list(load_ids))
                 # Push instruments to the Nautilus cache via data pipeline
                 for iid in load_ids:
                     instrument = self._instrument_provider.find(iid)
@@ -192,6 +193,7 @@ class FutuLiveDataClient(LiveMarketDataClient):
             except Exception as e:
                 self._log.exception(f"Error unsubscribing all on disconnect: {e}", e)
             self._clear_handlers()
+            self._quote_ctx = None
 
     # -----------------------------------------------------------------------
     # Push loop

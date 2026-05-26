@@ -12,6 +12,7 @@ from typing import Any
 
 from futu import (
     RET_OK,
+    ContextStatus,
     ModifyOrderOp,
     OpenSecTradeContext,
     TrdEnv,
@@ -141,7 +142,12 @@ class FutuLiveExecutionClient(LiveExecutionClient):
     # -----------------------------------------------------------------------
 
     async def _connect(self) -> None:
-        if self._trade_ctx is None:
+        if self._trade_ctx is None or self._trade_ctx.status != ContextStatus.READY:
+            if self._trade_ctx is not None:
+                try:
+                    self._trade_ctx.close()
+                except Exception:
+                    pass
             self._trade_ctx = get_cached_futu_trade_context(
                 self._config.host,
                 self._config.port,
@@ -186,6 +192,7 @@ class FutuLiveExecutionClient(LiveExecutionClient):
                 pass
             self._push_task = None
 
+        self._trade_ctx = None
         self._log.info("Futu execution client disconnected")
 
     # -----------------------------------------------------------------------

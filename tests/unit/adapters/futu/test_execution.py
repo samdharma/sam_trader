@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pandas as pd
 import pytest
-from futu import RET_OK, ModifyOrderOp
+from futu import RET_OK, ContextStatus, ModifyOrderOp
 from nautilus_trader.common.component import LiveClock
 from nautilus_trader.common.providers import InstrumentProvider
 from nautilus_trader.core.uuid import UUID4
@@ -42,6 +42,7 @@ def event_loop():
 def mock_trade_ctx() -> MagicMock:
     """Return a mock OpenSecTradeContext."""
     ctx = MagicMock()
+    ctx.status = ContextStatus.READY
     ctx.place_order.return_value = (RET_OK, pd.DataFrame({"order_id": ["12345"]}))
     ctx.modify_order.return_value = (RET_OK, "")
     ctx.get_acc_list.return_value = (RET_OK, pd.DataFrame())
@@ -429,6 +430,40 @@ class TestConnectDisconnect:
 
         assert task.cancelled() or task.done()
         assert client._push_task is None
+
+    def test_connect_refreshes_stale_context(self, event_loop, make_client):
+        """If _trade_ctx is not READY, _connect() must fetch a fresh context."""
+        mock_stale = MagicMock()
+        mock_stale.status = ContextStatus.CLOSED
+        mock_stale.set_handler.return_value = RET_OK
+        client = make_client(trade_ctx=mock_stale)
+
+        mock_fresh = MagicMock()
+        mock_fresh.status = ContextStatus.READY
+        mock_fresh.set_handler.return_value = RET_OK
+        mock_fresh.get_acc_list.return_value = (RET_OK, pd.DataFrame())
+        mock_fresh.position_list_query.return_value = (RET_OK, pd.DataFrame())
+
+        with patch(
+            "sam_trader.adapters.futu.execution.get_cached_futu_trade_context"
+        ) as mock_get:
+            mock_get.return_value = mock_fresh
+            event_loop.run_until_complete(client._connect())
+
+        mock_get.assert_called_once_with("test-host", 11111, "SIMULATE", "US")
+        assert client._trade_ctx is mock_fresh
+        mock_stale.close.assert_called_once()
+
+    def test_disconnect_sets_context_to_none(
+        self, event_loop, make_client, mock_trade_ctx
+    ):
+        client = make_client()
+        event_loop.run_until_complete(client._connect())
+        assert client._trade_ctx is not None
+
+        event_loop.run_until_complete(client._disconnect())
+
+        assert client._trade_ctx is None
 
 
 # ---------------------------------------------------------------------------
