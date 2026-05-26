@@ -14,6 +14,12 @@ from nautilus_trader.model.identifiers import InstrumentId
 from nautilus_trader.model.instruments import Instrument
 from nautilus_trader.trading.strategy import Strategy, StrategyConfig
 
+_VENUE_TO_TZ: dict[str, str] = {
+    "NASDAQ": "America/New_York",
+    "NYSE": "America/New_York",
+    "HKEX": "Asia/Hong_Kong",
+}
+
 
 class OrbStrategyConfig(StrategyConfig, frozen=True):  # type: ignore[call-arg]
     """Configuration for ``OrbStrategy`` instances.
@@ -49,11 +55,14 @@ class OrbStrategyConfig(StrategyConfig, frozen=True):  # type: ignore[call-arg]
     max_daily_loss : int, default 1000
         Maximum allowed loss for the day.
     session_start : str, default ""
-        When to begin accumulating the opening range. Empty string disables.
+        When to begin accumulating the opening range in the instrument's
+        local timezone. Empty string disables.
     max_trade_time : str, default ""
-        Stop looking for new breakouts after this time. Empty string disables.
+        Stop looking for new breakouts after this time in the instrument's
+        local timezone. Empty string disables.
     session_hard_stop : str, default ""
-        Close any open position at this time. Empty string disables.
+        Close any open position at this time in the instrument's local
+        timezone. Empty string disables.
     risk_per_trade_pct : float, default 0.0
         Fraction of account capital to risk per trade. 0.0 disables
         dynamic sizing and uses fixed ``trade_size``.
@@ -170,9 +179,18 @@ class OrbStrategy(Strategy):
             return None
 
     def _get_et_time(self) -> time:
-        """Return current clock time converted to America/New_York."""
-        et = self.clock.utc_now().astimezone(ZoneInfo("America/New_York"))
-        return time(et.hour, et.minute, et.second)
+        """Return current clock time converted to the instrument's local timezone."""
+        venue = ""
+        if self.instrument_id is not None:
+            venue = self.instrument_id.venue.value
+        elif self.config.instrument_id:
+            try:
+                venue = InstrumentId.from_str(self.config.instrument_id).venue.value
+            except Exception:
+                pass
+        tz_name = _VENUE_TO_TZ.get(venue, "America/New_York")
+        local = self.clock.utc_now().astimezone(ZoneInfo(tz_name))
+        return time(local.hour, local.minute, local.second)
 
     def _past_session_hard_stop(self) -> bool:
         """Return True if current time is past session_hard_stop."""

@@ -15,6 +15,12 @@ from nautilus_trader.model.identifiers import InstrumentId
 from nautilus_trader.model.instruments import Instrument
 from nautilus_trader.trading.strategy import Strategy, StrategyConfig
 
+_VENUE_TO_TZ: dict[str, str] = {
+    "NASDAQ": "America/New_York",
+    "NYSE": "America/New_York",
+    "HKEX": "Asia/Hong_Kong",
+}
+
 
 class MomentumStrategyConfig(StrategyConfig, frozen=True):  # type: ignore[call-arg]
     """Configuration for ``MomentumStrategy`` instances.
@@ -29,8 +35,8 @@ class MomentumStrategyConfig(StrategyConfig, frozen=True):  # type: ignore[call-
     window : int, default 20
         The momentum lookback window in bars.
     session_start : str, default ""
-        Local session start time (``HH:MM:SS`` or ``HH:MM``) in
-        America/New_York.  Empty string disables the guard.
+        Local session start time (``HH:MM:SS`` or ``HH:MM``) in the
+        instrument's local timezone.  Empty string disables the guard.
     session_end : str, default ""
         Local session end time (same format).  Empty string disables.
     trade_size : int, default 100
@@ -142,9 +148,18 @@ class MomentumStrategy(Strategy):
             return None
 
     def _get_et_time(self) -> time:
-        """Return current clock time converted to America/New_York."""
-        et = self.clock.utc_now().astimezone(ZoneInfo("America/New_York"))
-        return time(et.hour, et.minute, et.second)
+        """Return current clock time converted to the instrument's local timezone."""
+        venue = ""
+        if self.instrument_id is not None:
+            venue = self.instrument_id.venue.value
+        elif self.config.instrument_id:
+            try:
+                venue = InstrumentId.from_str(self.config.instrument_id).venue.value
+            except Exception:
+                pass
+        tz_name = _VENUE_TO_TZ.get(venue, "America/New_York")
+        local = self.clock.utc_now().astimezone(ZoneInfo(tz_name))
+        return time(local.hour, local.minute, local.second)
 
     def _in_session(self) -> bool:
         """Return True if the current clock time is within the session window."""

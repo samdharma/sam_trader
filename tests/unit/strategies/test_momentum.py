@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import time
+from datetime import time, timezone
 from decimal import Decimal
 from typing import Any
 from unittest.mock import MagicMock, patch
@@ -621,6 +621,48 @@ class TestFillHandling:
 # ---------------------------------------------------------------------------
 # State persistence
 # ---------------------------------------------------------------------------
+
+
+class TestTimezone:
+    def test_nasdaq_uses_eastern_time(self) -> None:
+        strategy = MomentumStrategy(_make_config(instrument_id="AAPL.NASDAQ"))
+        _register_strategy(strategy)
+        strategy.instrument_id = InstrumentId.from_str("AAPL.NASDAQ")
+
+        with patch("sam_trader.strategies.momentum.ZoneInfo") as mock_zi:
+            mock_zi.return_value = timezone.utc
+            strategy._get_et_time()
+            mock_zi.assert_called_once_with("America/New_York")
+
+    def test_hkex_uses_hong_kong_time(self) -> None:
+        strategy = MomentumStrategy(_make_config(instrument_id="00700.HKEX"))
+        _register_strategy(strategy)
+        strategy.instrument_id = InstrumentId.from_str("00700.HKEX")
+
+        with patch("sam_trader.strategies.momentum.ZoneInfo") as mock_zi:
+            mock_zi.return_value = timezone.utc
+            strategy._get_et_time()
+            mock_zi.assert_called_once_with("Asia/Hong_Kong")
+
+    def test_fallback_from_config_when_instrument_id_not_set(self) -> None:
+        strategy = MomentumStrategy(_make_config(instrument_id="00700.HKEX"))
+        _register_strategy(strategy)
+        # instrument_id not set — should fall back to parsing config
+
+        with patch("sam_trader.strategies.momentum.ZoneInfo") as mock_zi:
+            mock_zi.return_value = timezone.utc
+            strategy._get_et_time()
+            mock_zi.assert_called_once_with("Asia/Hong_Kong")
+
+    def test_unknown_venue_defaults_to_new_york(self) -> None:
+        strategy = MomentumStrategy(_make_config(instrument_id="AAPL.UNKNOWN"))
+        _register_strategy(strategy)
+        strategy.instrument_id = InstrumentId.from_str("AAPL.UNKNOWN")
+
+        with patch("sam_trader.strategies.momentum.ZoneInfo") as mock_zi:
+            mock_zi.return_value = timezone.utc
+            strategy._get_et_time()
+            mock_zi.assert_called_once_with("America/New_York")
 
 
 class TestStatePersistence:
