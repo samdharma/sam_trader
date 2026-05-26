@@ -1422,3 +1422,15 @@
 - **Files Changed**: `src/sam_trader/actors/health_monitor.py`, `tests/unit/actors/test_health_monitor.py`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 23/23 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None.
+
+## Iteration 128
+- **Task**: BUG: BarResubscriptionActor market hours and open timer hardcoded to US
+- **Task ID**: sam_trader-9z3.7.13
+- **Status**: COMPLETE
+- **Decisions**:
+  - The BarResubscriptionActor code was already configurable via `market_open_tz`, `market_open_time`, and `market_close_time` config fields, but the unit tests were broken (called instance method as unbound class method) and there were no HK timezone tests.
+  - Fixed 4 existing `_is_market_hours` tests to call the method on a registered actor instance instead of as an unbound method.
+  - Added `TestBarResubscriptionActorHK` test class with 5 new tests: `test_is_market_hours_hk_weekday`, `test_is_market_hours_hk_outside_hours`, `test_is_market_hours_hk_weekend`, `test_next_market_open_hk_same_day`, `test_next_market_open_hk_next_day`. These verify that when configured with `Asia/Hong_Kong`, the actor correctly identifies HK market hours (09:30-16:00 HKT) and schedules the next market-open timer at the correct local time.
+- **Files Changed**: `tests/unit/actors/test_bar_resubscription.py`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 26/26 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None.

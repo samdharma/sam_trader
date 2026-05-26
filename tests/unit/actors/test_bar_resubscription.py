@@ -239,21 +239,29 @@ class TestBarResubscriptionActor:
         result = registered_actor._next_market_open(ts)
         assert result.day == 9  # next day
 
-    def test_is_market_hours_weekday_open(self) -> None:
+    def test_is_market_hours_weekday_open(
+        self, registered_actor: BarResubscriptionActor
+    ) -> None:
         ts = datetime(2024, 1, 8, 15, 0, 0, tzinfo=timezone.utc)  # 10:00 ET Mon
-        assert BarResubscriptionActor._is_market_hours(ts) is True
+        assert registered_actor._is_market_hours(ts) is True
 
-    def test_is_market_hours_weekend(self) -> None:
+    def test_is_market_hours_weekend(
+        self, registered_actor: BarResubscriptionActor
+    ) -> None:
         ts = datetime(2024, 1, 6, 15, 0, 0, tzinfo=timezone.utc)  # Sat
-        assert BarResubscriptionActor._is_market_hours(ts) is False
+        assert registered_actor._is_market_hours(ts) is False
 
-    def test_is_market_hours_before_open(self) -> None:
+    def test_is_market_hours_before_open(
+        self, registered_actor: BarResubscriptionActor
+    ) -> None:
         ts = datetime(2024, 1, 8, 14, 0, 0, tzinfo=timezone.utc)  # 09:00 ET Mon
-        assert BarResubscriptionActor._is_market_hours(ts) is False
+        assert registered_actor._is_market_hours(ts) is False
 
-    def test_is_market_hours_after_close(self) -> None:
+    def test_is_market_hours_after_close(
+        self, registered_actor: BarResubscriptionActor
+    ) -> None:
         ts = datetime(2024, 1, 8, 22, 0, 0, tzinfo=timezone.utc)  # 17:00 ET Mon
-        assert BarResubscriptionActor._is_market_hours(ts) is False
+        assert registered_actor._is_market_hours(ts) is False
 
     def test_on_stop_cancels_timers(
         self, registered_actor: BarResubscriptionActor
@@ -267,3 +275,63 @@ class TestBarResubscriptionActor:
         assert (
             "bar_resubscription_stale_check" not in registered_actor.clock.timer_names
         )
+
+
+class TestBarResubscriptionActorHK:
+    @pytest.fixture
+    def registered_actor_hk(self) -> BarResubscriptionActor:
+        bar_type = TestDataStubs.bar_5decimal_5min_bid().bar_type
+        cfg = BarResubscriptionActorConfig(
+            bar_types=[bar_type],
+            market_open_time=time(9, 30),
+            market_open_tz="Asia/Hong_Kong",
+            market_close_time=time(16, 0),
+            enabled=True,
+            stale_timeout_seconds=300,
+            check_interval_seconds=60,
+        )
+        actor = BarResubscriptionActor(cfg)
+        actor.register_base(
+            portfolio=TestComponentStubs.portfolio(),
+            msgbus=TestComponentStubs.msgbus(),
+            cache=TestComponentStubs.cache(),
+            clock=TestComponentStubs.clock(),
+        )
+        return actor
+
+    def test_is_market_hours_hk_weekday(
+        self, registered_actor_hk: BarResubscriptionActor
+    ) -> None:
+        ts = datetime(2024, 1, 8, 2, 0, 0, tzinfo=timezone.utc)  # 10:00 HKT Mon
+        assert registered_actor_hk._is_market_hours(ts) is True
+
+    def test_is_market_hours_hk_outside_hours(
+        self, registered_actor_hk: BarResubscriptionActor
+    ) -> None:
+        ts = datetime(2024, 1, 8, 0, 0, 0, tzinfo=timezone.utc)  # 08:00 HKT Mon
+        assert registered_actor_hk._is_market_hours(ts) is False
+
+    def test_is_market_hours_hk_weekend(
+        self, registered_actor_hk: BarResubscriptionActor
+    ) -> None:
+        ts = datetime(2024, 1, 6, 2, 0, 0, tzinfo=timezone.utc)  # 10:00 HKT Sat
+        assert registered_actor_hk._is_market_hours(ts) is False
+
+    def test_next_market_open_hk_same_day(
+        self, registered_actor_hk: BarResubscriptionActor
+    ) -> None:
+        # 08:00 HKT on a Monday -> 09:30 HKT same day
+        ts = datetime(2024, 1, 8, 0, 0, 0, tzinfo=timezone.utc)  # 08:00 HKT Mon
+        result = registered_actor_hk._next_market_open(ts)
+        # 09:30 HKT = 01:30 UTC
+        assert result.hour == 1
+        assert result.minute == 30
+        assert result.day == 8
+
+    def test_next_market_open_hk_next_day(
+        self, registered_actor_hk: BarResubscriptionActor
+    ) -> None:
+        # 12:00 HKT on a Monday -> 09:30 HKT Tuesday
+        ts = datetime(2024, 1, 8, 4, 0, 0, tzinfo=timezone.utc)  # 12:00 HKT Mon
+        result = registered_actor_hk._next_market_open(ts)
+        assert result.day == 9  # next day
