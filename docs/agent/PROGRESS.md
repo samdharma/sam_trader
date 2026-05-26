@@ -1396,3 +1396,16 @@
 - **Files Changed**: `src/sam_trader/adapters/futu/data.py`, `src/sam_trader/adapters/futu/execution.py`, `tests/unit/adapters/futu/test_data.py`, `tests/unit/adapters/futu/test_execution.py`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 52/52 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None.
+
+## Iteration 126
+- **Task**: BUG: HealthMonitorActor _is_market_hours hardcoded to US 09:30-16:00 ET
+- **Task ID**: sam_trader-9z3.7.12
+- **Status**: COMPLETE
+- **Decisions**:
+  - The `_is_market_hours` method was already configurable via `market_timezone`, `market_open_time`, and `market_close_time` config fields, but the unit tests were broken (called instance method as classmethod) and `on_start()` crashed without a running event loop.
+  - Fixed `on_start()` to gracefully handle missing event loop by wrapping `asyncio.get_running_loop()` in `try/except RuntimeError`.
+  - Rewrote all `_is_market_hours` tests to use a registered actor instance instead of calling the method as a static method.
+  - Added 3 HK timezone tests (`test_is_market_hours_hk_weekday`, `test_is_market_hours_hk_outside_hours`, `test_is_market_hours_hk_weekend`) to verify non-US market hours work correctly when configured with `Asia/Hong_Kong`.
+- **Files Changed**: `src/sam_trader/actors/health_monitor.py`, `tests/unit/actors/test_health_monitor.py`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 19/19 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None.

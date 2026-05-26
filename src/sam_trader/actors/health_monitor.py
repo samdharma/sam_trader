@@ -84,7 +84,10 @@ class HealthMonitorActor(Actor):
         self.log.info("HealthMonitorActor: heartbeat started")
         # Capture the event loop in the async context so sync timer
         # callbacks can still schedule async Redis writes.
-        self._main_loop = asyncio.get_running_loop()
+        try:
+            self._main_loop = asyncio.get_running_loop()
+        except RuntimeError:
+            self._main_loop = None
         if self.config.redis_host:
             try:
                 self._redis = aioredis.Redis(

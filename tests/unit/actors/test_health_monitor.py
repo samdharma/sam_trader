@@ -166,22 +166,88 @@ class TestHealthMonitorActor:
         registered_actor.on_stop()
         assert "health_monitor_heartbeat" not in registered_actor.clock.timer_names
 
-    def test_is_market_hours_weekday(self) -> None:
-        # Monday 10:00 ET
+    def test_is_market_hours_weekday(
+        self, registered_actor: HealthMonitorActor
+    ) -> None:
+        # Monday 10:00 ET = 15:00 UTC
         ts = datetime(2024, 1, 8, 15, 0, 0, tzinfo=timezone.utc)
-        assert HealthMonitorActor._is_market_hours(ts) is True
+        assert registered_actor._is_market_hours(ts) is True
 
-    def test_is_market_hours_weekend(self) -> None:
-        # Saturday 10:00 ET
+    def test_is_market_hours_weekend(
+        self, registered_actor: HealthMonitorActor
+    ) -> None:
+        # Saturday 10:00 ET = 15:00 UTC
         ts = datetime(2024, 1, 6, 15, 0, 0, tzinfo=timezone.utc)
-        assert HealthMonitorActor._is_market_hours(ts) is False
+        assert registered_actor._is_market_hours(ts) is False
 
-    def test_is_market_hours_before_open(self) -> None:
-        # Monday 09:00 ET
+    def test_is_market_hours_before_open(
+        self, registered_actor: HealthMonitorActor
+    ) -> None:
+        # Monday 09:00 ET = 14:00 UTC
         ts = datetime(2024, 1, 8, 14, 0, 0, tzinfo=timezone.utc)
-        assert HealthMonitorActor._is_market_hours(ts) is False
+        assert registered_actor._is_market_hours(ts) is False
 
-    def test_is_market_hours_after_close(self) -> None:
-        # Monday 17:00 ET
+    def test_is_market_hours_after_close(
+        self, registered_actor: HealthMonitorActor
+    ) -> None:
+        # Monday 17:00 ET = 22:00 UTC
         ts = datetime(2024, 1, 8, 22, 0, 0, tzinfo=timezone.utc)
-        assert HealthMonitorActor._is_market_hours(ts) is False
+        assert registered_actor._is_market_hours(ts) is False
+
+    def test_is_market_hours_hk_weekday(
+        self,
+    ) -> None:
+        # HK market: 09:30-16:00 HKT
+        # Monday 10:00 HKT = 02:00 UTC
+        cfg = HealthMonitorActorConfig(
+            market_timezone="Asia/Hong_Kong",
+            market_open_time="09:30",
+            market_close_time="16:00",
+        )
+        actor = HealthMonitorActor(cfg)
+        actor.register_base(
+            portfolio=TestComponentStubs.portfolio(),
+            msgbus=TestComponentStubs.msgbus(),
+            cache=TestComponentStubs.cache(),
+            clock=TestComponentStubs.clock(),
+        )
+        ts = datetime(2024, 1, 8, 2, 0, 0, tzinfo=timezone.utc)
+        assert actor._is_market_hours(ts) is True
+
+    def test_is_market_hours_hk_outside_hours(
+        self,
+    ) -> None:
+        # HK market closed at 20:00 HKT = 12:00 UTC
+        cfg = HealthMonitorActorConfig(
+            market_timezone="Asia/Hong_Kong",
+            market_open_time="09:30",
+            market_close_time="16:00",
+        )
+        actor = HealthMonitorActor(cfg)
+        actor.register_base(
+            portfolio=TestComponentStubs.portfolio(),
+            msgbus=TestComponentStubs.msgbus(),
+            cache=TestComponentStubs.cache(),
+            clock=TestComponentStubs.clock(),
+        )
+        ts = datetime(2024, 1, 8, 12, 0, 0, tzinfo=timezone.utc)
+        assert actor._is_market_hours(ts) is False
+
+    def test_is_market_hours_hk_weekend(
+        self,
+    ) -> None:
+        # Saturday 10:00 HKT = 02:00 UTC
+        cfg = HealthMonitorActorConfig(
+            market_timezone="Asia/Hong_Kong",
+            market_open_time="09:30",
+            market_close_time="16:00",
+        )
+        actor = HealthMonitorActor(cfg)
+        actor.register_base(
+            portfolio=TestComponentStubs.portfolio(),
+            msgbus=TestComponentStubs.msgbus(),
+            cache=TestComponentStubs.cache(),
+            clock=TestComponentStubs.clock(),
+        )
+        ts = datetime(2024, 1, 6, 2, 0, 0, tzinfo=timezone.utc)
+        assert actor._is_market_hours(ts) is False
