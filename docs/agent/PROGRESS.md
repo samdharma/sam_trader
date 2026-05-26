@@ -1624,3 +1624,20 @@
 - **Files Changed**: `src/sam_trader/services/gap_scanner.py`, `src/sam_trader/services/ai_scoring.py`, `src/sam_trader/services/cli.py`, `src/sam_trader/services/pipeline.py`, `tests/unit/services/test_gap_scanner.py`, `tests/unit/services/test_ai_scoring.py`
 - **Validation Result**: PASS (92/92 targeted tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ticket closed.
+## Iteration 137
+- **Task**: TASK: Extend readiness report with data pipeline health section
+- **Task ID**: sam_trader-9z3.10.31
+- **Status**: COMPLETE
+- **Decisions**: 
+  1. Added `data_pipeline` dict to `ReadinessReport` frozen dataclass with `dataclasses.field(default_factory=dict)`.
+  2. `ReadinessReportGenerator._build_data_pipeline_health()` queries Redis for `sam:venue:conn:{FUTU,IB}` and `sam:bars:last:{instrument_id}` / `sam:bars:count:{date}` keys (written by HealthMonitorActor in iteration 127).
+  3. `data_pipeline_passed` is True only when all expected instruments have bars within 300s AND all enabled venues are UP. Vacuously true when zero candidates unless an expected venue is DOWN.
+  4. `format_table()` renders a new "Data Pipeline" section with venue states, subscription counts (active/expected), PASS/FAIL indicator, and per-instrument bar flow summary.
+  5. `_webhook_payload()` prepends `:warning: DATA PIPELINE ISSUE DETECTED` for Slack and `⚠️ DATA PIPELINE ISSUE` for Telegram when `data_pipeline_passed` is False.
+  6. `cli.py` `readiness` command creates a sync Redis client and passes it to the generator only in non-simulate mode, preventing test hangs on host DNS resolution.
+  7. `pipeline.py` passes the existing `_redis_client()` to `ReadinessReportGenerator` for real pipeline runs.
+  8. Added 13 new unit tests: fresh bars pass, stale bars fail, missing bars fail, venue DOWN fail, no candidates pass, no Redis graceful degradation, format table includes data pipeline section, `_report_to_dict` includes data pipeline, and webhook payloads highlight data issues for Slack/Telegram/Generic.
+- **Files Changed**: `src/sam_trader/services/readiness_report.py`, `src/sam_trader/services/cli.py`, `src/sam_trader/services/pipeline.py`, `tests/unit/services/test_readiness_report.py`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 28/28 targeted tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ticket closed and pushed to origin.
+
