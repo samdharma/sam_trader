@@ -1461,3 +1461,16 @@
 - **Files Changed**: `docker/Dockerfile.services`, `tests/unit/test_dockerfile_services.py`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 11/11 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Phase 8 bug fix complete.
+
+## Iteration 131
+- **Task**: TASK: Add DB schema validation on sam-services startup
+- **Task ID**: sam_trader-9z3.9.20
+- **Status**: COMPLETE
+- **Decisions**: 
+  - Created `src/sam_trader/services/db_schema.py` with `validate_schema()` that queries `information_schema.tables` and verifies `fills`, `orders`, `positions`, `performance_stats` exist.
+  - Emits a single CRITICAL log listing missing tables (instead of thousands of repeated WARNING logs like "fills query failed: relation fills does not exist").
+  - Integrated into `dashboard.py` `main()` — exits code 1 before starting the HTTP server if schema is invalid. This surfaces init failures immediately.
+  - Fixed pre-existing flaky `TestDashboardServer` tests by patching `_pg_status`, `_redis_status`, and `_docker_container_status` inside the class-scoped `server_port` fixture. Prevents daemon thread from blocking on real network connections.
+- **Files Changed**: `src/sam_trader/services/db_schema.py` (new), `src/sam_trader/services/dashboard.py`, `tests/unit/services/test_db_schema.py` (new), `tests/unit/services/test_dashboard.py`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 18/18 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Phase 8 hardening complete.
