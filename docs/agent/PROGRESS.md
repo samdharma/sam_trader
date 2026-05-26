@@ -1,3 +1,14 @@
+> **Note: see first-entry Iteration 20 for Phase 2 config dataclasses.**
+
+## Iteration 102
+- **Task**: BUG: Futu OpenD health check L3 picks most recent file (ftlog), not GTWLog — login check always fails
+- **Task ID**: sam_trader-9z3.1.23
+- **Status**: COMPLETE
+- **Decisions**: Fixed `healthcheck.sh` L3 to filter `ls -t` to `GTWLog_*` only instead of all files in the LOG_DIR. The `.ftlog` (Futu internal binary logs) files are always the most recently modified, so the old pattern never read the actual GTWLog containing "Login successful." Changed `ls -t "$LOG_DIR" | head -n 1` → `ls -t "$LOG_DIR"/GTWLog_* | head -n 1` and removed the now-unnecessary `$LOG_DIR/` prefixing block. Updated embedded test logic in `test_futu_opend_healthcheck.py` to match. Added 2 new tests: `test_l3_ftlog_files_ignored_picks_gtwlog` (healthy when GTWLog has login despite newer .ftlog) and `test_l3_no_gtwlog_with_ftlog_present_fails` (unhealthy when only .ftlog/Monitor.log exist). Updated `HEALTHCHECK_PATTERN.md` to document GTWLog_* filtering.
+- **Files Changed**: `docker/futu-opend/healthcheck.sh`, `docker/HEALTHCHECK_PATTERN.md`, `tests/unit/test_futu_opend_healthcheck.py`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 15/15 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None.
+
 ## Iteration 101
 - **Task**: BUG: OpenSecTradeContext passes is_encrypt=None — all trade orders rejected when FUTU_OPEND_IP=0.0.0.0
 - **Task ID**: sam_trader-9z3.4.11
