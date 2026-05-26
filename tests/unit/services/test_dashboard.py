@@ -16,6 +16,7 @@ from sam_trader.services.dashboard import (
     DashboardConfig,
     check_all_services,
     query_fills,
+    query_market_data_from_redis,
     query_pnl_from_redis,
     query_positions,
     run_server,
@@ -129,6 +130,91 @@ class TestPositionsEndpoint:
         assert positions[0]["venue"] == "FUTU"
 
 
+class TestMarketDataEndpoint:
+    """Tests for market data retrieval from Redis."""
+
+    def test_market_data_reads_bars_and_venues(self) -> None:
+        """query_market_data_from_redis returns instruments, counts, venues."""
+        mock_redis = MagicMock()
+        mock_redis.scan_iter.side_effect = [
+            ["sam:bars:last:TSLA.NASDAQ", "sam:bars:last:NVDA.NASDAQ"],
+            ["sam:venue:conn:FUTU"],
+        ]
+        mock_redis.get.side_effect = [
+            "2026-05-26T13:30:00+00:00",
+            "2026-05-26T13:28:00+00:00",
+            "UP:2026-05-26T13:00:00+00:00",
+        ]
+        mock_redis.hgetall.return_value = {
+            "TSLA.NASDAQ": "42",
+            "NVDA.NASDAQ": "17",
+        }
+
+        with patch(
+            "sam_trader.services.dashboard._redis_client", return_value=mock_redis
+        ):
+            result = query_market_data_from_redis(DashboardConfig())
+
+        assert len(result["instruments"]) == 2
+        assert result["instruments"][0]["instrument_id"] == "NVDA.NASDAQ"
+        assert result["instruments"][1]["instrument_id"] == "TSLA.NASDAQ"
+        assert result["counts"]["TSLA.NASDAQ"] == 42
+        assert result["counts"]["NVDA.NASDAQ"] == 17
+        assert len(result["venues"]) == 1
+        assert result["venues"][0]["venue"] == "FUTU"
+        assert result["venues"][0]["status"] == "UP"
+
+    def test_market_data_staleness_classes(self) -> None:
+        """Staleness is fresh (<2min), stale (<5min), or old (>5min)."""
+        from datetime import datetime, timedelta, timezone
+
+        now = datetime(2026, 5, 26, 12, 0, 0, tzinfo=timezone.utc)
+        fresh_ts = (now - timedelta(seconds=90)).isoformat()
+        stale_ts = (now - timedelta(seconds=180)).isoformat()
+        old_ts = (now - timedelta(seconds=400)).isoformat()
+
+        mock_redis = MagicMock()
+        mock_redis.scan_iter.side_effect = [
+            [
+                "sam:bars:last:FRESH.NASDAQ",
+                "sam:bars:last:STALE.NASDAQ",
+                "sam:bars:last:OLD.NASDAQ",
+            ],
+            [],
+        ]
+        mock_redis.get.side_effect = [fresh_ts, stale_ts, old_ts]
+        mock_redis.hgetall.return_value = {}
+
+        with patch(
+            "sam_trader.services.dashboard._redis_client", return_value=mock_redis
+        ):
+            with patch("sam_trader.services.dashboard.datetime") as mock_dt:
+                mock_dt.now.return_value = now
+                mock_dt.fromisoformat = datetime.fromisoformat
+                mock_dt.side_effect = lambda *a, **k: datetime(*a, **k)
+                result = query_market_data_from_redis(DashboardConfig())
+
+        assert len(result["instruments"]) == 3
+        stale_map = {i["instrument_id"]: i["staleness"] for i in result["instruments"]}
+        assert stale_map["FRESH.NASDAQ"] == "fresh"
+        assert stale_map["STALE.NASDAQ"] == "stale"
+        assert stale_map["OLD.NASDAQ"] == "old"
+
+    def test_market_data_returns_empty_on_redis_error(self) -> None:
+        """Redis errors yield empty market data without raising."""
+        mock_redis = MagicMock()
+        mock_redis.scan_iter.side_effect = Exception("connection refused")
+
+        with patch(
+            "sam_trader.services.dashboard._redis_client", return_value=mock_redis
+        ):
+            result = query_market_data_from_redis(DashboardConfig())
+
+        assert result["instruments"] == []
+        assert result["counts"] == {}
+        assert result["venues"] == []
+
+
 class TestPnlEndpoint:
     """Tests for P&L data from Redis."""
 
@@ -188,6 +274,21 @@ class TestHtmlRendering:
                     "strategy": "tsla-orb",
                 }
             ],
+            "market_data": {
+                "instruments": [
+                    {
+                        "instrument_id": "TSLA.NASDAQ",
+                        "last_ts": "13:30:00",
+                        "age_seconds": 90,
+                        "staleness": "fresh",
+                    }
+                ],
+                "counts": {"TSLA.NASDAQ": 42},
+                "venues": [
+                    {"venue": "FUTU", "status": "UP", "last_change": "13:00:00"}
+                ],
+                "timestamp": "2026-05-24T10:00:00+00:00",
+            },
             "pnl": {
                 "strategies": {"tsla-orb": 342.50, "nvda-mom": -87.30},
                 "total": 255.20,
@@ -201,6 +302,7 @@ class TestHtmlRendering:
         html = _render_html(data)
 
         assert "SYSTEM HEALTH" in html
+        assert "MARKET DATA" in html
         assert "TODAY'S FILLS" in html
         assert "CURRENT POSITIONS" in html
         assert "P&L SUMMARY" in html
@@ -219,10 +321,17 @@ class TestHtmlRendering:
                 "health": {"status": "healthy", "services": {}},
                 "fills": [],
                 "positions": [],
+                "market_data": {
+                    "instruments": [],
+                    "counts": {},
+                    "venues": [],
+                    "timestamp": "",
+                },
                 "pnl": {"strategies": {}, "total": 0.0, "date": ""},
                 "timestamp": "",
             }
         )
+        assert "No bar telemetry" in html
         assert "No fills today" in html
         assert "No open positions" in html
         assert "No P&L data" in html
@@ -322,21 +431,33 @@ class TestDashboardServer:
                 "sam_trader.services.dashboard._query_positions_async", _fake_positions
             ):
                 with patch(
-                    "sam_trader.services.dashboard._redis_client"
-                ) as mock_redis_cls:
-                    mock_client = MagicMock()
-                    mock_client.scan_iter.return_value = ["sam:pnl:aapl-orb:2026-05-24"]
-                    mock_client.get.return_value = "-5.00"
-                    mock_redis_cls.return_value = mock_client
+                    "sam_trader.services.dashboard.query_market_data_from_redis"
+                ) as mock_md:
+                    mock_md.return_value = {
+                        "instruments": [],
+                        "counts": {},
+                        "venues": [],
+                        "timestamp": "",
+                    }
+                    with patch(
+                        "sam_trader.services.dashboard._redis_client"
+                    ) as mock_redis_cls:
+                        mock_client = MagicMock()
+                        mock_client.scan_iter.return_value = [
+                            "sam:pnl:aapl-orb:2026-05-24"
+                        ]
+                        mock_client.get.return_value = "-5.00"
+                        mock_redis_cls.return_value = mock_client
 
-                    conn = HTTPConnection("127.0.0.1", server_port, timeout=5)
-                    conn.request("GET", "/api/dashboard")
-                    resp = conn.getresponse()
-                    body = json.loads(resp.read().decode())
-                    conn.close()
+                        conn = HTTPConnection("127.0.0.1", server_port, timeout=5)
+                        conn.request("GET", "/api/dashboard")
+                        resp = conn.getresponse()
+                        body = json.loads(resp.read().decode())
+                        conn.close()
 
         assert resp.status == 200
         assert "health" in body
+        assert "market_data" in body
         assert "fills" in body
         assert "positions" in body
         assert "pnl" in body
@@ -359,21 +480,31 @@ class TestDashboardServer:
                 _fake_positions,
             ):
                 with patch(
-                    "sam_trader.services.dashboard._redis_client"
-                ) as mock_redis_cls:
-                    mock_client = MagicMock()
-                    mock_client.scan_iter.return_value = []
-                    mock_redis_cls.return_value = mock_client
+                    "sam_trader.services.dashboard.query_market_data_from_redis"
+                ) as mock_md:
+                    mock_md.return_value = {
+                        "instruments": [],
+                        "counts": {},
+                        "venues": [],
+                        "timestamp": "",
+                    }
+                    with patch(
+                        "sam_trader.services.dashboard._redis_client"
+                    ) as mock_redis_cls:
+                        mock_client = MagicMock()
+                        mock_client.scan_iter.return_value = []
+                        mock_redis_cls.return_value = mock_client
 
-                    conn = HTTPConnection("127.0.0.1", server_port, timeout=5)
-                    conn.request("GET", "/")
-                    resp = conn.getresponse()
-                    html = resp.read().decode()
-                    conn.close()
+                        conn = HTTPConnection("127.0.0.1", server_port, timeout=5)
+                        conn.request("GET", "/")
+                        resp = conn.getresponse()
+                        html = resp.read().decode()
+                        conn.close()
 
         assert resp.status == 200
         assert "text/html" in resp.getheader("Content-Type", "")
         assert "SYSTEM HEALTH" in html
+        assert "MARKET DATA" in html
         assert "TODAY'S FILLS" in html
         assert "CURRENT POSITIONS" in html
         assert "P&L SUMMARY" in html

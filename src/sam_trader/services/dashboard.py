@@ -66,6 +66,9 @@ tr:hover { background:#161b22; }
 .sell { color:var(--red); }
 .positive { color:var(--green); }
 .negative { color:var(--red); }
+.fresh { color:var(--green); }
+.stale { color:#d29922; }
+.old { color:var(--red); }
 .card {
   border:1px solid var(--border); border-radius:6px;
   padding:1rem; margin-bottom:1rem;
@@ -105,6 +108,21 @@ tr:hover { background:#161b22; }
     <span class="status {{trader_status_class}}"></span>sam-trader: {{trader_status}}
   </div>
 </div>
+</div>
+
+<div class="card">
+<h2>MARKET DATA</h2>
+<table>
+<thead>
+  <tr>
+    <th>Instrument</th><th>Last Bar</th><th>Count Today</th><th>Staleness</th>
+  </tr>
+</thead>
+<tbody>
+{{market_data_rows}}
+</tbody>
+</table>
+{{venue_conn_rows}}
 </div>
 
 <div class="card">
@@ -391,6 +409,92 @@ def query_positions(config: DashboardConfig | None = None) -> list[dict[str, Any
         return []
 
 
+def query_market_data_from_redis(
+    config: DashboardConfig | None = None,
+) -> dict[str, Any]:
+    """Read bar telemetry and venue connection state from Redis."""
+    cfg = config or DashboardConfig()
+    try:
+        client = _redis_client(cfg)
+        now = datetime.now(timezone.utc)
+        today = now.strftime("%Y-%m-%d")
+
+        # Bars: last received timestamp per instrument
+        instruments: list[dict[str, Any]] = []
+        for key in client.scan_iter(match="sam:bars:last:*"):
+            instrument_id = (
+                key.split(":", 3)[3]
+                if isinstance(key, str)
+                else key.decode().split(":", 3)[3]
+            )
+            last_ts_str = client.get(key)
+            if not last_ts_str:
+                continue
+            try:
+                last_ts = datetime.fromisoformat(last_ts_str)
+            except ValueError:
+                continue
+            age_seconds = int((now - last_ts).total_seconds())
+            if age_seconds < 120:
+                staleness = "fresh"
+            elif age_seconds < 300:
+                staleness = "stale"
+            else:
+                staleness = "old"
+            instruments.append(
+                {
+                    "instrument_id": instrument_id,
+                    "last_ts": last_ts.strftime("%H:%M:%S"),
+                    "age_seconds": age_seconds,
+                    "staleness": staleness,
+                }
+            )
+        instruments.sort(key=lambda x: x["instrument_id"])
+
+        # Bars: today's count per instrument
+        counts: dict[str, int] = {}
+        count_hash = f"sam:bars:count:{today}"
+        raw_counts = client.hgetall(count_hash)
+        if raw_counts:
+            for k, v in raw_counts.items():
+                instr = k if isinstance(k, str) else k.decode()
+                try:
+                    counts[instr] = int(v)
+                except ValueError:
+                    counts[instr] = 0
+
+        # Venue connection state
+        venues: list[dict[str, Any]] = []
+        for key in client.scan_iter(match="sam:venue:conn:*"):
+            venue_name = (
+                key.split(":", 3)[3]
+                if isinstance(key, str)
+                else key.decode().split(":", 3)[3]
+            )
+            val = client.get(key)
+            if val:
+                val_str = val if isinstance(val, str) else val.decode()
+                status, _, ts_str = val_str.partition(":")
+                venues.append(
+                    {
+                        "venue": venue_name,
+                        "status": status,
+                        "last_change": ts_str.split("+")[0] if ts_str else "",
+                    }
+                )
+        venues.sort(key=lambda x: x["venue"])
+
+        return {
+            "instruments": instruments,
+            "counts": counts,
+            "venues": venues,
+            "timestamp": now.isoformat(),
+        }
+    except Exception as exc:
+        logger.warning("market data query failed: %s", exc)
+        return {"instruments": [], "counts": {}, "venues": [], "timestamp": ""}
+
+
 def query_pnl_from_redis(config: DashboardConfig | None = None) -> dict[str, Any]:
     """Read per-strategy realized P&L from Redis."""
     cfg = config or DashboardConfig()
@@ -421,6 +525,7 @@ def get_dashboard_data(config: DashboardConfig | None = None) -> dict[str, Any]:
     cfg = config or DashboardConfig()
     return {
         "health": check_all_services(cfg),
+        "market_data": query_market_data_from_redis(cfg),
         "fills": query_fills(cfg),
         "positions": query_positions(cfg),
         "pnl": query_pnl_from_redis(cfg),
@@ -484,6 +589,42 @@ def _render_html(data: dict[str, Any]) -> str:
             f"</tr>"
         )
 
+    # Market data rows
+    market_data = data.get("market_data", {})
+    market_data_rows: list[str] = []
+    counts = market_data.get("counts", {})
+    for instr in market_data.get("instruments", []):
+        instr_id = instr.get("instrument_id", "")
+        count = counts.get(instr_id, 0)
+        stale_cls = instr.get("staleness", "old")
+        stale_label = {
+            "fresh": "● <2min",
+            "stale": "● <5min",
+            "old": "● >5min",
+        }.get(stale_cls, "● unknown")
+        market_data_rows.append(
+            f"<tr>"
+            f"<td>{instr_id}</td>"
+            f"<td>{instr.get('last_ts', '')}</td>"
+            f"<td>{count}</td>"
+            f"<td class='{stale_cls}'>{stale_label}</td>"
+            f"</tr>"
+        )
+
+    venue_conn_rows: list[str] = []
+    venues = market_data.get("venues", [])
+    if venues:
+        venue_conn_rows.append(
+            "<div style='margin-top:.5rem; font-size:.85rem; color:var(--muted);'>"
+        )
+        venue_conn_rows.append("Venues: ")
+        parts = []
+        for v in venues:
+            v_cls = "up" if v.get("status") == "UP" else "down"
+            parts.append(f"<span class='status {v_cls}'></span>{v.get('venue', '')}")
+        venue_conn_rows.append(" ".join(parts))
+        venue_conn_rows.append("</div>")
+
     # Positions rows
     positions_rows: list[str] = []
     for p in data.get("positions", []):
@@ -525,6 +666,15 @@ def _render_html(data: dict[str, Any]) -> str:
         .replace("{{futu_status_class}}", _svc_class("futu_opend"))
         .replace("{{trader_status}}", _svc_status("sam_trader"))
         .replace("{{trader_status_class}}", _svc_class("sam_trader"))
+        .replace(
+            "{{market_data_rows}}",
+            (
+                "\n".join(market_data_rows)
+                if market_data_rows
+                else "<tr><td colspan='4'>No bar telemetry</td></tr>"
+            ),
+        )
+        .replace("{{venue_conn_rows}}", "\n".join(venue_conn_rows))
         .replace(
             "{{fills_rows}}",
             (
