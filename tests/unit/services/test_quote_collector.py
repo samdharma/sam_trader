@@ -6,7 +6,7 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from nautilus_trader.model.data import QuoteTick
+from nautilus_trader.model.data import Bar, BarType, QuoteTick
 from nautilus_trader.model.identifiers import InstrumentId
 from nautilus_trader.model.objects import Price, Quantity
 
@@ -441,6 +441,101 @@ class TestQuota:
         event_loop.run_until_complete(svc._teardown())
 
 
+class TestBarsCollection:
+    """Tests for bar collection support."""
+
+    def test_single_bar_collected(self, event_loop):
+        """A Bar published on the msgbus is captured."""
+        svc = QuoteCollectionService(
+            broker="FUTU",
+            host="test-host",
+            port=11111,
+            watchlist=["TSLA.NASDAQ"],
+            data_type="bars",
+            bar_type_str="TSLA.NASDAQ-1-MINUTE-LAST-EXTERNAL",
+            collection_period_secs=0,
+        )
+
+        async def _run():
+            await svc._setup()
+            bar = Bar(
+                bar_type=BarType.from_str("TSLA.NASDAQ-1-MINUTE-LAST-EXTERNAL"),
+                open=Price.from_str("150.00"),
+                high=Price.from_str("151.00"),
+                low=Price.from_str("149.00"),
+                close=Price.from_str("150.50"),
+                volume=Quantity.from_int(1000),
+                ts_event=0,
+                ts_init=0,
+            )
+            svc._on_data(bar)
+            result = await svc.collect()
+            return result
+
+        with patch.object(svc, "_connect_with_timeout", return_value=None):
+            with patch.object(svc, "_subscribe_all", return_value=None):
+                result = event_loop.run_until_complete(_run())
+
+        assert len(result.bars) == 1
+        assert InstrumentId.from_str("TSLA.NASDAQ") in result.bars
+        bar = result.bars[InstrumentId.from_str("TSLA.NASDAQ")]
+        assert str(bar.close) == "150.50"
+
+    def test_bar_default_type_derived(self, event_loop):
+        """When bar_type_str is omitted, a default is derived from the instrument."""
+        svc = QuoteCollectionService(
+            broker="FUTU",
+            host="test-host",
+            port=11111,
+            watchlist=["AAPL.NASDAQ"],
+            data_type="bars",
+            collection_period_secs=0,
+        )
+        assert svc._bar_type_str is None
+
+    def test_bars_and_quotes_isolated(self, event_loop):
+        """QuoteTick objects are not captured when data_type=bars."""
+        svc = QuoteCollectionService(
+            broker="FUTU",
+            host="test-host",
+            port=11111,
+            watchlist=["TSLA.NASDAQ"],
+            data_type="bars",
+            collection_period_secs=0,
+        )
+
+        async def _run():
+            await svc._setup()
+            tick = QuoteTick(
+                instrument_id=InstrumentId.from_str("TSLA.NASDAQ"),
+                bid_price=Price.from_str("150.00"),
+                ask_price=Price.from_str("150.05"),
+                bid_size=Quantity.from_int(100),
+                ask_size=Quantity.from_int(100),
+                ts_event=0,
+                ts_init=0,
+            )
+            svc._on_data(tick)
+            result = await svc.collect()
+            return result
+
+        with patch.object(svc, "_connect_with_timeout", return_value=None):
+            with patch.object(svc, "_subscribe_all", return_value=None):
+                result = event_loop.run_until_complete(_run())
+
+        assert len(result.bars) == 0
+        assert len(result.quotes) == 0
+
+    def test_invalid_data_type_raises(self):
+        """Unsupported data_type raises ValueError at construction."""
+        with pytest.raises(ValueError, match="Unsupported data_type"):
+            QuoteCollectionService(
+                broker="FUTU",
+                watchlist=["TSLA.NASDAQ"],
+                data_type="trades",
+            )
+
+
 class TestResult:
     """Tests for QuoteCollectionResult."""
 
@@ -448,6 +543,7 @@ class TestResult:
         """Result dataclass has sensible defaults."""
         result = QuoteCollectionResult()
         assert result.quotes == {}
+        assert result.bars == {}
         assert result.partial_failures == []
         assert result.elapsed_secs == 0.0
 

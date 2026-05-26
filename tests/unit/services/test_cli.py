@@ -6,7 +6,7 @@ import json
 import pathlib
 from datetime import datetime, timedelta, timezone
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from sam_trader.services.cli import SAM_TRADER_CONTAINER, main
 
@@ -1470,6 +1470,217 @@ class TestDataHealthCommand:
         captured = capsys.readouterr()
         assert rc == 1
         assert "Redis connection failed" in captured.err
+
+
+class TestProbeCommand:
+    @patch("sam_trader.services.cli.QuoteCollectionService")
+    def test_probe_quotes_pass(self, mock_svc_cls: Any, capsys: Any) -> None:
+        """Probe reports PASS when quotes are received."""
+        mock_result = MagicMock()
+        mock_result.quotes = {"TSLA.NASDAQ": MagicMock()}
+        mock_result.bars = {}
+        mock_result.elapsed_secs = 2.5
+        mock_result.partial_failures = []
+        mock_svc = MagicMock()
+        mock_svc.collect = AsyncMock(return_value=mock_result)
+        mock_svc_cls.return_value = mock_svc
+
+        rc = main(
+            [
+                "probe",
+                "--broker",
+                "FUTU",
+                "--instrument",
+                "TSLA.NASDAQ",
+                "--type",
+                "quotes",
+                "--duration",
+                "5",
+            ]
+        )
+        captured = capsys.readouterr()
+        assert rc == 0
+        assert "PASS" in captured.out
+        assert "received 1 quotes" in captured.out
+
+    @patch("sam_trader.services.cli.QuoteCollectionService")
+    def test_probe_bars_pass(self, mock_svc_cls: Any, capsys: Any) -> None:
+        """Probe reports PASS when bars are received."""
+        mock_result = MagicMock()
+        mock_result.quotes = {}
+        mock_result.bars = {"TSLA.NASDAQ": MagicMock()}
+        mock_result.elapsed_secs = 3.0
+        mock_result.partial_failures = []
+        mock_svc = MagicMock()
+        mock_svc.collect = AsyncMock(return_value=mock_result)
+        mock_svc_cls.return_value = mock_svc
+
+        rc = main(
+            [
+                "probe",
+                "--broker",
+                "FUTU",
+                "--instrument",
+                "TSLA.NASDAQ",
+                "--type",
+                "bars",
+                "--duration",
+                "5",
+            ]
+        )
+        captured = capsys.readouterr()
+        assert rc == 0
+        assert "PASS" in captured.out
+        assert "received 1 bars" in captured.out
+
+    @patch("sam_trader.services.cli.QuoteCollectionService")
+    def test_probe_fail_no_data(self, mock_svc_cls: Any, capsys: Any) -> None:
+        """Probe reports FAIL when no data is received."""
+        mock_result = MagicMock()
+        mock_result.quotes = {}
+        mock_result.bars = {}
+        mock_result.elapsed_secs = 5.0
+        mock_result.partial_failures = []
+        mock_svc = MagicMock()
+        mock_svc.collect = AsyncMock(return_value=mock_result)
+        mock_svc_cls.return_value = mock_svc
+
+        rc = main(
+            [
+                "probe",
+                "--broker",
+                "FUTU",
+                "--instrument",
+                "TSLA.NASDAQ",
+                "--type",
+                "quotes",
+                "--duration",
+                "5",
+            ]
+        )
+        captured = capsys.readouterr()
+        assert rc == 1
+        assert "FAIL" in captured.out
+        assert "received 0 quotes" in captured.out
+
+    @patch("sam_trader.services.cli.QuoteCollectionService")
+    def test_probe_json_output(self, mock_svc_cls: Any, capsys: Any) -> None:
+        """Probe with --json emits structured output."""
+        mock_result = MagicMock()
+        mock_result.quotes = {"TSLA.NASDAQ": MagicMock()}
+        mock_result.bars = {}
+        mock_result.elapsed_secs = 1.2
+        mock_result.partial_failures = []
+        mock_svc = MagicMock()
+        mock_svc.collect = AsyncMock(return_value=mock_result)
+        mock_svc_cls.return_value = mock_svc
+
+        rc = main(
+            [
+                "--json",
+                "probe",
+                "--broker",
+                "FUTU",
+                "--instrument",
+                "TSLA.NASDAQ",
+                "--type",
+                "quotes",
+                "--duration",
+                "5",
+            ]
+        )
+        captured = capsys.readouterr()
+        assert rc == 0
+        data = json.loads(captured.out)
+        assert data["command"] == "probe"
+        assert data["status"] == "PASS"
+        assert data["received"] == 1
+
+    @patch("sam_trader.services.cli.QuoteCollectionService")
+    def test_probe_connection_error(self, mock_svc_cls: Any, capsys: Any) -> None:
+        """Probe reports FAIL on ConnectionError."""
+        mock_svc = MagicMock()
+        mock_svc.collect = AsyncMock(side_effect=ConnectionError("timed out"))
+        mock_svc_cls.return_value = mock_svc
+
+        rc = main(
+            [
+                "probe",
+                "--broker",
+                "FUTU",
+                "--instrument",
+                "TSLA.NASDAQ",
+                "--duration",
+                "5",
+            ]
+        )
+        captured = capsys.readouterr()
+        assert rc == 1
+        assert "FAIL" in captured.out
+        assert "could not connect" in captured.out
+
+    def test_probe_unsupported_broker(self, capsys: Any) -> None:
+        """Probe rejects unsupported broker."""
+        rc = main(
+            [
+                "probe",
+                "--broker",
+                "UNKNOWN",
+                "--instrument",
+                "TSLA.NASDAQ",
+            ]
+        )
+        captured = capsys.readouterr()
+        assert rc == 1
+        assert "Unsupported broker" in captured.err
+
+    def test_probe_unsupported_data_type(self, capsys: Any) -> None:
+        """Probe rejects unsupported data type."""
+        rc = main(
+            [
+                "probe",
+                "--broker",
+                "FUTU",
+                "--instrument",
+                "TSLA.NASDAQ",
+                "--type",
+                "trades",
+            ]
+        )
+        captured = capsys.readouterr()
+        assert rc == 1
+        assert "Unsupported data type" in captured.err
+
+    @patch("sam_trader.services.cli.QuoteCollectionService")
+    def test_probe_bar_type_passed(self, mock_svc_cls: Any, capsys: Any) -> None:
+        """Probe passes bar_type_str to the service when --bar-type is given."""
+        mock_result = MagicMock()
+        mock_result.quotes = {}
+        mock_result.bars = {"TSLA.NASDAQ": MagicMock()}
+        mock_result.elapsed_secs = 2.0
+        mock_result.partial_failures = []
+        mock_svc = MagicMock()
+        mock_svc.collect = AsyncMock(return_value=mock_result)
+        mock_svc_cls.return_value = mock_svc
+
+        rc = main(
+            [
+                "probe",
+                "--broker",
+                "FUTU",
+                "--instrument",
+                "TSLA.NASDAQ",
+                "--type",
+                "bars",
+                "--bar-type",
+                "TSLA.NASDAQ-5-MINUTE-LAST-EXTERNAL",
+                "--duration",
+                "5",
+            ]
+        )
+        assert rc == 0
+        call_kwargs = mock_svc_cls.call_args.kwargs
+        assert call_kwargs["bar_type_str"] == "TSLA.NASDAQ-5-MINUTE-LAST-EXTERNAL"
 
 
 class TestJsonGlobalFlag:

@@ -1267,6 +1267,120 @@ def quote(ctx: click.Context, symbol: str) -> None:
 
 
 @cli.command()
+@click.option("--broker", default="FUTU", help="Broker to probe (FUTU or IB).")
+@click.option("--instrument", required=True, help="Instrument ID (e.g. TSLA.NASDAQ).")
+@click.option(
+    "--type", "data_type", default="quotes", help="Data type: quotes or bars."
+)
+@click.option(
+    "--duration", default=60, type=int, help="Collection duration in seconds."
+)
+@click.option(
+    "--bar-type",
+    default=None,
+    help="Bar type string (e.g. TSLA.NASDAQ-1-MINUTE-LAST-EXTERNAL).",
+)
+@click.pass_context
+def probe(
+    ctx: click.Context,
+    broker: str,
+    instrument: str,
+    data_type: str,
+    duration: int,
+    bar_type: str | None,
+) -> int:
+    """Probe broker data feed independently of the running TradingNode.
+
+    Spins up an isolated Nautilus data client, subscribes to the
+    requested instrument, collects for the specified duration, and
+    reports PASS or FAIL.
+    """
+    broker = broker.upper()
+    if broker not in ("FUTU", "IB"):
+        raise click.ClickException(f"Unsupported broker: {broker}")
+
+    data_type = data_type.lower()
+    if data_type not in ("quotes", "bars"):
+        raise click.ClickException(f"Unsupported data type: {data_type}")
+
+    svc = QuoteCollectionService(
+        broker=broker,
+        watchlist=[instrument],
+        data_type=data_type,
+        bar_type_str=bar_type,
+        collection_period_secs=duration,
+    )
+
+    try:
+        result = asyncio.run(svc.collect())
+    except ConnectionError as exc:
+        result_data = {
+            "command": "probe",
+            "broker": broker,
+            "instrument": instrument,
+            "data_type": data_type,
+            "duration": duration,
+            "status": "FAIL",
+            "detail": f"Connection error: {exc}",
+            "received": 0,
+            "elapsed_secs": 0,
+        }
+        if ctx.obj.get("json"):
+            _out(ctx, result_data)
+        else:
+            click.echo(
+                f"Probe FAIL — could not connect to {broker} "
+                f"for {instrument}: {exc}"
+            )
+        return 1  # type: ignore[return-value]
+    except Exception as exc:
+        result_data = {
+            "command": "probe",
+            "broker": broker,
+            "instrument": instrument,
+            "data_type": data_type,
+            "duration": duration,
+            "status": "FAIL",
+            "detail": str(exc),
+            "received": 0,
+            "elapsed_secs": 0,
+        }
+        if ctx.obj.get("json"):
+            _out(ctx, result_data)
+        else:
+            click.echo(
+                f"Probe FAIL — unexpected error probing {broker} "
+                f"for {instrument}: {exc}"
+            )
+        return 1  # type: ignore[return-value]
+
+    received = len(result.quotes) if data_type == "quotes" else len(result.bars)
+    status = "PASS" if received > 0 else "FAIL"
+
+    result_data = {
+        "command": "probe",
+        "broker": broker,
+        "instrument": instrument,
+        "data_type": data_type,
+        "duration": duration,
+        "status": status,
+        "received": received,
+        "elapsed_secs": result.elapsed_secs,
+        "partial_failures": result.partial_failures,
+    }
+
+    if ctx.obj.get("json"):
+        _out(ctx, result_data)
+    else:
+        detail = f"received {received} {data_type} in {result.elapsed_secs:.1f}s"
+        if result.partial_failures:
+            detail += f" (partial failures: {result.partial_failures})"
+        click.echo(f"Probe {status} — {detail}")
+
+    return 0 if status == "PASS" else 1  # type: ignore[return-value]
+
+
+@cli.command()
 @click.option("--market", default=None, help="Filter by market (US or HK).")
 @click.pass_context
 def watchlist(ctx: click.Context, market: str | None) -> None:

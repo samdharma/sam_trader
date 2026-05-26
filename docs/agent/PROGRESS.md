@@ -1,3 +1,12 @@
+## Iteration 95
+- **Task**: TASK: Add active bar/quote probe CLI for independent broker verification
+- **Task ID**: sam_trader-9z3.9.23
+- **Status**: COMPLETE
+- **Decisions**: Extended `QuoteCollectionService` to support both `quotes` and `bars` data types via new `data_type` and `bar_type_str` constructor parameters. Added `_subscribe_quotes_for_instrument()` and `_subscribe_bars_for_instrument()` helpers that use `SubscribeQuoteTicks` and `SubscribeBars` respectively. `_on_data()` now captures `Bar` objects in addition to `QuoteTick`, filtered by `data_type`. Added `probe` CLI command: `sam probe --broker FUTU --instrument TSLA.NASDAQ --type bars --duration 60`. Spins up isolated in-process Nautilus data client, collects for specified duration, reports PASS/FAIL with count and elapsed time. Supports `--json` output. Returns exit code 0 on PASS, 1 on FAIL or connection error. Added 4 unit tests for bar collection (single bar, default bar type, isolation, invalid data type) and 8 unit tests for probe CLI (quotes pass, bars pass, fail no data, JSON output, connection error, unsupported broker, unsupported data type, bar-type option passed).
+- **Files Changed**: `src/sam_trader/services/quote_collector.py`, `src/sam_trader/services/cli.py`, `tests/unit/services/test_quote_collector.py`, `tests/unit/services/test_cli.py`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 92/92 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ticket complete.
+
 ## Iteration 94
 - **Task**: TASK: Add CLI data-health command for post-fix bar flow verification
 - **Task ID**: sam_trader-9z3.9.21

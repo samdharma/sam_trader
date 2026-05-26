@@ -1,8 +1,9 @@
 """QuoteCollectionService — reusable Nautilus data client wrapper.
 
 A lightweight bridge between Nautilus data clients and sam-services.
-Connects to a broker (Futu or IB), subscribes quote ticks for a watchlist,
-collects them for a fixed duration, and returns the latest tick per symbol.
+Connects to a broker (Futu or IB), subscribes quote ticks or bars for a
+watchlist, collects them for a fixed duration, and returns the latest tick
+or bar per symbol.
 """
 
 from __future__ import annotations
@@ -19,8 +20,8 @@ from nautilus_trader.common.component import LiveClock, MessageBus
 from nautilus_trader.common.config import InstrumentProviderConfig
 from nautilus_trader.common.providers import InstrumentProvider
 from nautilus_trader.core.uuid import UUID4
-from nautilus_trader.data.messages import SubscribeQuoteTicks
-from nautilus_trader.model.data import QuoteTick
+from nautilus_trader.data.messages import SubscribeBars, SubscribeQuoteTicks
+from nautilus_trader.model.data import Bar, BarType, QuoteTick
 from nautilus_trader.model.identifiers import (
     ClientId,
     InstrumentId,
@@ -46,12 +47,13 @@ class QuoteCollectionResult:
     """Result of a quote collection run."""
 
     quotes: dict[InstrumentId, QuoteTick] = field(default_factory=dict)
+    bars: dict[InstrumentId, Bar] = field(default_factory=dict)
     partial_failures: list[str] = field(default_factory=list)
     elapsed_secs: float = 0.0
 
 
 class QuoteCollectionService:
-    """Reusable Nautilus data client wrapper for quote collection.
+    """Reusable Nautilus data client wrapper for quote or bar collection.
 
     Parameters
     ----------
@@ -65,8 +67,14 @@ class QuoteCollectionService:
         ``IB_GATEWAY_PORT`` (IB) env vars.
     watchlist : list[str]
         Nautilus instrument ID strings (e.g. ``["TSLA.NASDAQ", "AAPL.NASDAQ"]``).
+    data_type : str, default "quotes"
+        ``"quotes"`` or ``"bars"``.
+    bar_type_str : str, optional
+        Nautilus bar type string (e.g. ``"TSLA.NASDAQ-1-MINUTE-LAST-EXTERNAL"``).
+        Required when *data_type* is ``"bars"``.  If omitted, a default
+        ``1-MINUTE-LAST-EXTERNAL`` spec is used.
     collection_period_secs : int, default 60
-        How long to collect quotes after successful subscription.
+        How long to collect after successful subscription.
     connection_timeout_secs : int, default 10
         Maximum seconds to wait for the broker connection.
     client_id : int, default 1
@@ -80,12 +88,19 @@ class QuoteCollectionService:
         watchlist: list[str],
         host: str | None = None,
         port: int | None = None,
+        data_type: str = "quotes",
+        bar_type_str: str | None = None,
         collection_period_secs: int = 60,
         connection_timeout_secs: int = 10,
         client_id: int = 1,
     ) -> None:
         self._broker = broker.upper()
         self._watchlist = list(watchlist)
+        self._data_type = data_type.lower()
+        self._bar_type_str = bar_type_str
+
+        if self._data_type not in ("quotes", "bars"):
+            raise ValueError(f"Unsupported data_type: {data_type}")
 
         # Env-var-driven defaults
         if host is None:
@@ -117,6 +132,7 @@ class QuoteCollectionService:
 
         # Collection state
         self._quotes: dict[InstrumentId, QuoteTick] = {}
+        self._bars: dict[InstrumentId, Bar] = {}
         self._partial_failures: list[str] = []
 
     # ------------------------------------------------------------------
@@ -153,6 +169,7 @@ class QuoteCollectionService:
         elapsed = time.monotonic() - start_time
         return QuoteCollectionResult(
             quotes=dict(self._quotes),
+            bars=dict(self._bars),
             partial_failures=list(self._partial_failures),
             elapsed_secs=round(elapsed, 3),
         )
@@ -207,7 +224,7 @@ class QuoteCollectionService:
             subscription_manager=self._subscription_manager,
         )
 
-        # Register our collector on the message bus so QuoteTicks
+        # Register our collector on the message bus so QuoteTicks / Bars
         # dispatched by the client are captured.
         assert self._msgbus is not None
         self._msgbus.register(
@@ -268,7 +285,7 @@ class QuoteCollectionService:
 
         self._instrument_provider = self._data_client.instrument_provider
 
-        # Register our collector on the message bus so QuoteTicks
+        # Register our collector on the message bus so QuoteTicks / Bars
         # dispatched by the client are captured.
         assert self._msgbus is not None
         self._msgbus.register(
@@ -293,7 +310,7 @@ class QuoteCollectionService:
             ) from exc
 
     async def _subscribe_all(self) -> None:
-        """Subscribe QuoteTicks for every symbol in the watchlist."""
+        """Subscribe QuoteTicks or Bars for every symbol in the watchlist."""
         if self._data_client is None:
             return
 
@@ -307,35 +324,91 @@ class QuoteCollectionService:
                 self._partial_failures.append(symbol)
                 continue
 
-            # Check subscription quota first (Futu only)
+            if self._data_type == "bars":
+                await self._subscribe_bars_for_instrument(
+                    instrument_id, client_id_str, symbol
+                )
+            else:
+                await self._subscribe_quotes_for_instrument(
+                    instrument_id, client_id_str, symbol
+                )
+
+    async def _subscribe_quotes_for_instrument(
+        self, instrument_id: InstrumentId, client_id_str: str, symbol: str
+    ) -> None:
+        """Subscribe QuoteTicks for a single instrument."""
+        assert self._data_client is not None
+        # Check subscription quota first (Futu only)
+        if self._subscription_manager is not None:
+            ok = await self._subscription_manager.subscribe(
+                instrument_id, SubDataType.QUOTE
+            )
+            if not ok:
+                logger.warning("Quote subscription quota exceeded for %s", symbol)
+                self._partial_failures.append(symbol)
+                return
+
+        cmd = SubscribeQuoteTicks(
+            instrument_id=instrument_id,
+            client_id=ClientId(client_id_str),
+            venue=None,
+            command_id=UUID4(),
+            ts_init=0,
+        )
+        try:
+            await self._data_client._subscribe_quote_ticks(cmd)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Failed to subscribe quote ticks for %s: %s", symbol, exc)
+            self._partial_failures.append(symbol)
+            # Roll back quota entry if we tracked it
             if self._subscription_manager is not None:
-                ok = await self._subscription_manager.subscribe(
+                await self._subscription_manager.unsubscribe(
                     instrument_id, SubDataType.QUOTE
                 )
-                if not ok:
-                    logger.warning("Quote subscription quota exceeded for %s", symbol)
-                    self._partial_failures.append(symbol)
-                    continue
 
-            cmd = SubscribeQuoteTicks(
-                instrument_id=instrument_id,
-                client_id=ClientId(client_id_str),
-                venue=None,
-                command_id=UUID4(),
-                ts_init=0,
+    async def _subscribe_bars_for_instrument(
+        self, instrument_id: InstrumentId, client_id_str: str, symbol: str
+    ) -> None:
+        """Subscribe Bars for a single instrument."""
+        assert self._data_client is not None
+        bar_type_str = self._bar_type_str
+        if bar_type_str is None:
+            bar_type_str = f"{symbol}-1-MINUTE-LAST-EXTERNAL"
+
+        try:
+            bar_type = BarType.from_str(bar_type_str)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Invalid bar type %r for %s: %s", bar_type_str, symbol, exc)
+            self._partial_failures.append(symbol)
+            return
+
+        # Check subscription quota first (Futu only)
+        if self._subscription_manager is not None:
+            ok = await self._subscription_manager.subscribe(
+                instrument_id, SubDataType.KLINE
             )
-            try:
-                await self._data_client._subscribe_quote_ticks(cmd)
-            except Exception as exc:  # noqa: BLE001
-                logger.warning(
-                    "Failed to subscribe quote ticks for %s: %s", symbol, exc
-                )
+            if not ok:
+                logger.warning("Bar subscription quota exceeded for %s", symbol)
                 self._partial_failures.append(symbol)
-                # Roll back quota entry if we tracked it
-                if self._subscription_manager is not None:
-                    await self._subscription_manager.unsubscribe(
-                        instrument_id, SubDataType.QUOTE
-                    )
+                return
+
+        cmd = SubscribeBars(
+            bar_type=bar_type,
+            client_id=ClientId(client_id_str),
+            venue=None,
+            command_id=UUID4(),
+            ts_init=0,
+        )
+        try:
+            await self._data_client._subscribe_bars(cmd)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Failed to subscribe bars for %s: %s", symbol, exc)
+            self._partial_failures.append(symbol)
+            # Roll back quota entry if we tracked it
+            if self._subscription_manager is not None:
+                await self._subscription_manager.unsubscribe(
+                    instrument_id, SubDataType.KLINE
+                )
 
     async def _collect_loop(self) -> None:
         """Wait for the collection period to elapse."""
@@ -370,6 +443,8 @@ class QuoteCollectionService:
     # ------------------------------------------------------------------
 
     def _on_data(self, data: Any) -> None:
-        """MessageBus endpoint handler — captures QuoteTicks."""
-        if isinstance(data, QuoteTick):
+        """MessageBus endpoint handler — captures QuoteTicks or Bars."""
+        if self._data_type == "bars" and isinstance(data, Bar):
+            self._bars[data.bar_type.instrument_id] = data
+        elif self._data_type == "quotes" and isinstance(data, QuoteTick):
             self._quotes[data.instrument_id] = data
