@@ -25,6 +25,8 @@ bundles:
     risk:
       max_position: 500
       max_daily_loss: 1000
+      max_trades_per_day: 5
+      trade_cooldown_seconds: 300
 
   # HK equity — Opening Range Breakout on Tencent (disabled by default)
   - id: "tencent-orb-5m-futu"

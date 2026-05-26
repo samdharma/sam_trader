@@ -54,6 +54,11 @@ class OrbStrategyConfig(StrategyConfig, frozen=True):  # type: ignore[call-arg]
         Maximum absolute position size.
     max_daily_loss : int, default 1000
         Maximum allowed loss for the day.
+    max_trades_per_day : int, default 0
+        Maximum number of entries per session.  0 disables the limit.
+    trade_cooldown_seconds : int, default 0
+        Seconds to wait after position goes flat before entering again.
+        0 disables the cooldown.
     session_start : str, default ""
         When to begin accumulating the opening range in the instrument's
         local timezone. Empty string disables.
@@ -91,6 +96,8 @@ class OrbStrategyConfig(StrategyConfig, frozen=True):  # type: ignore[call-arg]
     take_profit_ticks: int = 30
     max_position: int = 500
     max_daily_loss: int = 1000
+    max_trades_per_day: int = 0
+    trade_cooldown_seconds: int = 0
     session_start: str = ""
     max_trade_time: str = ""
     session_hard_stop: str = ""
@@ -154,6 +161,9 @@ class OrbStrategy(Strategy):
         # Trade counter
         self._trades_today: int = 0
 
+        # Rate-limiting: cooldown between trades
+        self._last_flat_time_ns: int = 0
+
         # Cached ATR
         self._cached_atr: float | None = None
 
@@ -216,6 +226,45 @@ class OrbStrategy(Strategy):
             self.log.warning(
                 f"max_daily_loss exceeded: {self._daily_loss:.2f} >= "
                 f"{self.config.max_daily_loss:.2f}. Skipping entry."
+            )
+            return True
+        return False
+
+    def _max_trades_per_day_reached(self) -> bool:
+        """Return True if the daily trade limit has been reached."""
+        if self.config.max_trades_per_day <= 0:
+            return False
+        if self._trades_today >= self.config.max_trades_per_day:
+            self.log.warning(
+                f"max_trades_per_day reached: {self._trades_today} >= "
+                f"{self.config.max_trades_per_day}. Skipping entry."
+            )
+            return True
+        return False
+
+    def _in_cooldown(self, now_ns: int | None = None) -> bool:
+        """Return True if the cooldown period has not yet elapsed.
+
+        Parameters
+        ----------
+        now_ns : int | None, optional
+            Current timestamp in nanoseconds.  When ``None``, reads
+            ``self.clock.timestamp_ns()``.  Exposed for testability
+            because the Cython ``LiveClock.timestamp_ns`` is read-only.
+
+        """
+        if self.config.trade_cooldown_seconds <= 0:
+            return False
+        if self._last_flat_time_ns == 0:
+            return False
+        if now_ns is None:
+            now_ns = self.clock.timestamp_ns()
+        elapsed_ns = now_ns - self._last_flat_time_ns
+        cooldown_ns = self.config.trade_cooldown_seconds * 1_000_000_000
+        if elapsed_ns < cooldown_ns:
+            remaining = (cooldown_ns - elapsed_ns) / 1_000_000_000
+            self.log.info(
+                f"Cooldown active: {remaining:.1f}s remaining before next entry."
             )
             return True
         return False
@@ -339,6 +388,12 @@ class OrbStrategy(Strategy):
 
         # Skip new breakouts after max_trade_time
         if self._past_max_trade_time():
+            return
+
+        # Rate-limit checks: max trades per day + cooldown between trades
+        if self._max_trades_per_day_reached():
+            return
+        if self._in_cooldown():
             return
 
         # Look for fresh breakout
@@ -658,10 +713,6 @@ class OrbStrategy(Strategy):
         else:
             new_qty = prev_qty - fill_qty
 
-        # Count trades opened from flat
-        if prev_qty == 0 and new_qty != 0:
-            self._trades_today += 1
-
         # Daily loss tracking
         if prev_qty > 0 and event.order_side == OrderSide.SELL:
             closed_qty = min(fill_qty, prev_qty)
@@ -696,9 +747,10 @@ class OrbStrategy(Strategy):
             self._submit_protective_orders(event.order_side)
             self._entry_order = None
 
-        # Position fully closed → reset entry tracking
+        # Position fully closed → reset entry tracking + record flat time
         if new_qty == 0:
             self._entry_order = None
+            self._last_flat_time_ns = self.clock.timestamp_ns()
 
     # ------------------------------------------------------------------
     # Stop / reset / save / load
@@ -726,6 +778,7 @@ class OrbStrategy(Strategy):
         self._trades_today = 0
         self._cached_atr = None
         self._entry_order = None
+        self._last_flat_time_ns = 0
 
     def on_save(self) -> dict[str, bytes]:
         """Actions to be performed when the strategy is saved."""
@@ -747,6 +800,7 @@ class OrbStrategy(Strategy):
                     "_bar_history": self._bar_history,
                     "_trades_today": self._trades_today,
                     "_cached_atr": self._cached_atr,
+                    "_last_flat_time_ns": self._last_flat_time_ns,
                 }
             )
         }
@@ -772,6 +826,7 @@ class OrbStrategy(Strategy):
         self._bar_history = data.get("_bar_history", [])
         self._trades_today = data.get("_trades_today", 0)
         self._cached_atr = data.get("_cached_atr")
+        self._last_flat_time_ns = data.get("_last_flat_time_ns", 0)
 
     def on_dispose(self) -> None:
         """Actions to be performed when the strategy is disposed."""

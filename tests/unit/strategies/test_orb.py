@@ -581,6 +581,147 @@ class TestRiskLimits:
 
 
 # ---------------------------------------------------------------------------
+# Rate-limiting: max_trades_per_day + trade_cooldown_seconds
+# ---------------------------------------------------------------------------
+
+
+class TestMaxTradesPerDay:
+    def test_limit_blocks_entry_after_reached(self) -> None:
+        """Strategy stops entering after max_trades_per_day reached."""
+        strategy = OrbStrategy(
+            _make_config(
+                max_trades_per_day=2,
+                confirmation_bars=1,
+                first_candle_minutes=10,
+            )
+        )
+        _register_strategy(strategy)
+        _mock_instrument(strategy)
+        strategy.on_start()
+        strategy.submit_order_list = MagicMock()  # type: ignore[method-assign]
+
+        # Establish range
+        strategy.on_bar(_make_bar("100.00", "101.00", "99.00", "100.00"))
+        strategy.on_bar(_make_bar("100.50", "102.00", "100.00", "101.00"))
+
+        # Trade 1: breakout enters
+        strategy.on_bar(_make_bar("102.50", "103.00", "102.00", "102.80"))
+        assert strategy.submit_order_list.call_count == 1
+        assert strategy._trades_today == 1
+
+        # Trade 2: next breakout enters
+        strategy.on_bar(_make_bar("102.50", "103.00", "102.00", "102.80"))
+        assert strategy.submit_order_list.call_count == 2
+        assert strategy._trades_today == 2
+
+        # Trade 3: should be blocked (limit reached)
+        strategy.on_bar(_make_bar("103.00", "104.00", "102.50", "103.50"))
+        assert strategy.submit_order_list.call_count == 2
+
+    def test_disabled_allows_unlimited(self) -> None:
+        """``max_trades_per_day=0`` (default) disables the limit."""
+        strategy = OrbStrategy(
+            _make_config(
+                max_trades_per_day=0,
+                confirmation_bars=1,
+                first_candle_minutes=10,
+            )
+        )
+        _register_strategy(strategy)
+        _mock_instrument(strategy)
+        strategy.on_start()
+        strategy.submit_order_list = MagicMock()  # type: ignore[method-assign]
+
+        strategy.on_bar(_make_bar("100.00", "101.00", "99.00", "100.00"))
+        strategy.on_bar(_make_bar("100.50", "102.00", "100.00", "101.00"))
+
+        for _ in range(5):
+            strategy.on_bar(_make_bar("102.50", "103.00", "102.00", "102.80"))
+
+        assert strategy.submit_order_list.call_count == 5
+
+
+class TestTradeCooldown:
+    def test_in_cooldown_when_within_window(self) -> None:
+        """Unit-test ``_in_cooldown()`` — returns True when too recent."""
+        strategy = OrbStrategy(_make_config(trade_cooldown_seconds=60))
+        _register_strategy(strategy)
+
+        base_ns = 1_700_000_000_000_000_000
+        strategy._last_flat_time_ns = base_ns
+        now_ns = base_ns + 30 * 1_000_000_000
+
+        assert strategy._in_cooldown(now_ns) is True
+
+    def test_in_cooldown_after_elapsed(self) -> None:
+        """Unit-test ``_in_cooldown()`` — returns False after period elapsed."""
+        strategy = OrbStrategy(_make_config(trade_cooldown_seconds=60))
+        _register_strategy(strategy)
+
+        base_ns = 1_700_000_000_000_000_000
+        strategy._last_flat_time_ns = base_ns
+        now_ns = base_ns + 61 * 1_000_000_000
+
+        assert strategy._in_cooldown(now_ns) is False
+
+    def test_in_cooldown_disabled(self) -> None:
+        """Unit-test ``_in_cooldown()`` — returns False when disabled."""
+        strategy = OrbStrategy(_make_config(trade_cooldown_seconds=0))
+        _register_strategy(strategy)
+
+        strategy._last_flat_time_ns = 1_700_000_000_000_000_000
+
+        assert strategy._in_cooldown() is False
+
+    def test_in_cooldown_first_trade(self) -> None:
+        """Unit-test ``_in_cooldown()`` — returns False when no prior trade."""
+        strategy = OrbStrategy(_make_config(trade_cooldown_seconds=60))
+        _register_strategy(strategy)
+
+        assert strategy._last_flat_time_ns == 0
+
+        assert strategy._in_cooldown() is False
+
+    def test_cooldown_blocks_entry_in_on_bar(self) -> None:
+        """Cooldown enforced via on_bar — entry blocked when active."""
+        strategy = OrbStrategy(
+            _make_config(
+                trade_cooldown_seconds=60,
+                confirmation_bars=1,
+                first_candle_minutes=10,
+            )
+        )
+        _register_strategy(strategy)
+        _mock_instrument(strategy)
+        strategy.on_start()
+        strategy.submit_order_list = MagicMock()  # type: ignore[method-assign]
+
+        # Establish range
+        strategy.on_bar(_make_bar("100.00", "101.00", "99.00", "100.00"))
+        strategy.on_bar(_make_bar("100.50", "102.00", "100.00", "101.00"))
+
+        # First breakout enters (cooldown not yet active)
+        strategy.on_bar(_make_bar("102.50", "103.00", "102.00", "102.80"))
+        assert strategy.submit_order_list.call_count == 1
+
+        # Simulate active cooldown
+        strategy._in_cooldown = MagicMock(  # type: ignore[method-assign]
+            return_value=True,
+        )
+
+        # Second breakout blocked by cooldown
+        strategy.on_bar(_make_bar("102.50", "103.00", "102.00", "102.80"))
+        assert strategy.submit_order_list.call_count == 1
+
+        # Remove cooldown → entry allowed again
+        strategy._in_cooldown = MagicMock(  # type: ignore[method-assign]
+            return_value=False,
+        )
+        strategy.on_bar(_make_bar("103.00", "104.00", "102.50", "103.50"))
+        assert strategy.submit_order_list.call_count == 2
+
+
+# ---------------------------------------------------------------------------
 # Fill handling
 # ---------------------------------------------------------------------------
 
