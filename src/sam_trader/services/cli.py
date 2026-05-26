@@ -1674,7 +1674,23 @@ def readiness(
             bundle_path = None
 
     # Generate readiness report
-    gen = ReadinessReportGenerator(webhook_url=webhook_url)
+    redis_client = None
+    if not simulate and _redis_cli is not None:
+        try:
+            redis_client = _redis_cli.Redis(
+                host=REDIS_HOST,
+                port=int(REDIS_PORT),
+                password=REDIS_PASSWORD or None,
+                decode_responses=True,
+                socket_connect_timeout=5,
+            )
+        except Exception:
+            redis_client = None
+
+    gen = ReadinessReportGenerator(
+        webhook_url=webhook_url,
+        redis_client=redis_client,
+    )
     report = gen.generate(
         pipeline_result,
         bundle_path=bundle_path,

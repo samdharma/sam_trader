@@ -25,7 +25,7 @@ import json
 import logging
 import os
 import urllib.request
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -59,6 +59,7 @@ class ReadinessReport:
     bundle_path: str | None
     audit_trail: list[dict[str, Any]]
     trace_id: str = ""
+    data_pipeline: dict[str, Any] = field(default_factory=dict)
 
 
 # ---------------------------------------------------------------------------
@@ -84,10 +85,14 @@ class ReadinessReportGenerator:
         log_dir: str = _DEFAULT_LOG_DIR,
         top_n: int = _DEFAULT_TOP_N,
         webhook_url: str | None = None,
+        redis_client: Any | None = None,
+        bar_stale_threshold_seconds: int = 300,
     ) -> None:
         self.log_dir = Path(log_dir)
         self.top_n = top_n
         self.webhook_url = webhook_url or os.getenv("READINESS_WEBHOOK_URL")
+        self._redis = redis_client
+        self.bar_stale_threshold_seconds = bar_stale_threshold_seconds
 
     # ------------------------------------------------------------------
     # Public API
@@ -123,6 +128,7 @@ class ReadinessReportGenerator:
         )
         regime_state = self._build_regime_state(pipeline_result.regime_prediction)
         audit_trail = self._build_audit_trail(pipeline_result.audit_trail)
+        data_pipeline = self._build_data_pipeline_health(pipeline_result)
 
         return ReadinessReport(
             scan_timestamp=self._now_iso(),
@@ -137,6 +143,7 @@ class ReadinessReportGenerator:
             bundle_path=bundle_path,
             audit_trail=audit_trail,
             trace_id=pipeline_result.trace_id,
+            data_pipeline=data_pipeline,
         )
 
     def format_table(self, report: ReadinessReport) -> str:
@@ -226,6 +233,41 @@ class ReadinessReportGenerator:
             lines.append(f"  Bundle File       : {report.bundle_path}")
         else:
             lines.append("  Bundle File       : N/A")
+        lines.append("")
+
+        # Data pipeline
+        lines.append("Data Pipeline")
+        lines.append("-" * 60)
+        dp = report.data_pipeline
+        if dp:
+            venue_conn = dp.get("venue_connection_state", {})
+            for v, s in venue_conn.items():
+                lines.append(f"  {v:<18} : {s}")
+            sub = dp.get("subscription_health", {})
+            lines.append(
+                f"  Subscriptions    : {sub.get('active', 0)} active / "
+                f"{sub.get('expected', 0)} expected"
+            )
+            passed = dp.get("data_pipeline_passed", False)
+            lines.append(f"  Pipeline Pass    : {'PASS' if passed else 'FAIL'}")
+            dp_warnings = dp.get("warnings", [])
+            if dp_warnings:
+                lines.append("  Warnings:")
+                for w in dp_warnings:
+                    lines.append(f"    • {w}")
+            bar_flow = dp.get("bar_flow", [])
+            if bar_flow:
+                lines.append("  Bar Flow:")
+                for b in bar_flow[:5]:
+                    status = b.get("status", "UNKNOWN")
+                    last = b.get("last_bar_time", "N/A") or "N/A"
+                    if len(last) > 19:
+                        last = last[:19]
+                    lines.append(f"    {b['instrument_id']:<20} {status:<8} ({last})")
+                if len(bar_flow) > 5:
+                    lines.append(f"    ... and {len(bar_flow) - 5} more")
+        else:
+            lines.append("  (not available)")
         lines.append("")
         lines.append("=" * 60)
 
@@ -420,6 +462,134 @@ class ReadinessReportGenerator:
             )
         return result
 
+    def _build_data_pipeline_health(
+        self, pipeline_result: PipelineResult
+    ) -> dict[str, Any]:
+        """Query Redis for venue connection state and bar flow health.
+
+        Returns a dict with:
+        - venue_connection_state: {FUTU: UP/DOWN/UNKNOWN, IB: UP/DOWN/UNKNOWN}
+        - bar_flow: list of per-instrument bar status dicts
+        - subscription_health: {active, expected}
+        - data_pipeline_passed: bool
+        - warnings: list of human-readable warnings
+        """
+        now = datetime.now(timezone.utc)
+        date_str = now.date().isoformat()
+        redis = self._redis
+
+        # Venue connection state
+        venue_state: dict[str, str] = {}
+        for venue in ("FUTU", "IB"):
+            if redis is not None:
+                try:
+                    raw = redis.get(f"sam:venue:conn:{venue}")
+                    if raw:
+                        venue_state[venue] = raw.split(":")[0]
+                    else:
+                        venue_state[venue] = "UNKNOWN"
+                except Exception:
+                    venue_state[venue] = "UNKNOWN"
+            else:
+                venue_state[venue] = "UNKNOWN"
+
+        # Expected instruments from pipeline candidates
+        instrument_ids = sorted(
+            {
+                str(pc.gap.instrument_id)
+                for pc in (pipeline_result.approved + pipeline_result.rejected)
+            }
+        )
+
+        bar_flow: list[dict[str, Any]] = []
+        active_subs = 0
+        all_fresh = True
+
+        for inst_id in instrument_ids:
+            last_bar_time: str | None = None
+            bars_today = 0
+            status = "MISSING"
+
+            if redis is not None:
+                try:
+                    bar_raw = redis.get(f"sam:bars:last:{inst_id}")
+                    if bar_raw:
+                        last_ts = datetime.fromisoformat(bar_raw)
+                        age_seconds = int((now - last_ts).total_seconds())
+                        last_bar_time = last_ts.isoformat()
+                        if age_seconds > self.bar_stale_threshold_seconds:
+                            status = "STALE"
+                            all_fresh = False
+                        else:
+                            status = "OK"
+                            active_subs += 1
+                    else:
+                        all_fresh = False
+
+                    count_raw = redis.hget(f"sam:bars:count:{date_str}", inst_id)
+                    if count_raw:
+                        bars_today = int(count_raw)
+                except Exception:
+                    status = "ERROR"
+                    all_fresh = False
+            else:
+                all_fresh = False
+
+            bar_flow.append(
+                {
+                    "instrument_id": inst_id,
+                    "bar_type": None,
+                    "last_bar_time": last_bar_time,
+                    "bars_today": bars_today,
+                    "status": status,
+                }
+            )
+
+        futu_expected = os.getenv("FUTU_ENABLED", "false").lower() == "true"
+        ib_expected = os.getenv("IB_ENABLED", "false").lower() == "true"
+
+        venue_issues: list[str] = []
+        if futu_expected and venue_state.get("FUTU") == "DOWN":
+            venue_issues.append("FUTU venue connection is DOWN")
+            all_fresh = False
+        if ib_expected and venue_state.get("IB") == "DOWN":
+            venue_issues.append("IB venue connection is DOWN")
+            all_fresh = False
+
+        # With no candidates, pipeline passes unless an expected venue is DOWN.
+        data_pipeline_passed = all_fresh
+        if len(instrument_ids) == 0:
+            data_pipeline_passed = True
+            if futu_expected and venue_state.get("FUTU") == "DOWN":
+                data_pipeline_passed = False
+            if ib_expected and venue_state.get("IB") == "DOWN":
+                data_pipeline_passed = False
+
+        warnings: list[str] = []
+        if not data_pipeline_passed:
+            if venue_issues:
+                warnings.extend(venue_issues)
+            stale_or_missing = [
+                b["instrument_id"]
+                for b in bar_flow
+                if b["status"] in ("STALE", "MISSING", "ERROR")
+            ]
+            if stale_or_missing:
+                warnings.append(
+                    f"Stale or missing bars for: {', '.join(stale_or_missing)}"
+                )
+
+        return {
+            "venue_connection_state": venue_state,
+            "bar_flow": bar_flow,
+            "subscription_health": {
+                "active": active_subs,
+                "expected": len(instrument_ids),
+            },
+            "data_pipeline_passed": data_pipeline_passed,
+            "warnings": warnings,
+        }
+
     @staticmethod
     def _report_to_dict(report: ReadinessReport) -> dict[str, Any]:
         """Convert a frozen dataclass to a plain dict for JSON serialization."""
@@ -436,28 +606,39 @@ class ReadinessReportGenerator:
             "bundle_path": report.bundle_path,
             "audit_trail": report.audit_trail,
             "trace_id": report.trace_id,
+            "data_pipeline": report.data_pipeline,
         }
 
     def _webhook_payload(self, report: ReadinessReport) -> dict[str, Any]:
         """Build a JSON payload appropriate for the webhook target."""
         url = self.webhook_url or ""
+        dp_passed = report.data_pipeline.get("data_pipeline_passed", True)
+        dp_warnings = report.data_pipeline.get("warnings", [])
 
         # Slack formatting
         if "slack.com" in url or "hooks.slack" in url:
             lines = [
                 "*SAM Trader V3 — Pre-Market Readiness Report*",
-                f"• Market: {report.market}",
-                (
-                    f"• Candidates: {report.candidate_count} "
-                    f"(approved {report.approved_count}, "
-                    f"rejected {report.rejected_count})"
-                ),
-                (
-                    f"• Regime: {report.regime_state.get('regime', 'N/A')} "
-                    f"(confidence: {report.regime_state.get('confidence', 'N/A')})"
-                ),
-                f"• Bundles: {report.bundles_generated}",
             ]
+            if not dp_passed:
+                lines.insert(1, ":warning: *DATA PIPELINE ISSUE DETECTED*")
+                for w in dp_warnings:
+                    lines.append(f"• Warning: {w}")
+            lines.extend(
+                [
+                    f"• Market: {report.market}",
+                    (
+                        f"• Candidates: {report.candidate_count} "
+                        f"(approved {report.approved_count}, "
+                        f"rejected {report.rejected_count})"
+                    ),
+                    (
+                        f"• Regime: {report.regime_state.get('regime', 'N/A')} "
+                        f"(confidence: {report.regime_state.get('confidence', 'N/A')})"
+                    ),
+                    f"• Bundles: {report.bundles_generated}",
+                ]
+            )
             if report.top_recommendations:
                 lines.append("*Top Recommendations:*")
                 for rec in report.top_recommendations[:3]:
@@ -471,15 +652,23 @@ class ReadinessReportGenerator:
         if "telegram" in url:
             lines = [
                 "<b>SAM Trader V3 — Readiness Report</b>",
-                f"Market: {report.market}",
-                (
-                    f"Candidates: {report.candidate_count} "
-                    f"ok {report.approved_count} "
-                    f"no {report.rejected_count}"
-                ),
-                f"Regime: {report.regime_state.get('regime', 'N/A')}",
-                f"Bundles: {report.bundles_generated}",
             ]
+            if not dp_passed:
+                lines.insert(1, "⚠️ <b>DATA PIPELINE ISSUE</b>")
+                for w in dp_warnings:
+                    lines.append(f"⚠️ {w}")
+            lines.extend(
+                [
+                    f"Market: {report.market}",
+                    (
+                        f"Candidates: {report.candidate_count} "
+                        f"ok {report.approved_count} "
+                        f"no {report.rejected_count}"
+                    ),
+                    f"Regime: {report.regime_state.get('regime', 'N/A')}",
+                    f"Bundles: {report.bundles_generated}",
+                ]
+            )
             return {
                 "chat_id": os.getenv("TELEGRAM_CHAT_ID", ""),
                 "text": "\n".join(lines),

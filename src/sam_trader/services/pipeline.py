@@ -152,7 +152,8 @@ def run_pipeline(
             logger.warning("Bundle generation failed: %s", exc)
 
     # 5. Readiness report
-    gen = ReadinessReportGenerator()
+    redis_client = _redis_client()
+    gen = ReadinessReportGenerator(redis_client=redis_client)
     report = gen.generate(
         pipeline_result,
         bundle_path=bundle_path,

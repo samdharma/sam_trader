@@ -6,6 +6,7 @@ import json
 import os
 import tempfile
 import urllib.request
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -154,6 +155,39 @@ def _make_pipeline_result(
         audit_trail=audit_trail or [],
         trace_id=trace_id,
     )
+
+
+def _make_mock_redis(
+    venue_states: dict[str, str] | None = None,
+    bar_timestamps: dict[str, str] | None = None,
+    bar_counts: dict[str, int] | None = None,
+) -> MagicMock:
+    """Return a MagicMock that behaves like a redis.Redis client."""
+    redis = MagicMock()
+    venue_states = venue_states or {}
+    bar_timestamps = bar_timestamps or {}
+    bar_counts = bar_counts or {}
+
+    def _get(key: str) -> str | None:
+        if key.startswith("sam:venue:conn:"):
+            venue = key.split(":")[-1]
+            state = venue_states.get(venue)
+            if state:
+                return f"{state}:2026-05-24T08:00:00+00:00"
+            return None
+        if key.startswith("sam:bars:last:"):
+            inst = key.split(":")[-1]
+            return bar_timestamps.get(inst)
+        return None
+
+    def _hget(key: str, field: str) -> str | None:
+        if key.startswith("sam:bars:count:"):
+            return str(bar_counts.get(field, 0))
+        return None
+
+    redis.get.side_effect = _get
+    redis.hget.side_effect = _hget
+    return redis
 
 
 # ---------------------------------------------------------------------------
@@ -494,3 +528,190 @@ class TestReadinessReportGenerator:
         assert report.audit_trail[0]["stage"] == "ai_scoring"
         assert report.audit_trail[0]["errors"] == ["err1"]
         assert report.audit_trail[1]["notes"] == "regime=trending"
+
+    # ------------------------------------------------------------------
+    # Data pipeline health tests
+    # ------------------------------------------------------------------
+
+    def test_data_pipeline_passed_with_fresh_bars(self) -> None:
+        now = datetime.now(timezone.utc)
+        fresh_ts = now.isoformat()
+        redis = _make_mock_redis(
+            venue_states={"FUTU": "UP"},
+            bar_timestamps={"TSLA.NASDAQ": fresh_ts, "AAPL.NASDAQ": fresh_ts},
+            bar_counts={"TSLA.NASDAQ": 42, "AAPL.NASDAQ": 38},
+        )
+        approved = [
+            _make_approved_candidate("TSLA.NASDAQ"),
+            _make_approved_candidate("AAPL.NASDAQ"),
+        ]
+        result = _make_pipeline_result(approved=approved)
+        gen = ReadinessReportGenerator(redis_client=redis)
+        report = gen.generate(result)
+
+        dp = report.data_pipeline
+        assert dp["data_pipeline_passed"] is True
+        assert dp["venue_connection_state"]["FUTU"] == "UP"
+        assert dp["subscription_health"]["active"] == 2
+        assert dp["subscription_health"]["expected"] == 2
+        assert dp["warnings"] == []
+        assert len(dp["bar_flow"]) == 2
+        for b in dp["bar_flow"]:
+            assert b["status"] == "OK"
+            assert b["bars_today"] > 0
+
+    def test_data_pipeline_failed_with_stale_bars(self) -> None:
+        now = datetime.now(timezone.utc)
+        stale_ts = (now - timedelta(seconds=600)).isoformat()
+        redis = _make_mock_redis(
+            venue_states={"FUTU": "UP"},
+            bar_timestamps={"TSLA.NASDAQ": stale_ts},
+        )
+        approved = [_make_approved_candidate("TSLA.NASDAQ")]
+        result = _make_pipeline_result(approved=approved)
+        gen = ReadinessReportGenerator(redis_client=redis)
+        report = gen.generate(result)
+
+        dp = report.data_pipeline
+        assert dp["data_pipeline_passed"] is False
+        assert dp["bar_flow"][0]["status"] == "STALE"
+        assert any("Stale or missing bars" in w for w in dp["warnings"])
+
+    def test_data_pipeline_failed_with_missing_bars(self) -> None:
+        redis = _make_mock_redis(
+            venue_states={"FUTU": "UP"},
+            bar_timestamps={},
+        )
+        approved = [_make_approved_candidate("TSLA.NASDAQ")]
+        result = _make_pipeline_result(approved=approved)
+        gen = ReadinessReportGenerator(redis_client=redis)
+        report = gen.generate(result)
+
+        dp = report.data_pipeline
+        assert dp["data_pipeline_passed"] is False
+        assert dp["bar_flow"][0]["status"] == "MISSING"
+        assert any("Stale or missing bars" in w for w in dp["warnings"])
+
+    def test_data_pipeline_failed_with_venue_down(self) -> None:
+        now = datetime.now(timezone.utc)
+        fresh_ts = now.isoformat()
+        redis = _make_mock_redis(
+            venue_states={"FUTU": "DOWN"},
+            bar_timestamps={"TSLA.NASDAQ": fresh_ts},
+        )
+        approved = [_make_approved_candidate("TSLA.NASDAQ")]
+        result = _make_pipeline_result(approved=approved)
+
+        with patch.dict(os.environ, {"FUTU_ENABLED": "true"}):
+            gen = ReadinessReportGenerator(redis_client=redis)
+            report = gen.generate(result)
+
+        dp = report.data_pipeline
+        assert dp["data_pipeline_passed"] is False
+        assert any("FUTU venue connection is DOWN" in w for w in dp["warnings"])
+
+    def test_data_pipeline_no_candidates_passes(self) -> None:
+        """With zero candidates, data_pipeline_passed is True if venues are OK."""
+        redis = _make_mock_redis(venue_states={"FUTU": "UP", "IB": "UP"})
+        result = _make_pipeline_result()
+        gen = ReadinessReportGenerator(redis_client=redis)
+        report = gen.generate(result)
+
+        dp = report.data_pipeline
+        assert dp["data_pipeline_passed"] is True
+        assert dp["subscription_health"]["expected"] == 0
+
+    def test_data_pipeline_graceful_without_redis(self) -> None:
+        approved = [_make_approved_candidate("TSLA.NASDAQ")]
+        result = _make_pipeline_result(approved=approved)
+        gen = ReadinessReportGenerator(redis_client=None)
+        report = gen.generate(result)
+
+        dp = report.data_pipeline
+        assert dp["venue_connection_state"]["FUTU"] == "UNKNOWN"
+        assert dp["venue_connection_state"]["IB"] == "UNKNOWN"
+        assert dp["bar_flow"][0]["status"] == "MISSING"
+        # Without redis we cannot verify freshness, so pipeline is marked failed
+        assert dp["data_pipeline_passed"] is False
+
+    def test_format_table_includes_data_pipeline(self) -> None:
+        now = datetime.now(timezone.utc)
+        fresh_ts = now.isoformat()
+        redis = _make_mock_redis(
+            venue_states={"FUTU": "UP"},
+            bar_timestamps={"TSLA.NASDAQ": fresh_ts},
+        )
+        approved = [_make_approved_candidate("TSLA.NASDAQ")]
+        result = _make_pipeline_result(approved=approved)
+        gen = ReadinessReportGenerator(redis_client=redis)
+        report = gen.generate(result)
+        table = gen.format_table(report)
+
+        assert "Data Pipeline" in table
+        assert "FUTU" in table
+        assert "PASS" in table
+        assert "TSLA.NASDAQ" in table
+        assert "OK" in table
+
+    def test_report_to_dict_includes_data_pipeline(self) -> None:
+        redis = _make_mock_redis(venue_states={"FUTU": "UP"})
+        approved = [_make_approved_candidate("TSLA.NASDAQ")]
+        result = _make_pipeline_result(approved=approved)
+        gen = ReadinessReportGenerator(redis_client=redis)
+        report = gen.generate(result)
+        d = gen._report_to_dict(report)
+
+        assert "data_pipeline" in d
+        assert d["data_pipeline"]["venue_connection_state"]["FUTU"] == "UP"
+
+    def test_webhook_payload_highlights_data_issue_slack(self) -> None:
+        redis = _make_mock_redis(
+            venue_states={"FUTU": "DOWN"},
+            bar_timestamps={},
+        )
+        approved = [_make_approved_candidate("TSLA.NASDAQ")]
+        result = _make_pipeline_result(approved=approved)
+
+        with patch.dict(os.environ, {"FUTU_ENABLED": "true"}):
+            gen = ReadinessReportGenerator(
+                redis_client=redis,
+                webhook_url="https://hooks.slack.com/services/xxx",
+            )
+            report = gen.generate(result)
+            payload = gen._webhook_payload(report)
+
+        assert "DATA PIPELINE ISSUE DETECTED" in payload["text"]
+        assert "FUTU venue connection is DOWN" in payload["text"]
+
+    def test_webhook_payload_highlights_data_issue_telegram(self) -> None:
+        redis = _make_mock_redis(
+            venue_states={"FUTU": "DOWN"},
+            bar_timestamps={},
+        )
+        approved = [_make_approved_candidate("TSLA.NASDAQ")]
+        result = _make_pipeline_result(approved=approved)
+
+        with patch.dict(os.environ, {"FUTU_ENABLED": "true"}):
+            gen = ReadinessReportGenerator(
+                redis_client=redis,
+                webhook_url="https://api.telegram.org/botxxx/sendMessage",
+            )
+            report = gen.generate(result)
+            payload = gen._webhook_payload(report)
+
+        assert "DATA PIPELINE ISSUE" in payload["text"]
+        assert "FUTU venue connection is DOWN" in payload["text"]
+
+    def test_webhook_payload_generic_includes_data_pipeline(self) -> None:
+        redis = _make_mock_redis(venue_states={"FUTU": "UP"})
+        approved = [_make_approved_candidate("TSLA.NASDAQ")]
+        result = _make_pipeline_result(approved=approved)
+        gen = ReadinessReportGenerator(
+            redis_client=redis,
+            webhook_url="https://example.com/hook",
+        )
+        report = gen.generate(result)
+        payload = gen._webhook_payload(report)
+
+        assert "data_pipeline" in payload
+        assert payload["data_pipeline"]["venue_connection_state"]["FUTU"] == "UP"
