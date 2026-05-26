@@ -1434,3 +1434,18 @@
 - **Files Changed**: `tests/unit/actors/test_bar_resubscription.py`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 26/26 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None.
+
+## Iteration 129
+- **Task**: BUG: ORB strategy _get_et_time hardcoded to America/New_York
+- **Task ID**: sam_trader-9z3.8.9
+- **Status**: COMPLETE
+- **Decisions**: 
+  - Added `_VENUE_TO_TZ` mapping in both `orb.py` and `momentum.py`: NASDAQ/NYSE → America/New_York, HKEX → Asia/Hong_Kong.
+  - Updated `_get_et_time()` to derive timezone from `self.instrument_id.venue.value` when available, falling back to `InstrumentId.from_str(self.config.instrument_id).venue.value` when `instrument_id` is not yet set (e.g., before `on_start`).
+  - Unknown venues default to America/New_York for backward compatibility.
+  - Updated docstrings for `session_start`, `max_trade_time`, `session_hard_stop`, `session_end` to remove hardcoded "America/New_York" references.
+  - Added `TestTimezone` class with 4 tests per strategy: NASDAQ uses ET, HKEX uses HKT, fallback from config when instrument_id not set, unknown venue defaults to NY.
+  - Used `patch("sam_trader.strategies.orb.ZoneInfo")` pattern to verify timezone selection without needing to mock Cython `LiveClock.utc_now` (read-only).
+- **Files Changed**: `src/sam_trader/strategies/orb.py`, `src/sam_trader/strategies/momentum.py`, `tests/unit/strategies/test_orb.py`, `tests/unit/strategies/test_momentum.py`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 67/67 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Phase 7 bug fix complete.
