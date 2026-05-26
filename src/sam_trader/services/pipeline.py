@@ -50,7 +50,7 @@ def run_pipeline(
     schedule
         Schedule label (HH:MM).  Defaults to ``PIPELINE_SCHEDULE`` env var.
     pass_number
-        Scan pass (1=early gap, 2=trended, 3=final).  Default 1.
+        Scan pass (1=early gap, 2=trended, 3+=final).  Default 1.
 
     Returns
     -------

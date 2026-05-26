@@ -581,10 +581,25 @@ class TestCompositePrevCloseLoader:
 
 
 class TestEdgeCases:
-    def test_invalid_pass_number(self, event_loop):
+    def test_invalid_pass_number_zero(self, event_loop):
         scanner = PreMarketGapScanner(GapScannerConfig(), MagicMock())
-        with pytest.raises(ValueError, match="pass_number must be 1 or 2"):
-            event_loop.run_until_complete(scanner.scan(["A.NASDAQ"], pass_number=3))
+        with pytest.raises(ValueError, match="pass_number must be >= 1"):
+            event_loop.run_until_complete(scanner.scan(["A.NASDAQ"], pass_number=0))
+
+    def test_pass_three_runs_without_error(self, event_loop):
+        quotes = {
+            InstrumentId.from_str("A.NASDAQ"): _make_tick(
+                "A.NASDAQ", "110.00", "110.05"
+            ),
+        }
+        quote_svc = FakeQuoteService(quotes)
+        prev_loader = FakePrevCloseLoader({"A.NASDAQ": 100.0})
+        scanner = PreMarketGapScanner(GapScannerConfig(), quote_svc, prev_loader)
+        result = event_loop.run_until_complete(
+            scanner.scan(["A.NASDAQ"], pass_number=3)
+        )
+        assert len(result) == 1
+        assert result[0].pass_number == 3
 
     def test_zero_prev_close_skipped(self, event_loop):
         quotes = {

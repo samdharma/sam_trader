@@ -148,6 +148,14 @@ class TestDimensionScoring:
         scores_p2 = engine._compute_dimension_scores(cand_p2, {})
         assert scores_p2.market_context > scores_p1.market_context
 
+    def test_market_context_pass_three_bonus(self) -> None:
+        engine = AIScoringEngine()
+        cand_p2 = _make_candidate(pass_number=2)
+        cand_p3 = _make_candidate(pass_number=3)
+        scores_p2 = engine._compute_dimension_scores(cand_p2, {})
+        scores_p3 = engine._compute_dimension_scores(cand_p3, {})
+        assert scores_p3.market_context == scores_p2.market_context
+
     def test_total_score_within_range(self) -> None:
         engine = AIScoringEngine()
         cand = _make_candidate()
@@ -257,6 +265,14 @@ class TestConfidenceCalculation:
         }
         confidence = engine._compute_confidence(cand, ctx)
         assert confidence == pytest.approx(0.90, abs=0.01)  # capped
+
+    def test_confidence_pass_three_same_as_pass_two(self) -> None:
+        engine = AIScoringEngine()
+        cand_p2 = _make_candidate(cross_validated=False, pass_number=2)
+        cand_p3 = _make_candidate(cross_validated=False, pass_number=3)
+        confidence_p2 = engine._compute_confidence(cand_p2, {})
+        confidence_p3 = engine._compute_confidence(cand_p3, {})
+        assert confidence_p3 == pytest.approx(confidence_p2, abs=0.001)
 
 
 # ---------------------------------------------------------------------------

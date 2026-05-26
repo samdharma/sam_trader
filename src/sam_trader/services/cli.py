@@ -1460,15 +1460,21 @@ def watchlist(ctx: click.Context, market: str | None) -> None:
 
 @cli.command()
 @click.option("--market", default="US", help="Market to scan (US or HK).")
-@click.option("--pass", "pass_number", default=1, type=int, help="Scan pass (1 or 2).")
+@click.option(
+    "--pass",
+    "pass_number",
+    default=1,
+    type=int,
+    help="Scan pass (1=early, 2=trended, 3+=final).",
+)
 @click.pass_context
 def gapscan(ctx: click.Context, market: str, pass_number: int) -> None:
     """Run the pre-market gap scanner."""
     market = market.upper()
     if market not in ("US", "HK"):
         raise click.ClickException(f"Unknown market: {market}")
-    if pass_number not in (1, 2):
-        raise click.ClickException("pass must be 1 or 2")
+    if pass_number < 1:
+        raise click.ClickException("pass must be >= 1")
 
     # Load watchlist
     try:

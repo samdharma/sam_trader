@@ -291,6 +291,8 @@ class PreMarketGapScanner:
             Nautilus instrument ID strings.
         pass_number : int, default 1
             1 = early pass, 2 = late pass (enables trend detection).
+            Passes >= 3 are treated as final passes (trend detection enabled,
+            no Pass-1 caching).
 
         Returns
         -------
@@ -298,8 +300,8 @@ class PreMarketGapScanner:
             Filtered and sorted candidates (descending by absolute gap).
 
         """
-        if pass_number not in (1, 2):
-            raise ValueError("pass_number must be 1 or 2")
+        if pass_number < 1:
+            raise ValueError("pass_number must be >= 1")
 
         # 1. Collect real-time quotes
         quotes = await self._collect_quotes(watchlist)
@@ -313,8 +315,8 @@ class PreMarketGapScanner:
         # 4. Apply filters
         filtered = self._apply_filters(candidates)
 
-        # 5. Trend detection (Pass 2 only)
-        if pass_number == 2:
+        # 5. Trend detection (Pass 2+)
+        if pass_number >= 2:
             filtered = self._apply_trend_detection(filtered)
 
         # 6. Persist

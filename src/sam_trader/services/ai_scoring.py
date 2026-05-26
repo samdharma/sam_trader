@@ -474,7 +474,7 @@ class AIScoringEngine:
 
         # 6. Market Context (0–10)
         market_ctx = 5  # neutral base
-        if candidate.pass_number == 2:
+        if candidate.pass_number >= 2:
             market_ctx += 2
         if candidate.cross_validated:
             market_ctx += 2
@@ -502,7 +502,7 @@ class AIScoringEngine:
         base = 0.25
         if candidate.cross_validated:
             base += 0.15
-        if candidate.pass_number == 2:
+        if candidate.pass_number >= 2:
             base += 0.10
         if ctx.get("atr") is not None:
             base += 0.10
