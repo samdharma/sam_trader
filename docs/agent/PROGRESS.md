@@ -1528,3 +1528,16 @@
 - **Files Changed**: `docker/Dockerfile.futu-opend`, `docker/futu-opend/start.py`, `docker/requirements.txt`, `pyproject.toml`, `docker/docker-compose.yml`, `src/sam_trader/adapters/futu/connection.py`, `.env.example`, `docs/reference/BUILD_PHASE_2.md`, `docs/user/OPERATOR_GUIDE.md`, `tests/unit/test_futu_opend_startup.py`, `tests/unit/test_version_consistency.py` (new)
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 14/14 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: Runtime acceptance criteria (quote context ready logs, health monitor UP, bar subscription, paper-trade order) require live Futu OpenD stack with credentials and cannot be verified in this build-only environment. They are deferred to operator E2E validation per OPERATOR_GUIDE.md §4.9.
+
+## Iteration 134
+- **Task**: Futu OpenD RemoteClose disconnects every ~1 hour — causes brief data gaps
+- **Task ID**: sam_trader-9z3.3.10
+- **Status**: COMPLETE (discovered already implemented in commit 48ff8dc)
+- **Decisions**: 
+  - On starting the iteration, found the ticket had been closed ~8 minutes prior by commit `48ff8dc` with full implementation.
+  - Verified all acceptance criteria are met: keep-alive task (`query_subscription()` every 1800s), explicit `RemoteClose` handling in `_FutuDisconnectHandler`, structured disconnect/reconnect logging, configurable `keep_alive_interval_secs` via `FutuDataClientConfig` + `FUTU_KEEP_ALIVE_INTERVAL_SECS` env var, subscription restoration and bar backfill on reconnect.
+  - Integration test `test_connection_lifecycle.py::test_reconnect_after_remote_close` exists and passes.
+  - Docs updated: `BUILD_PHASE_2.md` §6.4 and `OPERATOR_GUIDE.md` §4.8.
+- **Files Changed**: None (this iteration)
+- **Validation Result**: PASS (55 targeted tests passed, ralph_validate.sh --tier=targeted green)
+- **Blockers / Notes**: Ticket was already closed by previous iteration. Ralph harness assigned a completed ticket.
