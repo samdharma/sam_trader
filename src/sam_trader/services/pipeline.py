@@ -21,9 +21,11 @@ from sam_trader.services.gap_scanner import (
     PGFillPrevCloseLoader,
     PreMarketGapScanner,
 )
+from sam_trader.services.market_calendar import MarketCalendarService
 from sam_trader.services.pipeline_executor import (
     PipelineExecutor,
     PipelineExecutorConfig,
+    PipelineResult,
 )
 from sam_trader.services.quote import _redis_client
 from sam_trader.services.quote_collector import QuoteCollectionService
@@ -95,7 +97,52 @@ def run_pipeline(
             "note": msg,
         }
 
-    # 2. Gap scan
+    # 2. Market holiday check
+    calendar = MarketCalendarService.from_env()
+    today = datetime.now(timezone.utc).date()
+    if not calendar.is_trading_day(market, today):
+        holiday_name = calendar.holiday_name(market, today) or f"{market} market holiday"
+        logger.info(
+            "%s market holiday (%s), skipping gap scan",
+            market,
+            holiday_name,
+        )
+        pipeline_result = PipelineResult(
+            approved=[],
+            rejected=[],
+            holiday_skipped=True,
+            holiday_name=holiday_name,
+            trace_id=f"pipeline-{market}-{datetime.now(timezone.utc).isoformat()}",
+        )
+        # Skip to readiness report
+        redis_client = _redis_client()
+        gen = ReadinessReportGenerator(redis_client=redis_client)
+        report = gen.generate(
+            pipeline_result,
+            bundle_path=None,
+            market=market,
+        )
+        try:
+            gen.save_audit(report)
+        except Exception as exc:
+            logger.warning("Failed to save readiness audit: %s", exc)
+        return {
+            "command": "pipeline",
+            "status": "success",
+            "market": market,
+            "schedule": schedule,
+            "candidate_count": 0,
+            "approved_count": 0,
+            "rejected_count": 0,
+            "bundles_generated": 0,
+            "bundle_path": None,
+            "regime": None,
+            "trace_id": pipeline_result.trace_id,
+            "holiday_skipped": True,
+            "holiday_name": holiday_name,
+        }
+
+    # 3. Gap scan
     market_config = wl_cfg.get(market)
     min_gap = market_config.min_gap_pct if market_config else 2.0
 
@@ -135,14 +182,14 @@ def run_pipeline(
             "error": f"Gap scan failed: {exc}",
         }
 
-    # 3. Pipeline executor
+    # 4. Pipeline executor
     executor = PipelineExecutor(config=PipelineExecutorConfig())
     pipeline_result = executor.run(
         candidates=candidates,
         trace_id=f"pipeline-{market}-{datetime.now(timezone.utc).isoformat()}",
     )
 
-    # 4. Bundle generation
+    # 5. Bundle generation
     bundle_path: str | None = None
     if pipeline_result.approved:
         try:
@@ -151,7 +198,7 @@ def run_pipeline(
         except Exception as exc:
             logger.warning("Bundle generation failed: %s", exc)
 
-    # 5. Readiness report
+    # 6. Readiness report
     redis_client = _redis_client()
     gen = ReadinessReportGenerator(redis_client=redis_client)
     report = gen.generate(

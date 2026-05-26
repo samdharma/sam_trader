@@ -147,6 +147,8 @@ class PipelineResult:
     regime_prediction: RegimePrediction | None = None
     audit_trail: list[PipelineStageRecord] = field(default_factory=list)
     trace_id: str = ""
+    holiday_skipped: bool = False
+    holiday_name: str = ""
 
 
 # ---------------------------------------------------------------------------
