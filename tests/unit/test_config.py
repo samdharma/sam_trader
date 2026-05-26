@@ -86,6 +86,7 @@ class TestSamTraderConfig:
         assert cfg.bundles_path == "config/bundles.yaml"
         assert cfg.health_monitor_market == ""
         assert cfg.bar_resub_market == ""
+        assert cfg.market_calendar_enabled is True
         assert cfg.postgres_host == "sam-postgres"
         assert cfg.postgres_port == 5432
         assert cfg.postgres_db == "sam_trader"
@@ -141,6 +142,7 @@ class TestSamTraderConfig:
         monkeypatch.setenv("RISK_BYPASS", "1")
         monkeypatch.setenv("HEALTH_MONITOR_MARKET", "US")
         monkeypatch.setenv("BAR_RESUB_MARKET", "HK")
+        monkeypatch.setenv("MARKET_CALENDAR_ENABLED", "false")
 
         cfg = SamTraderConfig.from_env()
 
@@ -184,6 +186,7 @@ class TestSamTraderConfig:
         assert cfg.risk_bypass is True
         assert cfg.health_monitor_market == "US"
         assert cfg.bar_resub_market == "HK"
+        assert cfg.market_calendar_enabled is False
 
     def test_futu_fields_present(self) -> None:
         """Test that all required Futu fields exist on the dataclass."""
@@ -230,6 +233,7 @@ class TestSamTraderConfig:
             risk_bypass=False,
             health_monitor_market="",
             bar_resub_market="",
+            market_calendar_enabled=True,
         )
 
         assert cfg.futu_enabled is True
@@ -284,6 +288,7 @@ class TestSamTraderConfig:
             risk_bypass=False,
             health_monitor_market="",
             bar_resub_market="",
+            market_calendar_enabled=True,
         )
 
         with pytest.raises(FrozenInstanceError):

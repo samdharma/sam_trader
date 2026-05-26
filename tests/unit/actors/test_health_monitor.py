@@ -90,6 +90,7 @@ class TestHealthMonitorActorConfig:
         assert cfg.futu_enabled is False
         assert cfg.ib_enabled is False
         assert cfg.market == ""
+        assert cfg.market_calendar_enabled is True
 
     def test_custom_values(self, actor_config: HealthMonitorActorConfig) -> None:
         assert actor_config.interval == 30
@@ -528,3 +529,42 @@ class TestHealthMonitorActorCalendar:
         # Holiday but no market set — legacy logic doesn't know about holidays
         ts = datetime(2024, 7, 4, 15, 0, 0, tzinfo=timezone.utc)
         assert actor._is_market_hours(ts) is True
+
+    def test_calendar_disabled_uses_legacy(self) -> None:
+        cfg = HealthMonitorActorConfig(
+            market="US",
+            market_calendar_enabled=False,
+        )
+        actor = HealthMonitorActor(cfg)
+        actor.register_base(
+            portfolio=TestComponentStubs.portfolio(),
+            msgbus=TestComponentStubs.msgbus(),
+            cache=TestComponentStubs.cache(),
+            clock=TestComponentStubs.clock(),
+        )
+        actor.on_start()
+        # Holiday but calendar disabled — legacy logic doesn't know about holidays
+        ts = datetime(2024, 7, 4, 15, 0, 0, tzinfo=timezone.utc)
+        assert actor._is_market_hours(ts) is True
+
+    def test_holiday_logs_skip_message(self) -> None:
+        cfg = HealthMonitorActorConfig(
+            market="US",
+            market_calendar_enabled=True,
+            bar_stale_threshold=300,
+        )
+        actor = HealthMonitorActor(cfg)
+        actor.register_base(
+            portfolio=TestComponentStubs.portfolio(),
+            msgbus=TestComponentStubs.msgbus(),
+            cache=TestComponentStubs.cache(),
+            clock=TestComponentStubs.clock(),
+        )
+        actor.on_start()
+        actor._calendar = MagicMock()
+        actor._calendar.market_timezone.return_value = "America/New_York"
+        actor._calendar.is_trading_day.return_value = False
+        actor._calendar.holiday_name.return_value = "Independence Day"
+        ts = datetime(2024, 7, 4, 15, 0, 0, tzinfo=timezone.utc)
+        stale = actor._find_stale_instruments(ts)
+        assert stale == []

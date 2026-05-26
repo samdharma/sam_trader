@@ -325,6 +325,7 @@ def build_trading_node() -> TradingNode:
                     "redis_password": cfg.redis_password,
                     "market_timezone": health_tz,
                     "market": cfg.health_monitor_market,
+                    "market_calendar_enabled": cfg.market_calendar_enabled,
                 },
             )
         )
@@ -346,6 +347,7 @@ def build_trading_node() -> TradingNode:
                 config={
                     "market_open_tz": bar_resub_tz,
                     "market": cfg.bar_resub_market,
+                    "market_calendar_enabled": cfg.market_calendar_enabled,
                 },
             )
         )

@@ -43,6 +43,7 @@ class SamTraderConfig:
     actor_position_snapshot_enabled: bool
     health_monitor_market: str
     bar_resub_market: str
+    market_calendar_enabled: bool
 
     # State persistence
     state_save_enabled: bool
@@ -133,6 +134,10 @@ class SamTraderConfig:
             ),
             health_monitor_market=os.environ.get("HEALTH_MONITOR_MARKET", ""),
             bar_resub_market=os.environ.get("BAR_RESUB_MARKET", ""),
+            market_calendar_enabled=os.environ.get(
+                "MARKET_CALENDAR_ENABLED", "true"
+            ).lower()
+            in ("1", "true", "yes"),
             state_save_enabled=os.environ.get("STATE_SAVE_ENABLED", "").lower()
             in ("1", "true", "yes"),
             state_load_enabled=os.environ.get("STATE_LOAD_ENABLED", "").lower()

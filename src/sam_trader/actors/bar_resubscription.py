@@ -40,6 +40,9 @@ class BarResubscriptionActorConfig(ActorConfig, frozen=True):
         Market code for calendar-aware hours ("US" or "HK").
         When set, overrides *market_open_tz*/*market_open_time*/*market_close_time*
         with the canonical calendar for that market.
+    market_calendar_enabled : bool, default True
+        Master switch for market calendar integration. When ``False``,
+        legacy weekday+fixed-hours logic is used even if *market* is set.
 
     """
 
@@ -51,6 +54,7 @@ class BarResubscriptionActorConfig(ActorConfig, frozen=True):
     stale_timeout_seconds: int = 300
     check_interval_seconds: int = 60
     market: str = ""
+    market_calendar_enabled: bool = True
 
 
 class BarResubscriptionActor(Actor):
@@ -98,7 +102,7 @@ class BarResubscriptionActor(Actor):
             self.log.info("BarResubscriptionActor: disabled")
             return
 
-        if self.config.market:
+        if self.config.market and self.config.market_calendar_enabled:
             self._calendar = MarketCalendarService()
 
         bar_types = self._resolve_bar_types()
@@ -151,6 +155,29 @@ class BarResubscriptionActor(Actor):
     def _on_market_open(self, alert: Any = None) -> None:  # noqa: ARG001
         """Evaluate bar counts and force re-subscription where needed."""
         now = self.clock.utc_now()
+        if self._calendar is not None:
+            tz = ZoneInfo(self._calendar.market_timezone(self.config.market))
+            local = now.astimezone(tz)
+            if not self._calendar.is_trading_day(self.config.market, local.date()):
+                name = self._calendar.holiday_name(self.config.market, local.date())
+                holiday_str = f" ({name})" if name else ""
+                self.log.info(
+                    f"Today is a {self.config.market} holiday{holiday_str}. "
+                    "Skipping market-open resubscription."
+                )
+                next_open = self._next_market_open(now)
+                self.clock.set_time_alert(
+                    self._market_open_timer,
+                    next_open,
+                    self._on_market_open,
+                    override=True,
+                )
+                self.log.info(
+                    f"BarResubscriptionActor: next market-open check at "
+                    f"{next_open.isoformat()}"
+                )
+                return
+
         for bt in list(self._bar_counts.keys()):
             count = self._bar_counts.get(bt, 0)
             if count == 0:
@@ -182,6 +209,16 @@ class BarResubscriptionActor(Actor):
         """Check for stale bars and force re-subscription during market hours."""
         now = self.clock.utc_now()
         if not self._is_market_hours(now):
+            if self._calendar is not None:
+                tz = ZoneInfo(self._calendar.market_timezone(self.config.market))
+                local = now.astimezone(tz)
+                if not self._calendar.is_trading_day(self.config.market, local.date()):
+                    name = self._calendar.holiday_name(self.config.market, local.date())
+                    holiday_str = f" ({name})" if name else ""
+                    self.log.info(
+                        f"Today is a {self.config.market} holiday{holiday_str}. "
+                        "Skipping stale bar checks."
+                    )
             self._reschedule_stale_check(now)
             return
 

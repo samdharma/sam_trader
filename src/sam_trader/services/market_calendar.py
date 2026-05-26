@@ -391,9 +391,40 @@ class MarketCalendarService:
             raise ValueError(f"Unsupported market: {market}")
         return _MARKET_TIMEZONE[market]
 
+    def holiday_name(self, market: str, date_val: date) -> str | None:
+        """Return the holiday name for *date_val* in *market*, or ``None``."""
+        market = market.upper()
+        if market not in self._VALID_MARKETS:
+            raise ValueError(f"Unsupported market: {market}")
+        if date_val.weekday() >= 5:
+            return None
+        return self._holiday_name_uncached(market, date_val)
+
     # ------------------------------------------------------------------
     # Internals
     # ------------------------------------------------------------------
+    def _holiday_name_uncached(self, market: str, date_val: date) -> str | None:
+        date_str = date_val.isoformat()
+        if market == "US":
+            if date_str in self._custom_holidays_us:
+                return "Custom Holiday"
+            if _HAS_HOLIDAYS:
+                us_hols = holidays.US(years=date_val.year)  # type: ignore[attr-defined]
+                if date_val in us_hols:
+                    return str(us_hols[date_val])
+            if date_str in _HARDCODED_HOLIDAYS_US:
+                return "US Holiday"
+        elif market == "HK":
+            if date_str in self._custom_holidays_hk:
+                return "Custom Holiday"
+            if _HAS_HOLIDAYS:
+                hk_hols = holidays.HK(years=date_val.year)  # type: ignore[attr-defined]
+                if date_val in hk_hols:
+                    return str(hk_hols[date_val])
+            if date_str in _HARDCODED_HOLIDAYS_HK:
+                return "HK Holiday"
+        return None
+
     def _is_holiday_uncached(self, market: str, date_val: date) -> bool:
         date_str = date_val.isoformat()
         if market == "US":

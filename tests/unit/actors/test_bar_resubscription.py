@@ -52,6 +52,7 @@ class TestBarResubscriptionActorConfig:
         assert cfg.stale_timeout_seconds == 300
         assert cfg.check_interval_seconds == 60
         assert cfg.market == ""
+        assert cfg.market_calendar_enabled is True
 
     def test_custom_values(self, actor_config: BarResubscriptionActorConfig) -> None:
         assert actor_config.market_open_time == time(9, 30)
@@ -355,6 +356,75 @@ class TestBarResubscriptionActorCalendar:
         # 2024-10-01 is HK holiday
         ts = datetime(2024, 10, 1, 2, 0, 0, tzinfo=timezone.utc)  # 10:00 HKT
         assert actor_hk._is_market_hours(ts) is False
+
+    def test_calendar_disabled_uses_legacy(self) -> None:
+        bar_type = TestDataStubs.bar_5decimal_5min_bid().bar_type
+        cfg = BarResubscriptionActorConfig(
+            bar_types=[bar_type],
+            market="US",
+            market_calendar_enabled=False,
+            enabled=True,
+        )
+        actor = BarResubscriptionActor(cfg)
+        actor.register_base(
+            portfolio=TestComponentStubs.portfolio(),
+            msgbus=TestComponentStubs.msgbus(),
+            cache=TestComponentStubs.cache(),
+            clock=TestComponentStubs.clock(),
+        )
+        actor.on_start()
+        # Holiday but calendar disabled — legacy logic doesn't know about holidays
+        ts = datetime(2024, 7, 4, 15, 0, 0, tzinfo=timezone.utc)
+        assert actor._is_market_hours(ts) is True
+
+    def test_on_market_open_skips_holiday(self) -> None:
+        bar_type = TestDataStubs.bar_5decimal_5min_bid().bar_type
+        cfg = BarResubscriptionActorConfig(
+            bar_types=[bar_type],
+            market="US",
+            enabled=True,
+        )
+        actor = BarResubscriptionActor(cfg)
+        actor.register_base(
+            portfolio=TestComponentStubs.portfolio(),
+            msgbus=TestComponentStubs.msgbus(),
+            cache=TestComponentStubs.cache(),
+            clock=TestComponentStubs.clock(),
+        )
+        actor.on_start()
+        actor._calendar = MagicMock()
+        actor._calendar.market_timezone.return_value = "America/New_York"
+        actor._calendar.is_trading_day.return_value = False
+        actor._calendar.holiday_name.return_value = "Independence Day"
+        actor._calendar.market_hours.return_value = (time(9, 30), time(16, 0))
+        actor._calendar.next_trading_day.return_value = __import__("datetime").date(
+            2024, 7, 5
+        )
+        with patch.object(actor, "_force_resubscription") as mock_force:
+            actor._on_market_open()
+            mock_force.assert_not_called()
+
+    def test_on_staleness_check_logs_holiday(self) -> None:
+        bar_type = TestDataStubs.bar_5decimal_5min_bid().bar_type
+        cfg = BarResubscriptionActorConfig(
+            bar_types=[bar_type],
+            market="US",
+            enabled=True,
+        )
+        actor = BarResubscriptionActor(cfg)
+        actor.register_base(
+            portfolio=TestComponentStubs.portfolio(),
+            msgbus=TestComponentStubs.msgbus(),
+            cache=TestComponentStubs.cache(),
+            clock=TestComponentStubs.clock(),
+        )
+        actor.on_start()
+        actor._last_bar_times[bar_type] = datetime(
+            2024, 7, 4, 10, 0, 0, tzinfo=timezone.utc
+        )
+        with patch.object(actor, "_force_resubscription") as mock_force:
+            actor._on_staleness_check()
+            mock_force.assert_not_called()
 
 
 class TestBarResubscriptionActorHK:

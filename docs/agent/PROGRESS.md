@@ -1590,3 +1590,19 @@
 - **Files Changed**: `src/sam_trader/services/market_calendar.py` (new), `src/sam_trader/services/backup.py`, `src/sam_trader/actors/health_monitor.py`, `src/sam_trader/actors/bar_resubscription.py`, `src/sam_trader/config.py`, `src/sam_trader/main.py`, `.env.example`, `tests/unit/services/test_market_calendar.py` (new), `tests/unit/services/test_backup.py`, `tests/unit/actors/test_health_monitor.py`, `tests/unit/actors/test_bar_resubscription.py`, `tests/unit/test_config.py`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 126/126 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ticket ready to close.
+
+## Iteration 136
+- **Task**: TASK: Integrate market calendar into actors for holiday-aware stale checks
+- **Task ID**: sam_trader-9z3.7.11
+- **Status**: COMPLETE
+- **Decisions**:
+  1. Added `market_calendar_enabled: bool = True` master switch to both `HealthMonitorActorConfig` and `BarResubscriptionActorConfig`. When `False`, legacy weekday+fixed-hours logic is used even if `market` is set.
+  2. Added `holiday_name()` method to `MarketCalendarService` to retrieve human-readable holiday names from the `holidays` library or hardcoded fallback.
+  3. `HealthMonitorActor._find_stale_instruments` now logs INFO: "Today is a US holiday (Memorial Day). Skipping stale bar checks." when `_calendar` is active and the current date is a holiday.
+  4. `BarResubscriptionActor._on_market_open` now skips the market-open resubscription check on holidays, rescheduling for the next trading day instead.
+  5. `BarResubscriptionActor._on_staleness_check` also logs the holiday skip message.
+  6. Added `MARKET_CALENDAR_ENABLED=true/false` (default true) env var to `SamTraderConfig`, wired through `main.py`, and documented in `.env.example`.
+  7. Early-close detection was already working via `_is_market_hours` calling `_calendar.market_hours()`, which returns adjusted close times for early-close days.
+- **Files Changed**: `src/sam_trader/services/market_calendar.py`, `src/sam_trader/actors/health_monitor.py`, `src/sam_trader/actors/bar_resubscription.py`, `src/sam_trader/config.py`, `src/sam_trader/main.py`, `.env.example`, `tests/unit/actors/test_health_monitor.py`, `tests/unit/actors/test_bar_resubscription.py`, `tests/unit/test_config.py`
+- **Validation Result**: PASS (133/133 targeted tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ticket ready to close.

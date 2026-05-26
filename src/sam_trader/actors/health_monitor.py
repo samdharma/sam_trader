@@ -45,6 +45,9 @@ class HealthMonitorActorConfig(ActorConfig, frozen=True):
         Market code for calendar-aware hours ("US" or "HK").
         When set, overrides *market_timezone*/*market_open_time*/*market_close_time*
         with the canonical calendar for that market.
+    market_calendar_enabled : bool, default True
+        Master switch for market calendar integration. When ``False``,
+        legacy weekday+fixed-hours logic is used even if *market* is set.
 
     """
 
@@ -59,6 +62,7 @@ class HealthMonitorActorConfig(ActorConfig, frozen=True):
     market_open_time: str = "09:30"
     market_close_time: str = "16:00"
     market: str = ""
+    market_calendar_enabled: bool = True
 
 
 class HealthMonitorActor(Actor):
@@ -107,7 +111,7 @@ class HealthMonitorActor(Actor):
                 )
             except Exception as exc:  # noqa: BLE001
                 self.log.warning("HealthMonitorActor: Redis connect failed: %s", exc)
-        if self.config.market:
+        if self.config.market and self.config.market_calendar_enabled:
             self._calendar = MarketCalendarService()
 
     def on_bar(self, bar: Bar) -> None:
@@ -157,6 +161,16 @@ class HealthMonitorActor(Actor):
         """Return instrument IDs that have not received a bar recently."""
         stale: list[str] = []
         if not self._is_market_hours(now):
+            if self._calendar is not None:
+                tz = ZoneInfo(self._calendar.market_timezone(self.config.market))
+                local = now.astimezone(tz)
+                if not self._calendar.is_trading_day(self.config.market, local.date()):
+                    name = self._calendar.holiday_name(self.config.market, local.date())
+                    holiday_str = f" ({name})" if name else ""
+                    self.log.info(
+                        f"Today is a {self.config.market} holiday{holiday_str}. "
+                        "Skipping stale bar checks."
+                    )
             return stale
         for instrument_id, last_ts in self._last_bar_times.items():
             age_seconds = int((now - last_ts).total_seconds())
