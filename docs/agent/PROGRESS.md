@@ -1409,3 +1409,16 @@
 - **Files Changed**: `src/sam_trader/actors/health_monitor.py`, `tests/unit/actors/test_health_monitor.py`
 - **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 19/19 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None.
+
+## Iteration 127
+- **Task**: TASK: Persist bar receipt telemetry to Redis from HealthMonitorActor
+- **Task ID**: sam_trader-9z3.7.10
+- **Status**: COMPLETE
+- **Decisions**:
+  - Added `_write_bar_telemetry_to_redis` helper called from `on_bar` that fire-and-forgets two Redis writes via `self._main_loop.create_task()`: (1) `sam:bars:last:{instrument_id}` with 24h TTL via `setex`, and (2) daily counter increment via `hincrby` on `sam:bars:count:{YYYY-MM-DD}`.
+  - Added `_write_venue_conn_to_redis` helper called from `_on_heartbeat` whenever venue connection status changes (tracked via `_last_venue_conn` dict). Writes `sam:venue:conn:{venue_name}` = `UP/DOWN:{iso_timestamp}`.
+  - All writes are fire-and-forget using the event loop captured in `on_start`, ensuring bar processing and heartbeat callbacks never block on I/O.
+  - Added `redis_registered_actor` fixture and 4 new tests: `test_on_bar_writes_redis_telemetry`, `test_on_bar_no_redis_when_not_configured`, `test_on_heartbeat_writes_venue_conn_on_change`, `test_on_heartbeat_no_venue_conn_write_when_redis_not_ready`.
+- **Files Changed**: `src/sam_trader/actors/health_monitor.py`, `tests/unit/actors/test_health_monitor.py`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targetted; 23/23 tests passed, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None.

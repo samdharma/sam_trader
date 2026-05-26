@@ -72,6 +72,7 @@ class HealthMonitorActor(Actor):
         self._last_bar_times: dict[str, datetime] = {}
         self._redis: aioredis.Redis | None = None
         self._main_loop: asyncio.AbstractEventLoop | None = None
+        self._last_venue_conn: dict[str, bool] = {}
 
     def on_start(self) -> None:
         """Set the first heartbeat alert when the actor starts."""
@@ -100,9 +101,15 @@ class HealthMonitorActor(Actor):
                 self.log.warning("HealthMonitorActor: Redis connect failed: %s", exc)
 
     def on_bar(self, bar: Bar) -> None:
-        """Track the last bar received time per instrument."""
+        """Track the last bar received time per instrument.
+
+        Also persists bar receipt telemetry to Redis for external
+        monitoring (dashboard, CLI) without parsing container logs.
+        """
         instrument_id = str(bar.bar_type.instrument_id)
-        self._last_bar_times[instrument_id] = self.clock.utc_now()
+        now = self.clock.utc_now()
+        self._last_bar_times[instrument_id] = now
+        self._write_bar_telemetry_to_redis(instrument_id, now)
 
     def _build_heartbeat_msg(
         self,
@@ -168,6 +175,10 @@ class HealthMonitorActor(Actor):
             # as evidence of a live data pipeline.
             has_any_bars = len(self._last_bar_times) > 0
             connected = account is not None or (enabled and has_any_bars)
+            prev_connected = self._last_venue_conn.get(venue_name)
+            if prev_connected != connected:
+                self._write_venue_conn_to_redis(venue_name, connected, timestamp)
+                self._last_venue_conn[venue_name] = connected
             venue_status[venue_name] = {
                 "orders": orders,
                 "positions": positions,
@@ -195,6 +206,58 @@ class HealthMonitorActor(Actor):
             self._on_heartbeat,
             override=True,
         )
+
+    def _write_bar_telemetry_to_redis(
+        self, instrument_id: str, timestamp: datetime
+    ) -> None:
+        """Persist bar receipt timestamp and daily counter to Redis.
+
+        Fire-and-forget: schedules async Redis commands via the event loop
+        captured in ``on_start`` so that ``on_bar`` never blocks.
+        """
+        if self._redis is None or self._main_loop is None:
+            return
+        date_str = timestamp.date().isoformat()
+        try:
+            self._main_loop.create_task(
+                self._redis.setex(  # type: ignore[arg-type]
+                    f"sam:bars:last:{instrument_id}",
+                    86400,
+                    timestamp.isoformat(),
+                )
+            )
+            self._main_loop.create_task(
+                self._redis.hincrby(  # type: ignore[arg-type]
+                    f"sam:bars:count:{date_str}",
+                    instrument_id,
+                    1,
+                )
+            )
+        except Exception as exc:  # noqa: BLE001
+            self.log.warning(f"HealthMonitorActor: Redis bar telemetry failed: {exc}")
+
+    def _write_venue_conn_to_redis(
+        self, venue_name: str, connected: bool, timestamp: datetime
+    ) -> None:
+        """Persist venue connection status change to Redis.
+
+        Fire-and-forget: schedules async Redis commands via the event loop
+        captured in ``on_start`` so that the heartbeat callback never blocks.
+        """
+        if self._redis is None or self._main_loop is None:
+            return
+        status_str = "UP" if connected else "DOWN"
+        try:
+            self._main_loop.create_task(
+                self._redis.set(  # type: ignore[arg-type]
+                    f"sam:venue:conn:{venue_name}",
+                    f"{status_str}:{timestamp.isoformat()}",
+                )
+            )
+        except Exception as exc:  # noqa: BLE001
+            self.log.warning(
+                f"HealthMonitorActor: Redis venue conn write failed: {exc}"
+            )
 
     def _write_heartbeat_to_redis(self, timestamp: datetime) -> None:
         """Persist heartbeat timestamp to Redis for the safety monitor.

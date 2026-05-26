@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timedelta, timezone
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from nautilus_trader.test_kit.stubs.component import TestComponentStubs
@@ -26,6 +27,19 @@ def actor_config() -> HealthMonitorActorConfig:
 
 
 @pytest.fixture
+def redis_actor_config() -> HealthMonitorActorConfig:
+    return HealthMonitorActorConfig(
+        interval=30,
+        bar_stale_threshold=300,
+        futu_enabled=True,
+        ib_enabled=True,
+        redis_host="localhost",
+        redis_port=6379,
+        redis_password="",
+    )
+
+
+@pytest.fixture
 def registered_actor(
     actor_config: HealthMonitorActorConfig,
 ) -> HealthMonitorActor:
@@ -37,6 +51,30 @@ def registered_actor(
         clock=TestComponentStubs.clock(),
     )
     return actor
+
+
+@pytest.fixture
+def redis_registered_actor(
+    redis_actor_config: HealthMonitorActorConfig,
+) -> HealthMonitorActor:
+    actor = HealthMonitorActor(redis_actor_config)
+    actor.register_base(
+        portfolio=TestComponentStubs.portfolio(),
+        msgbus=TestComponentStubs.msgbus(),
+        cache=TestComponentStubs.cache(),
+        clock=TestComponentStubs.clock(),
+    )
+    return actor
+
+
+@pytest.fixture
+def mock_redis() -> AsyncMock:
+    redis = AsyncMock()
+    redis.setex = AsyncMock(return_value=True)
+    redis.hincrby = AsyncMock(return_value=1)
+    redis.set = AsyncMock(return_value=True)
+    redis.close = AsyncMock(return_value=None)
+    return redis
 
 
 class TestHealthMonitorActorConfig:
@@ -76,6 +114,47 @@ class TestHealthMonitorActor:
         instrument_id = str(bar.bar_type.instrument_id)
         assert instrument_id in registered_actor._last_bar_times
 
+    def test_on_bar_writes_redis_telemetry(
+        self,
+        redis_registered_actor: HealthMonitorActor,
+        mock_redis: AsyncMock,
+    ) -> None:
+        async def _test() -> None:
+            with patch(
+                "sam_trader.actors.health_monitor.aioredis.Redis",
+                return_value=mock_redis,
+            ):
+                redis_registered_actor.on_start()
+                await asyncio.sleep(0.01)
+
+                bar = TestDataStubs.bar_5decimal_5min_bid()
+                redis_registered_actor.on_bar(bar)
+                await asyncio.sleep(0.01)
+
+                instrument_id = str(bar.bar_type.instrument_id)
+                mock_redis.setex.assert_awaited_once()
+                call_args = mock_redis.setex.call_args
+                assert call_args[0][0] == f"sam:bars:last:{instrument_id}"
+                assert call_args[0][1] == 86400
+                assert isinstance(call_args[0][2], str)
+
+                mock_redis.hincrby.assert_awaited_once()
+                hcall = mock_redis.hincrby.call_args
+                assert hcall[0][0].startswith("sam:bars:count:")
+                assert hcall[0][1] == instrument_id
+                assert hcall[0][2] == 1
+
+        asyncio.run(_test())
+
+    def test_on_bar_no_redis_when_not_configured(
+        self, registered_actor: HealthMonitorActor
+    ) -> None:
+        # redis_host is empty by default
+        registered_actor.on_start()
+        bar = TestDataStubs.bar_5decimal_5min_bid()
+        # Should not raise
+        registered_actor.on_bar(bar)
+
     def test_build_heartbeat_msg_format(
         self, registered_actor: HealthMonitorActor
     ) -> None:
@@ -104,6 +183,61 @@ class TestHealthMonitorActor:
         registered_actor._on_heartbeat()
         # Timer should still be registered (rescheduled with override=True)
         assert "health_monitor_heartbeat" in registered_actor.clock.timer_names
+
+    def test_on_heartbeat_writes_venue_conn_on_change(
+        self,
+        redis_registered_actor: HealthMonitorActor,
+        mock_redis: AsyncMock,
+    ) -> None:
+        async def _test() -> None:
+            with patch(
+                "sam_trader.actors.health_monitor.aioredis.Redis",
+                return_value=mock_redis,
+            ):
+                redis_registered_actor.on_start()
+                await asyncio.sleep(0.01)
+
+                # First heartbeat — both FUTU and IB transition from unknown
+                # (no bars, but account_for_venue returns None and enabled=True
+                # with no bars → connected=False based on has_any_bars logic)
+                redis_registered_actor._on_heartbeat()
+                await asyncio.sleep(0.01)
+
+                # After first heartbeat, status should be recorded for both venues
+                # Since no account and no bars, connected=False
+                mock_redis.set.assert_called()
+                venue_calls = [
+                    c
+                    for c in mock_redis.set.call_args_list
+                    if "sam:venue:conn" in c[0][0]
+                ]
+                assert len(venue_calls) == 2
+                futu_call = [c for c in venue_calls if "FUTU" in c[0][0]]
+                ib_call = [c for c in venue_calls if "IB" in c[0][0]]
+                assert len(futu_call) == 1
+                assert "DOWN" in futu_call[0][0][1]
+                assert len(ib_call) == 1
+                assert "DOWN" in ib_call[0][0][1]
+
+                # Second heartbeat — status unchanged, no new venue conn writes
+                redis_registered_actor._on_heartbeat()
+                await asyncio.sleep(0.01)
+                venue_calls_after = [
+                    c
+                    for c in mock_redis.set.call_args_list
+                    if "sam:venue:conn" in c[0][0]
+                ]
+                assert len(venue_calls_after) == 2
+
+        asyncio.run(_test())
+
+    def test_on_heartbeat_no_venue_conn_write_when_redis_not_ready(
+        self, registered_actor: HealthMonitorActor
+    ) -> None:
+        # redis_host is empty by default, so _redis is None
+        registered_actor.on_start()
+        # Should not raise
+        registered_actor._on_heartbeat()
 
     def test_build_heartbeat_msg_no_venues(
         self, registered_actor: HealthMonitorActor
