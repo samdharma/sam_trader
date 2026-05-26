@@ -12,7 +12,7 @@ import logging
 import os
 import threading
 import time
-from typing import Any
+from typing import Any, Callable
 
 import futu
 from futu import (
@@ -104,10 +104,18 @@ _DEFAULT_CONNECT_TIMEOUT = 10.0
 class _FutuDisconnectHandler(SysNotifyHandlerBase):
     """Invalidate cached contexts when Futu notifies us of a disconnect."""
 
-    def __init__(self, key: tuple[Any, ...], *, is_trade: bool = False) -> None:
+    def __init__(
+        self,
+        key: tuple[Any, ...],
+        *,
+        is_trade: bool = False,
+        on_disconnect: Callable[[str, float], None] | None = None,
+    ) -> None:
         super().__init__()
         self._key = key
         self._is_trade = is_trade
+        self._on_disconnect = on_disconnect
+        self._connect_time = time.monotonic()
 
     def on_recv_rsp(self, rsp_pb: Any) -> tuple[int, Any]:
         ret, content = super().on_recv_rsp(rsp_pb)
@@ -116,23 +124,47 @@ class _FutuDisconnectHandler(SysNotifyHandlerBase):
 
         notify_type, sub_type, data = content
         should_invalidate = False
+        reason: str | None = None
 
         if notify_type == "CONN_STATUS":
             if isinstance(data, dict):
                 if self._is_trade:
                     if not data.get("trd_logined"):
                         should_invalidate = True
+                        reason = "CONN_STATUS:trd_logined=False"
                 else:
                     if not data.get("qot_logined"):
                         should_invalidate = True
+                        reason = "CONN_STATUS:qot_logined=False"
         elif notify_type == "GTW_EVENT":
             if sub_type in ("LoginFailed", "KickedOut", "APISvrRunFailed"):
                 should_invalidate = True
+                reason = f"GTW_EVENT:{sub_type}"
+            elif sub_type == "RemoteClose":
+                should_invalidate = True
+                reason = "RemoteClose"
+            elif isinstance(data, dict) and data.get("reason") == "RemoteClose":
+                should_invalidate = True
+                reason = "RemoteClose"
         elif notify_type == "PROGRAM_STATUS":
             if sub_type == "FORCE_LOGOUT":
                 should_invalidate = True
+                reason = "FORCE_LOGOUT"
 
         if should_invalidate:
+            duration = time.monotonic() - self._connect_time
+            logger.info(
+                "futu_disconnect event=%s reason=%s duration_seconds=%.3f is_trade=%s",
+                "disconnect",
+                reason,
+                duration,
+                self._is_trade,
+            )
+            if self._on_disconnect is not None and reason is not None:
+                try:
+                    self._on_disconnect(reason, duration)
+                except Exception:
+                    logger.exception("on_disconnect callback failed")
             _invalidate_context(self._key, is_trade=self._is_trade)
 
         return ret, content
@@ -195,7 +227,10 @@ def _wait_for_ready(
 
 
 def get_cached_futu_quote_context(
-    host: str, port: int, trade_env: str
+    host: str,
+    port: int,
+    trade_env: str,
+    on_disconnect: Callable[[str, float], None] | None = None,
 ) -> OpenQuoteContext:
     """Get or create a cached ``OpenQuoteContext``.
 
@@ -218,7 +253,9 @@ def get_cached_futu_quote_context(
         _QUOTE_CACHE[key] = ctx
 
     _wait_for_ready(ctx)
-    ret = ctx.set_handler(_FutuDisconnectHandler(key, is_trade=False))
+    ret = ctx.set_handler(
+        _FutuDisconnectHandler(key, is_trade=False, on_disconnect=on_disconnect)
+    )
     if ret != RET_OK:
         logger.warning("Failed to set disconnect handler on quote context %s", key)
     opend_ver = os.environ.get("FUTU_OPEND_VER", "unknown")
@@ -258,6 +295,7 @@ def get_cached_futu_trade_context(
     port: int,
     trade_env: str,
     trd_market: str | TrdMarket = TrdMarket.US,
+    on_disconnect: Callable[[str, float], None] | None = None,
 ) -> OpenSecTradeContext:
     """Get or create a cached ``OpenSecTradeContext``.
 
@@ -298,7 +336,9 @@ def get_cached_futu_trade_context(
         _TRADE_CACHE[key] = ctx
 
     _wait_for_ready(ctx)
-    ret = ctx.set_handler(_FutuDisconnectHandler(key, is_trade=True))
+    ret = ctx.set_handler(
+        _FutuDisconnectHandler(key, is_trade=True, on_disconnect=on_disconnect)
+    )
     if ret != RET_OK:
         logger.warning("Failed to set disconnect handler on trade context %s", key)
     opend_ver = os.environ.get("FUTU_OPEND_VER", "unknown")

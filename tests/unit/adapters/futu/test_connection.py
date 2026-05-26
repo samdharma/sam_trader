@@ -255,6 +255,90 @@ class TestDisconnectHandler:
         assert ("h1", 11111, "SIMULATE") in _QUOTE_CACHE
         mock_ctx.close.assert_not_called()
 
+    @patch("sam_trader.adapters.futu.connection.OpenQuoteContext")
+    @patch(
+        "futu.quote.quote_response_handler.SysNotifyPush.unpack_rsp",
+        return_value=(RET_OK, ("GTW_EVENT", "RemoteClose", None)),
+    )
+    def test_invalidation_on_remote_close(
+        self, _mock_unpack: MagicMock, mock_cls: MagicMock
+    ) -> None:
+        mock_ctx = MagicMock()
+        mock_ctx.status = ContextStatus.READY
+        mock_cls.return_value = mock_ctx
+
+        get_cached_futu_quote_context("h1", 11111, "SIMULATE")
+        handler = mock_ctx.set_handler.call_args[0][0]
+        handler.on_recv_rsp(MagicMock())
+
+        assert ("h1", 11111, "SIMULATE") not in _QUOTE_CACHE
+        mock_ctx.close.assert_called_once()
+
+    @patch("sam_trader.adapters.futu.connection.OpenQuoteContext")
+    @patch(
+        "futu.quote.quote_response_handler.SysNotifyPush.unpack_rsp",
+        return_value=(RET_OK, ("GTW_EVENT", "Close", {"reason": "RemoteClose"})),
+    )
+    def test_invalidation_on_remote_close_in_data(
+        self, _mock_unpack: MagicMock, mock_cls: MagicMock
+    ) -> None:
+        mock_ctx = MagicMock()
+        mock_ctx.status = ContextStatus.READY
+        mock_cls.return_value = mock_ctx
+
+        get_cached_futu_quote_context("h1", 11111, "SIMULATE")
+        handler = mock_ctx.set_handler.call_args[0][0]
+        handler.on_recv_rsp(MagicMock())
+
+        assert ("h1", 11111, "SIMULATE") not in _QUOTE_CACHE
+        mock_ctx.close.assert_called_once()
+
+    @patch("sam_trader.adapters.futu.connection.OpenQuoteContext")
+    @patch(
+        "futu.quote.quote_response_handler.SysNotifyPush.unpack_rsp",
+        return_value=(RET_OK, ("GTW_EVENT", "RemoteClose", None)),
+    )
+    def test_remote_close_invokes_callback(
+        self, _mock_unpack: MagicMock, mock_cls: MagicMock
+    ) -> None:
+        mock_ctx = MagicMock()
+        mock_ctx.status = ContextStatus.READY
+        mock_cls.return_value = mock_ctx
+
+        callback = MagicMock()
+        get_cached_futu_quote_context("h1", 11111, "SIMULATE", on_disconnect=callback)
+        handler = mock_ctx.set_handler.call_args[0][0]
+        handler.on_recv_rsp(MagicMock())
+
+        callback.assert_called_once()
+        args = callback.call_args[0]
+        assert args[0] == "RemoteClose"
+        assert isinstance(args[1], float)
+        assert args[1] >= 0.0
+
+    @patch("sam_trader.adapters.futu.connection.OpenQuoteContext")
+    @patch(
+        "futu.quote.quote_response_handler.SysNotifyPush.unpack_rsp",
+        return_value=(RET_OK, ("GTW_EVENT", "RemoteClose", None)),
+    )
+    def test_remote_close_logs_structured(
+        self,
+        _mock_unpack: MagicMock,
+        mock_cls: MagicMock,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        mock_ctx = MagicMock()
+        mock_ctx.status = ContextStatus.READY
+        mock_cls.return_value = mock_ctx
+
+        with caplog.at_level(logging.INFO):
+            get_cached_futu_quote_context("h1", 11111, "SIMULATE")
+            handler = mock_ctx.set_handler.call_args[0][0]
+            handler.on_recv_rsp(MagicMock())
+
+        assert "futu_disconnect" in caplog.text
+        assert "reason=RemoteClose" in caplog.text
+
 
 class TestCloseFutuContexts:
     @patch("sam_trader.adapters.futu.connection.OpenQuoteContext")

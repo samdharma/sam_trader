@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from typing import Any
 
 from futu import RET_OK, ContextStatus, OpenQuoteContext, SubType
@@ -121,6 +122,7 @@ class FutuLiveDataClient(LiveMarketDataClient):
         self._quote_ctx = client
         self._queue: asyncio.Queue[Any] = asyncio.Queue()
         self._push_task: asyncio.Task | None = None
+        self._keep_alive_task: asyncio.Task | None = None
         self._subscription_manager = subscription_manager
 
         # Subscription tracking for reconnection restoration
@@ -131,6 +133,11 @@ class FutuLiveDataClient(LiveMarketDataClient):
 
         # Push handlers registered on the quote context
         self._handlers: list[Any] = []
+
+        # Disconnect / reconnect metrics
+        self._connect_time: float | None = None
+        self._disconnect_time: float | None = None
+        self._disconnect_reason: str | None = None
 
     # -----------------------------------------------------------------------
     # Connection lifecycle
@@ -147,7 +154,22 @@ class FutuLiveDataClient(LiveMarketDataClient):
                 self._config.host,
                 self._config.port,
                 self._config.trd_env,
+                on_disconnect=self._on_futu_disconnect,
             )
+
+        now = time.monotonic()
+        self._connect_time = now
+
+        # Log reconnect metrics if this is a reconnect
+        if self._disconnect_time is not None:
+            reconnect_seconds = now - self._disconnect_time
+            reason = self._disconnect_reason or "unknown"
+            self._log.info(
+                f"futu_reconnect event=reconnect reason={reason} "
+                f"reconnect_time_seconds={reconnect_seconds:.3f}"
+            )
+            self._disconnect_time = None
+            self._disconnect_reason = None
 
         # Pre-load instruments so strategies can find them on start
         if self._instrument_provider is not None:
@@ -178,7 +200,12 @@ class FutuLiveDataClient(LiveMarketDataClient):
         # Backfill historical bars for restored bar subscriptions
         await self._backfill_bars()
 
+        # Start keep-alive task to prevent RemoteClose idle timeout
+        self._start_keep_alive()
+
     async def _disconnect(self) -> None:
+        self._stop_keep_alive()
+
         if self._push_task is not None and not self._push_task.done():
             self._push_task.cancel()
             try:
@@ -194,6 +221,8 @@ class FutuLiveDataClient(LiveMarketDataClient):
                 self._log.exception(f"Error unsubscribing all on disconnect: {e}", e)
             self._clear_handlers()
             self._quote_ctx = None
+
+        self._disconnect_time = time.monotonic()
 
     # -----------------------------------------------------------------------
     # Push loop
@@ -501,6 +530,56 @@ class FutuLiveDataClient(LiveMarketDataClient):
                     self._handle_data(bar)
         except Exception as e:
             self._log.exception(f"Request bars failed for {bar_type}: {e}", e)
+
+    # -----------------------------------------------------------------------
+    # Keep-alive
+    # -----------------------------------------------------------------------
+
+    def _start_keep_alive(self) -> None:
+        interval = getattr(self._config, "keep_alive_interval_secs", 1800)
+        if interval <= 0:
+            return
+        self._keep_alive_task = self._loop.create_task(
+            self._run_keep_alive(interval),
+            name="futu_keep_alive",
+        )
+
+    def _stop_keep_alive(self) -> None:
+        if self._keep_alive_task is not None and not self._keep_alive_task.done():
+            self._keep_alive_task.cancel()
+        self._keep_alive_task = None
+
+    async def _run_keep_alive(self, interval_secs: int) -> None:
+        """Periodically call query_subscription() to keep the connection alive."""
+        try:
+            while True:
+                await asyncio.sleep(interval_secs)
+                if (
+                    self._quote_ctx is not None
+                    and self._quote_ctx.status == ContextStatus.READY
+                ):
+                    try:
+                        ret, _data = self._quote_ctx.query_subscription()
+                        if ret == RET_OK:
+                            self._log.debug("Keep-alive query_subscription succeeded")
+                        else:
+                            self._log.warning("Keep-alive query_subscription failed")
+                    except Exception as e:
+                        self._log.warning(f"Keep-alive query_subscription error: {e}")
+                else:
+                    self._log.debug("Keep-alive skipped: context not ready")
+        except asyncio.CancelledError:
+            self._log.debug("Keep-alive task cancelled")
+            raise
+
+    def _on_futu_disconnect(self, reason: str, duration_seconds: float) -> None:
+        """Callback from _FutuDisconnectHandler on Futu disconnect."""
+        self._disconnect_time = time.monotonic()
+        self._disconnect_reason = reason
+        self._log.info(
+            f"futu_disconnect event=client_disconnect reason={reason} "
+            f"connection_duration_seconds={duration_seconds:.3f}"
+        )
 
     # -----------------------------------------------------------------------
     # Helpers

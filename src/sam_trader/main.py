@@ -159,7 +159,8 @@ def build_trading_node() -> TradingNode:
                 trd_env=cfg.futu_trd_env,
                 trd_market=cfg.futu_trd_market,
                 load_ids=futu_load_ids,
-                routing=RoutingConfig(venues={"NASDAQ", "NYSE", "HKEX"}),
+                keep_alive_interval_secs=cfg.futu_keep_alive_interval_secs,
+                routing=RoutingConfig(venues=frozenset({"NASDAQ", "NYSE", "HKEX"})),
             )
 
             exec_clients["FUTU"] = FutuExecClientConfig(
@@ -296,7 +297,9 @@ def build_trading_node() -> TradingNode:
 
     if cfg.actor_health_enabled:
         # Quick-fix: use HK timezone when trading HK market
-        health_tz = "Asia/Hong_Kong" if cfg.futu_trd_market == "HK" else "America/New_York"
+        health_tz = (
+            "Asia/Hong_Kong" if cfg.futu_trd_market == "HK" else "America/New_York"
+        )
         actors.append(
             ImportableActorConfig(
                 actor_path="sam_trader.actors.health_monitor:HealthMonitorActor",
@@ -319,7 +322,9 @@ def build_trading_node() -> TradingNode:
             "sam_trader.actors.bar_resubscription:BarResubscriptionActorConfig"
         )
         # Quick-fix: use HK timezone when trading HK market
-        bar_resub_tz = "Asia/Hong_Kong" if cfg.futu_trd_market == "HK" else "America/New_York"
+        bar_resub_tz = (
+            "Asia/Hong_Kong" if cfg.futu_trd_market == "HK" else "America/New_York"
+        )
         actors.append(
             ImportableActorConfig(
                 actor_path=bar_resub_actor,

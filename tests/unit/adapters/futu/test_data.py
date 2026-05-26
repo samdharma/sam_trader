@@ -321,7 +321,9 @@ class TestConnectDisconnect:
             mock_get.return_value = mock_fresh
             event_loop.run_until_complete(client._connect())
 
-        mock_get.assert_called_once_with("test-host", 11111, "SIMULATE")
+        mock_get.assert_called_once_with(
+            "test-host", 11111, "SIMULATE", on_disconnect=client._on_futu_disconnect
+        )
         assert client._quote_ctx is mock_fresh
         mock_stale.close.assert_called_once()
 
@@ -362,6 +364,51 @@ class TestConnectDisconnect:
 
         assert len(handled) == 1
         assert handled[0] == test_item
+        event_loop.run_until_complete(client._disconnect())
+
+    def test_keep_alive_task_starts_on_connect(
+        self, event_loop, make_client, mock_quote_ctx
+    ):
+        client = make_client(quote_ctx=mock_quote_ctx)
+        event_loop.run_until_complete(client._connect())
+
+        assert client._keep_alive_task is not None
+        assert not client._keep_alive_task.done()
+        event_loop.run_until_complete(client._disconnect())
+
+    def test_keep_alive_task_cancelled_on_disconnect(
+        self, event_loop, make_client, mock_quote_ctx
+    ):
+        client = make_client(quote_ctx=mock_quote_ctx)
+        event_loop.run_until_complete(client._connect())
+        task = client._keep_alive_task
+        assert task is not None
+
+        event_loop.run_until_complete(client._disconnect())
+
+        assert task.cancelled() or task.done()
+        assert client._keep_alive_task is None
+
+    def test_reconnect_metrics_after_disconnect(
+        self, event_loop, make_client, mock_quote_ctx, caplog
+    ):
+        client = make_client(quote_ctx=mock_quote_ctx)
+        event_loop.run_until_complete(client._connect())
+        event_loop.run_until_complete(client._disconnect())
+
+        # Simulate a disconnect callback firing
+        client._on_futu_disconnect("RemoteClose", 3600.0)
+        assert client._disconnect_reason == "RemoteClose"
+
+        with patch(
+            "sam_trader.adapters.futu.data.get_cached_futu_quote_context"
+        ) as mock_get:
+            mock_get.return_value = mock_quote_ctx
+            event_loop.run_until_complete(client._connect())
+
+        assert client._connect_time is not None
+        assert client._disconnect_time is None
+        assert client._disconnect_reason is None
         event_loop.run_until_complete(client._disconnect())
 
 

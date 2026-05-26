@@ -237,6 +237,35 @@ On reconnect:
 
 Subscriptions unused for 60 seconds are auto-released. Bundle-flagged instruments are exempt.
 
+### 6.4 Keep-Alive and Reconnect Resilience
+
+**Problem:** Futu OpenD enforces an idle timeout of ~3600s. During pre-market hours with no live data, the connection is closed with `reason=RemoteClose`.
+
+**Solution:**
+
+1. **Keep-alive task** (`FutuLiveDataClient._run_keep_alive`):
+   - asyncio task inside `LiveMarketDataClient`, not a separate thread
+   - Calls `OpenQuoteContext.query_subscription()` every `keep_alive_interval_secs`
+   - Default interval: 1800s (configurable via `FutuDataClientConfig.keep_alive_interval_secs`)
+   - Skips when context is not `READY`
+
+2. **RemoteClose handling** (`_FutuDisconnectHandler.on_recv_rsp`):
+   - Explicitly detects `notify_type="GTW_EVENT"` with `sub_type="RemoteClose"`
+   - Also checks `data.get("reason") == "RemoteClose"` for robustness
+   - Invalidates cached context immediately
+
+3. **Structured disconnect logging**:
+   - `_FutuDisconnectHandler` logs: `event=disconnect reason=<reason> duration_seconds=<float> is_trade=<bool>`
+   - `FutuLiveDataClient._on_futu_disconnect()` stores `_disconnect_time` and `_disconnect_reason`
+   - On reconnect, `_connect()` logs: `event=reconnect reason=<reason> reconnect_time_seconds=<float>`
+
+4. **Reconnect recovery** (in `FutuLiveDataClient._connect()`):
+   - Fetches fresh context from shared cache if old one is stale
+   - Re-pushes pre-loaded instruments to Nautilus cache via `self._handle_data(instrument)`
+   - Restores all tracked subscriptions (`_restore_subscriptions()`)
+   - Backfills historical bars (`_backfill_bars()`)
+   - Restarts keep-alive task
+
 ---
 
 ## 7. Symbology Mapping

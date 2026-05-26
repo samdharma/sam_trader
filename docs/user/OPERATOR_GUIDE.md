@@ -396,7 +396,55 @@ docker exec sam-services sam logs sam-futu-opend
 docker exec sam-services sam logs sam-postgres
 ```
 
-### 4.8 False CONNECTIVITY_LOSS in SIMULATE Mode
+### 4.8 Futu OpenD RemoteClose — Normal Idle Timeout
+
+**Symptoms:**
+- Trader logs show: `on_disconnect: Disconnected: conn=... reason=RemoteClose msg=`
+- Reconnection succeeds within ~7 seconds
+- Brief data gap of a few seconds during pre-market hours
+
+**Root cause:** Futu OpenD enforces an idle timeout of approximately 3600 seconds.
+During pre-market hours with no live market data, the connection appears idle and
+OpenD severs it with `RemoteClose`.
+
+**This is expected behavior.** SAM Trader handles it automatically:
+
+1. **Keep-alive** — `FutuLiveDataClient` sends a lightweight `query_subscription()`
+   every `keep_alive_interval_secs` (default: 1800s, configurable via
+   `FUTU_KEEP_ALIVE_INTERVAL_SECS` env var).
+2. **Explicit handling** — `_FutuDisconnectHandler` detects `RemoteClose` and
+   invalidates the cached context immediately.
+3. **Structured logging** — every disconnect logs `reason`,
+   `connection_duration_seconds`, and `reconnect_time_seconds`.
+4. **Auto-recovery** — on reconnect, instruments are re-pushed to the Nautilus
+   cache and all subscriptions are restored.
+
+**Operator action:** None required. If you see `RemoteClose` more than once per
+hour, check:
+
+```bash
+# Verify keep-alive interval
+docker exec sam-trader env | grep FUTU_KEEP_ALIVE_INTERVAL_SECS
+
+# Expected: FUTU_KEEP_ALIVE_INTERVAL_SECS=1800 (or lower)
+# If unset, the default 1800s applies.
+```
+
+**To reduce the interval (e.g., 900s for very quiet pre-market):**
+
+Edit `.env`:
+```bash
+FUTU_KEEP_ALIVE_INTERVAL_SECS=900
+```
+
+Then apply during the next maintenance window:
+```bash
+docker exec sam-services sam apply
+```
+
+---
+
+### 4.9 False CONNECTIVITY_LOSS in SIMULATE Mode
 
 If the safety monitor (`sam safety-monitor`) reports `CONNECTIVITY_LOSS` but
 bars and quotes are flowing in the trader logs, the likely cause is a Redis
@@ -501,7 +549,7 @@ docker exec sam-services sam <command>
 
 ---
 
-### 4.9 SHA Handshake Failure — `proto_id:1001 check sha error`
+### 4.10 SHA Handshake Failure — `proto_id:1001 check sha error`
 
 **Symptoms:**
 - `sam-trader` logs show: `init connect fail: conn=0(1) msg=proto_id:1001 conn_id:0 check sha error!`

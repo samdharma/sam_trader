@@ -73,6 +73,7 @@ class TestSamTraderConfig:
         assert cfg.futu_trd_env == "SIMULATE"
         assert cfg.futu_trd_market == "US"
         assert cfg.futu_unlock_pwd_md5 == ""
+        assert cfg.futu_keep_alive_interval_secs == 1800
         assert cfg.actor_bar_resub_enabled is False
         assert cfg.actor_journal_enabled is False
         assert cfg.actor_health_enabled is False
@@ -113,6 +114,7 @@ class TestSamTraderConfig:
         monkeypatch.setenv("FUTU_TRD_ENV", "REAL")
         monkeypatch.setenv("FUTU_TRD_MARKET", "HK")
         monkeypatch.setenv("FUTU_UNLOCK_PWD_MD5", "abc123")
+        monkeypatch.setenv("FUTU_KEEP_ALIVE_INTERVAL_SECS", "900")
         monkeypatch.setenv("ACTOR_BAR_RESUB_ENABLED", "true")
         monkeypatch.setenv("ACTOR_JOURNAL_ENABLED", "true")
         monkeypatch.setenv("ACTOR_HEALTH_ENABLED", "true")
@@ -153,6 +155,7 @@ class TestSamTraderConfig:
         assert cfg.futu_trd_env == "REAL"
         assert cfg.futu_trd_market == "HK"
         assert cfg.futu_unlock_pwd_md5 == "abc123"
+        assert cfg.futu_keep_alive_interval_secs == 900
         assert cfg.actor_bar_resub_enabled is True
         assert cfg.actor_journal_enabled is True
         assert cfg.actor_health_enabled is True
@@ -194,6 +197,7 @@ class TestSamTraderConfig:
             futu_trd_env="SIMULATE",
             futu_trd_market="US",
             futu_unlock_pwd_md5="",
+            futu_keep_alive_interval_secs=1800,
             actor_bar_resub_enabled=False,
             actor_journal_enabled=False,
             actor_health_enabled=False,
@@ -245,6 +249,7 @@ class TestSamTraderConfig:
             futu_trd_env="SIMULATE",
             futu_trd_market="US",
             futu_unlock_pwd_md5="",
+            futu_keep_alive_interval_secs=1800,
             actor_bar_resub_enabled=False,
             actor_journal_enabled=False,
             actor_health_enabled=False,

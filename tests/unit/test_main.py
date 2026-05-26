@@ -77,6 +77,7 @@ class TestFutuFactoryWiring:
         monkeypatch.setenv("FUTU_TRD_ENV", "REAL")
         monkeypatch.setenv("FUTU_TRD_MARKET", "HK")
         monkeypatch.setenv("FUTU_UNLOCK_PWD_MD5", "deadbeef")
+        monkeypatch.setenv("FUTU_KEEP_ALIVE_INTERVAL_SECS", "900")
         monkeypatch.setenv("IB_ENABLED", "false")
         monkeypatch.setenv("BUNDLES_PATH", "config/nonexistent_bundles.yaml")
         monkeypatch.setenv("STATE_SAVE_ENABLED", "false")
@@ -99,6 +100,7 @@ class TestFutuFactoryWiring:
             assert data_cfg.port == 22222
             assert data_cfg.trd_env == "REAL"
             assert data_cfg.trd_market == "HK"
+            assert data_cfg.keep_alive_interval_secs == 900
             assert exec_cfg.host == "test-futu-host"
             assert exec_cfg.port == 22222
             assert exec_cfg.trd_env == "REAL"
