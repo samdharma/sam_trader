@@ -1,5 +1,14 @@
 > **Note: see first-entry Iteration 20 for Phase 2 config dataclasses.**
 
+## Iteration 106
+- **Task**: BUG: Exec client uses hardcoded FUTU-1 account ID, ignores FUTU_ACCOUNT_ID — all HK orders rejected
+- **Task ID**: sam_trader-48c
+- **Status**: COMPLETE
+- **Decisions**: Four root causes fixed: (1) factories.py hardcoded AccountId(FUTU-{config.client_id}) → FUTU-1, now reads FUTU_ACCOUNT_ID env var; (2) execution.py _register_venue_account_aliases compared against hardcoded AccountId("FUTU-001") which never matched FUTU-1 — zero-padding mismatch prevented discovered accounts from being applied; (3) docker-compose.yml didn't forward FUTU_ACCOUNT_ID to sam-trader (only to sam-futu-opend); (4) config.py never consumed FUTU_ACCOUNT_ID env var. Fixed by: factories reads os.environ.get("FUTU_ACCOUNT_ID") with fallback to config.client_id; execution stores _initial_account_id at __init__ and uses it for discovery comparison; docker-compose adds FUTU_ACCOUNT_ID forwarding; config.py adds futu_account_id field. Added 5 unit tests (3 factory, 2 execution discovery).
+- **Files Changed**: `docker/docker-compose.yml`, `src/sam_trader/adapters/futu/execution.py`, `src/sam_trader/adapters/futu/factories.py`, `src/sam_trader/config.py`, `tests/unit/adapters/futu/test_execution.py`, `tests/unit/adapters/futu/test_factories.py`
+- **Validation Result**: PASS (RALPH_GATE_PASSED — 40/40 tests, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: Pre-existing broken test_kill_switch_subscriber.py (missing 4 SamTraderConfig fields before this change). Not caused by this fix.
+
 ## Iteration 105
 - **Task**: BUG: sam-services health check fails despite dashboard responding on :8080
 - **Task ID**: sam_trader-9z3.9.27
