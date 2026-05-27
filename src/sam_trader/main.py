@@ -15,6 +15,7 @@ from nautilus_trader.config import RoutingConfig
 from nautilus_trader.live.config import LiveRiskEngineConfig, TradingNodeConfig
 from nautilus_trader.live.node import TradingNode
 from nautilus_trader.model.identifiers import InstrumentId, Symbol, Venue
+from nautilus_trader.trading.config import ImportableControllerConfig
 
 from sam_trader.bundle_loader import (
     BundleLoaderError,
@@ -561,6 +562,26 @@ def build_trading_node() -> TradingNode:
         )
         logger.info("PositionSnapshotActor registered")
 
+    # --- Phase 7 DM: BundleController ---
+    controller: ImportableControllerConfig | None = None
+    if cfg.actor_controller_enabled:
+        controller = ImportableControllerConfig(
+            controller_path=(
+                "sam_trader.controllers.bundle_controller:BundleController"
+            ),
+            config_path=(
+                "sam_trader.controllers.bundle_controller:BundleControllerConfig"
+            ),
+            config={
+                "redis_host": cfg.redis_host,
+                "redis_port": cfg.redis_port,
+                "redis_password": cfg.redis_password,
+                "bundles_path": cfg.bundles_path,
+                "market": cfg.market if cfg.market else "",
+            },
+        )
+        logger.info("BundleController registered (market=%s)", cfg.market or "none")
+
     # Guard: prevent stale order replay when no execution clients exist.
     # If the broker is disconnected, strategies may have generated orders
     # that were saved to Redis. Loading them without an exec client would
@@ -586,6 +607,7 @@ def build_trading_node() -> TradingNode:
         data_clients=data_clients,
         exec_clients=exec_clients,
         risk_engine=risk_config,
+        controller=controller,
         actors=actors,
         strategies=strategies,
     )

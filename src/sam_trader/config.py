@@ -86,6 +86,7 @@ class SamTraderConfig:
     market: str = ""
     market_config: MarketConfig | None = None
     futu_routing_venues: list[str] = field(default_factory=list)
+    actor_controller_enabled: bool = False
 
     @classmethod
     def from_env(cls) -> SamTraderConfig:
@@ -242,6 +243,10 @@ class SamTraderConfig:
             bar_resub_market=bar_resub_val,
             market_calendar_enabled=os.environ.get(
                 "MARKET_CALENDAR_ENABLED", "true"
+            ).lower()
+            in ("1", "true", "yes"),
+            actor_controller_enabled=os.environ.get(
+                "ACTOR_CONTROLLER_ENABLED", ""
             ).lower()
             in ("1", "true", "yes"),
             market=market,

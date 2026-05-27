@@ -19,6 +19,7 @@ class EchoStrategyConfig(StrategyConfig, frozen=True):  # type: ignore[call-arg]
 
     instrument_id: str
     bar_type: str
+    market: str = "US"
     futu_code: str = ""
     venue: str = ""
     bundle_id: str = "unknown"

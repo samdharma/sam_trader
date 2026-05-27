@@ -1867,3 +1867,12 @@
 - **Files Changed**: src/sam_trader/actors/health_monitor.py, src/sam_trader/main.py, tests/unit/actors/test_health_monitor.py
 - **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 37/37 tests passed, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ticket closed.
+
+## Iteration 140
+- **Task**: P7-DM: BundleController — Nautilus Controller for dynamic strategy lifecycle
+- **Task ID**: sam_trader-9z3.8.12
+- **Status**: COMPLETE
+- **Decisions**: Created `BundleController(Controller)` subclass with `BundleControllerConfig(ActorConfig)`. Methods: `load_bundle(bundle_dict)` → converts dict to `ImportableStrategyConfig` via `_load_bundle()` → `create_strategy_from_config(start=True)`. `unload_bundle(strategy_id)` → `remove_strategy_from_id()`. `reload_market(market)` → unloads all current strategies via `trader.strategies()` + stops/removes each, then loads target-market bundles from `bundles.yaml` filtered by `market` field. Redis pub/sub via threaded asyncio listener on `sam:bundle:load` and `sam:bundle:unload` channels. All Nautilus log calls use f-strings (Cython Logger single-arg requirement). Config stored in `_active_market` instance var (not mutated on frozen config). Wired via `ImportableControllerConfig(config_path, controller_path, config)` into `main.py` → `TradingNodeConfig.controller`. New `actor_controller_enabled` env var (default False) in `SamTraderConfig`. Added `market` field to `EchoStrategyConfig` to fix pre-existing `msgspec.ValidationError` from bundle loader's `config.setdefault("market")`.
+- **Files Changed**: `src/sam_trader/controllers/__init__.py` (new), `src/sam_trader/controllers/bundle_controller.py` (new), `src/sam_trader/config.py`, `src/sam_trader/main.py`, `src/sam_trader/strategies/test_echo.py`, `tests/unit/controllers/__init__.py` (new), `tests/unit/controllers/test_bundle_controller.py` (new, 32 tests)
+- **Validation Result**: PASS (RALPH_GATE_PASSED — 32/32 targeted tests, 91/91 extended tests with config+main, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ticket ready to close.
