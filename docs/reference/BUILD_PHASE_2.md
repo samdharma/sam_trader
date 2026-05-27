@@ -415,3 +415,30 @@ data_clients["FUTU"] = FutuDataClientConfig(
 ---
 
 *Last updated: 2026-05-25 — Added Post-Deployment Fixes from sandbox paper-trading*
+
+---
+
+## Dynamic Multi-Market Extensions (Planned)
+
+> **Status:** Planning — 1 ticket  
+> **Plan:** `docs/user/DYNAMIC_MULTI_MARKET_PLAN.md`
+
+### Tickets
+
+| Ticket ID | Title | Deps |
+|-----------|-------|------|
+| `sam_trader-9z3.3.11` | Futu: verify per-market connection context coexistence | 9z3.2.5 |
+
+### Design Notes
+- Verification ticket. Connection caching already keys trade contexts by `trd_market` (see `connection.py` `get_cached_futu_trade_context` which uses `(host, port, trade_env, market_str)` cache key)
+- Quote contexts keyed by `(host, port, trade_env)` — verify this is sufficient for multi-market (different markets share same quote context since OpenD serves all markets from one connection)
+- Integration test: connect to HK market → verify HK instruments resolve. Connect to US market → verify US instruments resolve
+- No code changes expected — verification + integration test only
+- If issues found, fix in this ticket
+
+### Nautilus Types / Patterns Used
+- `OpenQuoteContext` — single connection serves all markets
+- `OpenSecTradeContext` — per-market trade context (filtered by `TrdMarket`)
+- Existing `get_cached_futu_quote_context()` / `get_cached_futu_trade_context()`
+
+*Last updated: 2026-05-27 — Dynamic Multi-Market extensions planned*

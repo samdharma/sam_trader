@@ -333,3 +333,53 @@ at init time and reused.
 ---
 
 *Last updated: 2026-05-25 — Added Known Issues from sandbox deployment*
+
+---
+
+## Dynamic Multi-Market Extensions (Planned)
+
+> **Status:** Planning — 4 tickets  
+> **Plan:** `docs/user/DYNAMIC_MULTI_MARKET_PLAN.md`
+
+### Tickets
+
+| Ticket ID | Title | Deps |
+|-----------|-------|------|
+| `sam_trader-9z3.7.18` | MarketSchedulerActor: LiveClock alerts for market-switch + maintenance window | 9z3.2.5 |
+| `sam_trader-9z3.7.17` | ReadinessCheckerActor: SOD operational readiness check | 9z3.2.5 |
+| `sam_trader-9z3.7.19` | EndOfDayReporterActor: EOD aggregated report | 9z3.2.5 |
+| `sam_trader-9z3.7.16` | Actor timezone refactor: existing actors use MarketConfig | 9z3.2.5, 9z3.7.18 |
+
+### Design Notes — MarketSchedulerActor
+- Nautilus `Actor` subclass using `LiveClock.set_time_alert()`
+- Alerts: HK close (16:00 HKT daily), US close (04:00 HKT daily)
+- Pre-switch health gate: zero open positions, brokers healthy, target market is trading day
+- On trigger: `self.trader.save()`, publish `sam:market_switch_request {target, timestamp}` to Redis
+- Publishes `sam:maintenance_window` open (04:00 HKT) / close (07:00 HKT) events
+- Weekend/holiday: skips all alerts (via `MarketCalendarService.is_trading_day()`)
+
+### Design Notes — ReadinessCheckerActor
+- 7 checks: (1) broker connectivity, (2) QuoteTick flowing, (3) instruments resolved, (4) account margin, (5) bundles loaded, (6) Redis/PG health, (7) calendar confirms trading day
+- Output: `sam:readiness:{market}:{date}` JSON in Redis with per-check pass/fail
+- Triggered at `market_config.sod_readiness_time` via `LiveClock.set_time_alert()`
+
+### Design Notes — EndOfDayReporterActor
+- 6 sections: daily P&L per strategy (Redis), fills + commissions (PG), max drawdown, position summary, rejection events, health events
+- Output: `sam:eod_report:{market}:{date}` JSON in Redis + `daily_reports` PG table
+- New PG table: `daily_reports (id, market, date, report_json, created_at)`
+
+### Design Notes — Actor Timezone Refactor
+- `HealthMonitorActor` and `BarResubscriptionActor` use `cfg.market_config.session_timezone`
+- Deprecate `HEALTH_MONITOR_MARKET` and `BAR_RESUB_MARKET` env vars
+- Backward compat: if MARKET not set but legacy vars are, use legacy values
+
+### Nautilus Types / Patterns Used
+- `nautilus_trader.common.actor.Actor` base class
+- `LiveClock.set_time_alert()` for scheduled triggers (standard pattern)
+- `LiveClock.set_timer()` for periodic checks
+- `Trader.save()` for state persistence
+- `ImportableActorConfig` for wiring into `main.py`
+- `Cache` facade for Redis access
+- `DataEngine` / `ExecEngine` for connectivity checks
+
+*Last updated: 2026-05-27 — Dynamic Multi-Market extensions planned*

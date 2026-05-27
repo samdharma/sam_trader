@@ -74,7 +74,7 @@ See `docs/user/FUTU_FIRST_LOGIN.md` (created by `sam_trader-9z3.1.19`).
 docker build -f docker/Dockerfile.futu-opend -t sam-futu-opend .
 
 # Start stack
-docker compose --profile futu up -d
+docker compose up -d
 
 # Check health
 docker compose ps
@@ -89,3 +89,31 @@ docker exec sam-services python -m sam_trader.services.backup backup
 ---
 
 *Last updated: 2026-05-22*
+
+---
+
+## Dynamic Multi-Market Extensions (Planned)
+
+> **Status:** Planning — 3 tickets  
+> **Plan:** `docs/user/DYNAMIC_MULTI_MARKET_PLAN.md`
+
+### Tickets
+
+| Ticket ID | Title | Deps |
+|-----------|-------|------|
+| `sam_trader-9z3.1.25` | Remove Docker profiles — all 6 containers always-on | None |
+| `sam_trader-9z3.1.26` | Entrypoint: unconditional multi-broker wait logic | 9z3.1.25 |
+| `sam_trader-9z3.1.27` | IB Gateway: US-market-only environment label | 9z3.1.25 |
+
+### Design Notes
+- `profiles:` blocks removed from sam-futu-opend, sam-ib-gateway, sam-services
+- `docker compose up -d` starts all 6 containers (no flags)
+- Entrypoint always waits for Futu OpenD (TCP 11111) and IB Gateway (TCP 4004)
+- 120s timeout per broker; clear error on timeout
+- `IB_MARKET=US` env var added to ib-gateway for operator clarity (metadata only)
+
+### Nautilus Types / Patterns Used
+- Docker Compose health checks (L1/L2/L3 — already standardized)
+- TCP socket checks in entrypoint (already built)
+
+*Last updated: 2026-05-27 — Dynamic Multi-Market extensions planned*

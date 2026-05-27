@@ -239,6 +239,14 @@ Phase 11 ───────────────────────�
 | 0.16 | `sam_trader-9z3.1.19` | Document Futu OpenD first-time login and terminal access | task | FUTU_FIRST_LOGIN.md, questionnaire URL, telnet access, MD5 generation, troubleshooting |
 | 0.17 | `sam_trader-9z3.1.20` | Exit gate: hardened stack builds, health, monitor, backup | exit | All containers healthy within 2min, monitor detects restart, backup creates valid archive, no regression |
 
+#### Dynamic Multi-Market Extensions
+
+| # | Ticket ID | Title | Type | AC Highlights |
+|---|-----------|-------|------|---------------|
+| 0.18 | `sam_trader-9z3.1.25` | Remove Docker profiles — all 6 containers always-on | task | Remove `profiles:` blocks from futu-opend, ib-gateway, services. `docker compose up -d` starts all containers. |
+| 0.19 | `sam_trader-9z3.1.26` | Entrypoint: unconditional multi-broker wait logic | task | Always wait for Futu OpenD (TCP 11111) + IB Gateway (TCP 4004). Remove WAIT_FOR_* conditionals. 120s timeout per broker. Depends on 9z3.1.25. |
+| 0.20 | `sam_trader-9z3.1.27` | IB Gateway: US-market-only environment label | task | Add `IB_MARKET=US` to ib-gateway env. Metadata only — no functional change. Depends on 9z3.1.25. |
+
 ---
 
 ### Phase 1: Configuration & Bootstrap
@@ -253,6 +261,14 @@ Phase 11 ───────────────────────�
 | 1.2 | *(implicit)* | main.py: TradingNode bootstrap with multi-broker placeholders | task | port+enhance | Port `main.py` from v2. `build_trading_node()`. Lazy imports for Futu + IB. Feature flags. Bundle loader with graceful fail. `ImportableActorConfig` pattern for all 6 actors. `LiveRiskEngineConfig` wiring. |
 | 1.3 | *(implicit)* | Phase 1 integration test: config + bootstrap | exit | - | SamTraderConfig loads from `.env.example` defaults. `build_trading_node()` returns TradingNode without errors. `node.build()` succeeds (no clients registered). |
 | 1.4 | `sam_trader-9z3.2.1` | BUG: Remove dead `futu_account_id` field from SamTraderConfig | bug | - | `futu_account_id` read from env but never used. Field + env read removed. No runtime impact — purely dead code. |
+
+#### Dynamic Multi-Market Extensions
+
+| # | Ticket ID | Title | Type | AC Highlights |
+|---|-----------|-------|------|---------------|
+| 1.5 | `sam_trader-9z3.2.3` | MarketConfig: frozen dataclass + market_config.yaml | task | New `market_config.py` with `MarketConfig` dataclass. `config/market_config.yaml` with US/HK entries (timezone, routing, hours, pipeline times). `from_yaml()` classmethod. |
+| 1.6 | `sam_trader-9z3.2.4` | MARKET env var → derived config fields | task | `SamTraderConfig.from_env()` reads `MARKET` env var. Derives futu_trd_market, ib_enabled, routing_venues, timezone from market config. Backward compat fallback. Depends on 9z3.2.3. |
+| 1.7 | `sam_trader-9z3.2.5` | main.py: market-aware config propagation | task | Replace all hardcoded timezone ternary patterns with `cfg.market_config.session_timezone`. IB gated on `cfg.market_config.ib_enabled`. Bundle filtering by `market` field. Depends on 9z3.2.4. |
 
 ---
 
@@ -271,6 +287,12 @@ Phase 11 ───────────────────────�
 | 2.5 | `sam_trader-9z3.3.5` | FutuLiveDataClient: push-loop architecture, subscription lifecycle | task | new | `data.py`. Subclass `LiveMarketDataClient`. Push-loop, subscribe/unsubscribe, restore on reconnect, historical backfill. |
 | 2.6 | `sam_trader-9z3.3.6` | Futu subscription quota manager | task | new | `subscription_manager.py`. Per-DataType limits, priority bundles, idle release, 80%/95% thresholds. |
 | 2.7 | `sam_trader-9z3.3.7` | [EXIT] Market data subscription → QuoteTick flow | exit | - | Integration test: subscribe TSLA.NASDAQ → QuoteTick on bus within 5s → unsubscribe → quota tracking verified. |
+
+#### Dynamic Multi-Market Extensions
+
+| # | Ticket ID | Title | Type | AC Highlights |
+|---|-----------|-------|------|---------------|
+| 2.8 | `sam_trader-9z3.3.11` | Futu: verify per-market connection context coexistence | task | Integration test: HK context resolves HK instruments, US context resolves US instruments. Verify cache key includes trd_market. Depends on 9z3.2.5. |
 
 ---
 
@@ -328,6 +350,12 @@ Phase 11 ───────────────────────�
 | 5.7 | `sam_trader-9z3.6.7` | [BUG] IBKR post_only incompatibility - bracket orders rejected | bug | Adapter-level handling of Nautilus `post_only=True` default that IB doesn't support. Venue-aware order wrapper. Port fixes from v2 operational day 1 (108 rejections, 0 fills). Depends on enhance adapter (`9z3.6.3`). Blocks EXIT. |
 | 5.8 | `sam_trader-9z3.6.4` | [EXIT] Dual-venue TradingNode (Futu + IB) | exit | Integration test: both Futu + IB factories, 1 Futu bundle + 1 IB bundle, both strategies instantiated, data flows from both venues, no cross-contamination. Depends on post_only bug (`9z3.6.7`). Blocks P6 schema (`9z3.7.1`) and P6 RejectionMonitor (`9z3.7.7`). |
 
+#### Dynamic Multi-Market Extensions
+
+| # | Ticket ID | Title | Type | AC Highlights |
+|---|-----------|-------|------|---------------|
+| 5.9 | `sam_trader-9z3.6.15` | IB: conditional enable/disable via MarketConfig | task | IB factories registered only when `cfg.market_config.ib_enabled is True`. MARKET=US → IB registered. MARKET=HK → IB skipped, log INFO. Depends on 9z3.2.5. |
+
 ---
 
 ### Phase 6: Actors & State Management
@@ -347,6 +375,15 @@ Phase 11 ───────────────────────�
 | 6.7 | `sam_trader-9z3.7.8` | RealizedPnLTrackerActor: per-strategy realized P&L | task | Subscribe `OrderFilled`. FIFO matching per strategy. Persist to Redis (`sam:pnl:{strategy_id}:{date}`). Pure realized - no unrealized. Resets at 00:00 UTC. Addresses v2 ambiguous max_daily_loss. Depends on TradeJournal (`9z3.7.2`). Blocks EXIT. |
 | 6.8 | `sam_trader-9z3.7.9` | [EXIT] Actors run, fills journaled, state persisted | exit | Integration test: fill appears in PG with venue tag. HealthMonitor heartbeat. State restored from Redis. Bar subscriptions restored on reconnect. RejectionMonitor halts on streaks. RealizedPnL computed. Depends on 7.3/7.4/7.5/7.7/7.8. Blocks P7 BundleLoader (`9z3.8.1`). |
 
+#### Dynamic Multi-Market Extensions
+
+| # | Ticket ID | Title | Type | AC Highlights |
+|---|-----------|-------|------|---------------|
+| 6.9 | `sam_trader-9z3.7.18` | MarketSchedulerActor: LiveClock alerts for market-switch + maintenance window | task | LiveClock.set_time_alert() for HK close (16:00 HKT) and US close (04:00 HKT). Pre-switch health gate. Publishes market_switch_request + maintenance_window events. Depends on 9z3.2.5. |
+| 6.10 | `sam_trader-9z3.7.17` | ReadinessCheckerActor: SOD operational readiness check | task | 7 checks: broker connectivity, data flowing, instruments resolved, account status, bundles loaded, Redis/PG healthy, calendar check. Output: sam:readiness:{market}:{date} in Redis. Depends on 9z3.2.5. |
+| 6.11 | `sam_trader-9z3.7.19` | EndOfDayReporterActor: EOD aggregated report | task | 6 sections: daily P&L, fills, max drawdown, positions, rejections, health. Output: sam:eod_report:{market}:{date} in Redis + daily_reports PG table. Depends on 9z3.2.5. |
+| 6.12 | `sam_trader-9z3.7.16` | Actor timezone refactor: existing actors use MarketConfig | task | HealthMonitorActor + BarResubscriptionActor use cfg.market_config.session_timezone. Deprecate HEALTH_MONITOR_MARKET/BAR_RESUB_MARKET env vars. Depends on 9z3.2.5 + 9z3.7.18. |
+
 ---
 
 ### Phase 7: Strategy Library & Bundle System
@@ -362,6 +399,14 @@ Phase 11 ───────────────────────�
 | 7.4 | `sam_trader-9z3.8.4` | Strategy template: extracted from Orb + Momentum | task | Copy-paste starter. All hooks documented. Venue-aware `post_only=False` patterns. Depends on orb (`9z3.8.2`) + momentum (`9z3.8.3`). |
 | 7.5 | `sam_trader-9z3.8.5` | Bundle validation: schema check + backtest gate | task | Schema validation. Strategy class existence check. Backtest gate before deployment. `sam validate-bundles` CLI. Depends on loader (`9z3.8.1`). Blocks EXIT. |
 | 7.6 | `sam_trader-9z3.8.6` | [EXIT] Verify: strategy lifecycle with Futu data | exit | Integration test: OrbStrategy bundle loaded. Bar data from Futu. Breakout → bracket order → fill journaled to PG. State persists across restart. Depends on Orb/Momentum/Validation. Blocks P8 Dockerfile (`9z3.9.1`). |
+
+#### Dynamic Multi-Market Extensions
+
+| # | Ticket ID | Title | Type | AC Highlights |
+|---|-----------|-------|------|---------------|
+| 7.7 | `sam_trader-9z3.8.14` | Bundle schema: add `market` field with backward compat | task | market: str = "US" in bundle schema. Backward compat: default "US" when missing. Update bundles.example.yaml with HK examples. Depends on 9z3.2.5. |
+| 7.8 | `sam_trader-9z3.8.12` | BundleController: Nautilus Controller for dynamic strategy lifecycle | task | Subclass nautilus_trader.trading.controller.Controller. load_bundle() via create_strategy_from_config(). unload_bundle() via remove_strategy_from_id(). Redis pub/sub for bundle commands. Wire ImportableControllerConfig into main.py. Depends on 9z3.8.14 + 9z3.6.15. |
+| 7.9 | `sam_trader-9z3.8.13` | Strategy: configurable HK lunch pause | task | lunch_pause_enabled, lunch_start, lunch_end fields in OrbStrategyConfig + MomentumStrategyConfig. LiveClock alerts call self.pause()/self.resume(). Depends on 9z3.8.14. |
 
 ---
 
@@ -386,6 +431,15 @@ Phase 11 ───────────────────────�
 | **8.8** | **`sam_trader-9z3.9.8`** | **sam performance CLI: Nautilus-powered performance stats display** | task ○ | `sam performance [--strategy <id>] [--days 30] [--json]`. Reads `performance_stats` PG table. Displays: Sharpe, Sortino, CAGR, MaxDrawdown, WinRate, ProfitFactor, etc. Depends on CLI (`9z3.9.2`) + PerformanceAnalyzer (`9z3.9.11`). Blocks EXIT. |
 | 8.6 | `sam_trader-9z3.9.6` | [EXIT] Verify: all Phase 8 components, Nautilus integrations, perf stats | exit | Expanded: `docker compose --profile services up -d`. `sam status/health/backup/performance` work. PerformanceAnalyzer writes stats. PositionSnapshotActor upserts positions. LiveRiskEngine enforces rate limits. Slippage tracked in fills. Restart sam-services → sam-trader unaffected. Depends on tickets 3,4,5,7,8,9,10. Blocks P9 gapscan + regime. |
 
+#### Dynamic Multi-Market Extensions
+
+| # | Ticket ID | Title | Type | AC Highlights |
+|---|-----------|-------|------|---------------|
+| 8.7 | `sam_trader-9z3.9.28` | Restart orchestrator: market-switch docker compose restart | task | Listens on Redis sam:market_switch_request. Updates MARKET in .env, docker compose restart sam-trader. Polls sam:state_loaded. Rollback on failure. CLI: sam switch-market US|HK. Depends on 9z3.7.18 + 9z3.1.25. |
+| 8.8 | `sam_trader-9z3.9.30` | SOD readiness CLI: sam readiness command | task | sam readiness --market US|HK [--json]. Reads sam:readiness:{market}:{date} from Redis. Pass/fail table. Depends on 9z3.7.17. |
+| 8.9 | `sam_trader-9z3.9.31` | EOD report CLI: sam report command | task | sam report --market US|HK [--date YYYY-MM-DD] [--json]. Reads Redis + PG daily_reports. P&L table, fills, health, positions. Depends on 9z3.7.19. |
+| 8.10 | `sam_trader-9z3.9.29` | Market-aware cron schedules | task | US pipeline 20:30 HKT, HK pipeline 07:30 HKT. Backup 05:00 HKT. All gated on MarketCalendarService.is_trading_day(). Depends on 9z3.9.28 + 9z3.10.36. |
+
 ---
 
 ### Phase 9: Pre-Market Pipeline
@@ -409,6 +463,14 @@ Phase 11 ───────────────────────�
 | 10 | `sam_trader-9z3.10.25` | Bundle YAML Generator | task | **10th** (depends on 24) |
 | 11 | `sam_trader-9z3.10.26` | Readiness Report | task | **11th** (depends on 25) |
 | 12 | `sam_trader-9z3.10.27` | [EXIT] Pipeline E2E Validation | exit | **12th** (depends on 26) |
+
+#### Dynamic Multi-Market Extensions
+
+| # | Ticket ID | Title | Type | Ralph Order |
+|---|-----------|-------|------|-------------|
+| 13 | `sam_trader-9z3.10.37` | Dual-broker gap scanner: Futu primary + IB cross-validation | task | **13th** (depends on 9z3.6.15 + 9z3.2.5) |
+| 14 | `sam_trader-9z3.10.36` | Market-aware pipeline scheduling | task | **14th** (depends on 9z3.2.5) |
+| 15 | `sam_trader-9z3.10.35` | Pipeline → BundleController integration via Redis | task | **15th** (depends on 9z3.10.36 + 9z3.8.12) |
 
 ---
 
@@ -447,6 +509,13 @@ Phase 11 ───────────────────────�
 | 11.3 | `sam_trader-9z3.12.3` | User documentation: deploy guide, bundle guide, operator guide | task | `DEPLOY_GUIDE.md`, `BUNDLE_GUIDE.md`, `OPERATOR_GUIDE.md`. Prerequisites, daily ops, troubleshooting, incident response. Depends on wizard (`9z3.12.2`). Blocks E2E. |
 | 11.4 | `sam_trader-9z3.12.4` | [GATE] Full E2E validation: fresh deploy, Futu live, 1-hour soak | exit | Fresh macOS: `git clone` + `./deploy.sh --with-futu`. Full stack healthy. QuoteTick arrives. Order → fill → journal. Dashboard shows data. 1-hour soak test. `./deploy.sh --stop` cleans up. Depends on docs (`9z3.12.3`). Terminal gate - no blocks. |
 
+#### Dynamic Multi-Market Extensions
+
+| # | Ticket ID | Title | Type | AC Highlights |
+|---|-----------|-------|------|---------------|
+| 11.5 | `sam_trader-9z3.12.8` | deploy.sh: always-on brokers, MARKET env var, updated wizard | task | Remove --with-futu/--with-ib/--with-services flags. Wizard prompts for MARKET (auto-detect from HKT time). Depends on 9z3.1.25 + 9z3.2.4. |
+| 11.6 | `sam_trader-9z3.12.9` | [EXIT] E2E: full daily cycle simulation | exit | 15-test suite: HK open→close→US switch→US open→close→HK switch. State preservation, broker correctness, SOD/EOD, lunch pause, weekend behavior, dual-broker scanner. Depends on 9z3.12.8. |
+
 ---
 
 ## 6. Phase Dependency Summary
@@ -474,19 +543,19 @@ Phase 0 ✅ ───► Phase 1 ✅ ───► Phase 2 ✅ ───► Phase
 
 | Phase | Tickets | Type |
 |-------|---------|------|
-| Phase 0 | 17 | Foundation + Hardening |
-| Phase 1 | 3 | Config + Bootstrap |
-| Phase 2 | 7 | Futu Market Data |
+| Phase 0 | 17 + 3 DM | Foundation + Hardening (+ always-on brokers) |
+| Phase 1 | 3 + 3 DM | Config + Bootstrap (+ MarketConfig, MARKET) |
+| Phase 2 | 7 + 1 DM | Futu Market Data (+ multi-market verify) |
 | Phase 3 | 6 | Futu Execution (decomposed from 3) |
 | Phase 4 | 6 | Futu Integration |
-| Phase 5 | 8 | IBKR Re-integration (decomposed from 1; 2 bug fixes) |
-| Phase 6 | 9 | Actors + State (2 gap-remediation actors; EXIT renumbered 7.6→7.9) |
-| Phase 7 | 6 | Strategies + Bundles |
-| Phase 8 | 11 | Services Container (revised: +5 Nautilus-native integrations) |
-| Phase 9 | 12 | Pre-Market Pipeline (renumbered: sequential 10.16–10.27 matching build order) |
+| Phase 5 | 8 + 1 DM | IBKR Re-integration (+ IB conditional enable) |
+| Phase 6 | 9 + 4 DM | Actors + State (+ scheduler, readiness, EOD, tz refactor) |
+| Phase 7 | 6 + 3 DM | Strategies + Bundles (+ market field, Controller, lunch pause) |
+| Phase 8 | 11 + 4 DM | Services Container (+ orchestrator, SOD/EOD CLI, cron) |
+| Phase 9 | 12 + 3 DM | Pre-Market Pipeline (+ dual scanner, market pipeline) |
 | Phase 10 | 3 | Safety + Dashboard (simplified: no FastAPI, no new tables) |
-| Phase 11 | 4 | Deploy + E2E |
-| **Total** | **93** | (revised Phase 8: 6→11 tickets) |
+| Phase 11 | 4 + 2 DM | Deploy + E2E (+ deploy update, daily cycle E2E) |
+| **Total** | **93 + 24 = 117** | (DM = Dynamic Multi-Market extensions)
 
 ---
 

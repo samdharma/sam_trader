@@ -1,10 +1,11 @@
 # SAM Trader V3 - Architecture & Build Plan
 
-> **Status:** Active (Phases 0–11 complete)
-> **Last Updated:** 2026-05-24
+> **Status:** Active (Phases 0–11 complete; Dynamic Multi-Market extensions planned)
+> **Last Updated:** 2026-05-27
 > **Purpose:** Single source of truth for SAM Trader V3. Written for AI agents and humans.
 > **Repo:** `github.com/samdharma/sam_trader`
 > **Predecessor:** CSAM Trader V2 (`~/Trading/csam_trader/`)
+> **Dynamic Multi-Market Plan:** `docs/user/DYNAMIC_MULTI_MARKET_PLAN.md`
 
 ---
 
@@ -417,6 +418,14 @@ sam_trader/
 > **Goal:** Single-script deploy. First-run wizard. All profiles work. Full E2E gate passes.
 > **Status:** ✅ Complete (all 4 tickets closed incl EXIT 9z3.12.4)  
 > **Depends on:** Phase 10
+
+---
+
+### Dynamic Multi-Market Extensions (in progress)
+> **Goal:** Always-on brokers (Futu + IB), MARKET env var, dynamic market switching via Nautilus Controller, dual-broker gap scanner, SOD readiness checks, EOD reports, HK lunch pause, per-market config.
+> **Status:** Planned — 24 tickets across phases 0, 1, 2, 5, 6, 7, 8, 9, 11
+> **Plan:** `docs/user/DYNAMIC_MULTI_MARKET_PLAN.md`
+> **Depends on:** Phases 0–11 complete
 
 ---
 

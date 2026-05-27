@@ -174,3 +174,34 @@ from nautilus_trader.live.config import LiveRiskEngineConfig
 ---
 
 *Last updated: 2026-05-24 — Created from gap audit; Phase 1 implemented 2026-05-20*
+
+---
+
+## Dynamic Multi-Market Extensions (Planned)
+
+> **Status:** Planning — 3 tickets  
+> **Plan:** `docs/user/DYNAMIC_MULTI_MARKET_PLAN.md`
+
+### Tickets
+
+| Ticket ID | Title | Deps |
+|-----------|-------|------|
+| `sam_trader-9z3.2.3` | MarketConfig: frozen dataclass + market_config.yaml | None |
+| `sam_trader-9z3.2.4` | MARKET env var → derived config fields | 9z3.2.3 |
+| `sam_trader-9z3.2.5` | main.py: market-aware config propagation | 9z3.2.4 |
+
+### Design Notes
+- New `MarketConfig` frozen dataclass in `src/sam_trader/market_config.py`
+- New `config/market_config.yaml` with US + HK entries (timezone, routing, session hours, pipeline times)
+- `SamTraderConfig.from_env()` reads `MARKET` env var (default `US`), loads active market config
+- Derives: `futu_trd_market`, `ib_enabled`, `futu_routing_venues`, actor timezone fields
+- Backward compat: if `MARKET` not set, falls back to existing `FUTU_TRD_MARKET` + `IB_ENABLED` env vars
+- main.py: remove all hardcoded `if futu_trd_market == "HK"` timezone ternary patterns
+- Bundle filtering by `market` field — skip bundles for inactive market
+
+### Nautilus Types / Patterns Used
+- Frozen dataclass with `from_yaml()` (matches `SamTraderConfig` pattern)
+- `RoutingConfig` for per-market venue routing
+- `ImportableActorConfig` for actor timezone propagation
+
+*Last updated: 2026-05-27 — Dynamic Multi-Market extensions planned*

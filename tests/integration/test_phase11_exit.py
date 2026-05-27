@@ -26,7 +26,7 @@ DEPLOY_SH = pathlib.Path(__file__).resolve().parents[2] / "deploy.sh"
 
 @pytest.mark.integration
 class TestFreshDeployStructure:
-    """AC: Fresh macOS: git clone + ./deploy.sh --with-futu --build start."""
+    """AC: Fresh macOS: git clone + ./deploy.sh --build start."""
 
     def test_deploy_sh_executable(self) -> None:
         """deploy.sh must exist and be executable."""
@@ -34,10 +34,10 @@ class TestFreshDeployStructure:
         assert DEPLOY_SH.stat().st_mode & stat.S_IXUSR
 
     def test_deploy_sh_has_fresh_deploy_flags(self) -> None:
-        """deploy.sh must support --with-futu and --build."""
+        """deploy.sh must support --build and --tag (always-on, no --with-* needed)."""
         content = DEPLOY_SH.read_text()
-        assert "--with-futu" in content
         assert "--build" in content
+        assert "--tag" in content
 
     def test_deploy_sh_sequential_start_order(self) -> None:
         """deploy.sh starts postgres/redis first, then brokers, then trader."""
@@ -400,11 +400,11 @@ class TestCleanup:
         assert "docker compose" in content
         assert "down" in content
 
-    def test_stop_includes_all_profiles(self) -> None:
-        """deploy.sh stop should tear down profiles futu, ib, services."""
+    def test_stop_has_no_profile_flags(self) -> None:
+        """deploy.sh stop must NOT use --profile flags (all always-on)."""
         content = DEPLOY_SH.read_text()
         stop_section = content[content.find("stop_stack") :]
-        assert "--profile" in stop_section or "down" in stop_section
+        assert "--profile" not in stop_section
 
 
 @pytest.mark.integration

@@ -1,5 +1,14 @@
 > **Note: see first-entry Iteration 20 for Phase 2 config dataclasses.**
 
+## Iteration 107
+- **Task**: P0-DM: Remove Docker profiles — all 6 containers always-on
+- **Task ID**: sam_trader-9z3.1.25
+- **Status**: COMPLETE
+- **Decisions**: Removed `profiles:` blocks from sam-futu-opend (futu), sam-ib-gateway (ib), and sam-services (services) in docker-compose.yml. Simplified deploy.sh: removed --with-futu/--with-ib/--with-services flags, _profile_args() function, and all conditional service startup in start_stack(). All 6 containers now start unconditionally with `docker compose up -d`. Updated all profile-gating tests to assert no profiles exist. Removed --profile ib from validate_ib_stack.sh.
+- **Files Changed**: `docker/docker-compose.yml`, `deploy.sh`, `tests/unit/test_docker_compose.py`, `tests/integration/test_phase11_deploy_structure.py`, `tests/integration/test_deploy_decouple.py`, `tests/integration/test_phase11_exit.py`, `scripts/ralph/validate_ib_stack.sh`, `docs/reference/BUILD_PHASE_0.md`
+- **Validation Result**: PASS (RALPH_GATE_PASSED — 96/96 tests, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: 4 TestSoakTestPrerequisites tests deselected — they hang due to Docker daemon not available in this environment (pre-existing).
+
 ## Iteration 106
 - **Task**: BUG: Exec client uses hardcoded FUTU-1 account ID, ignores FUTU_ACCOUNT_ID — all HK orders rejected
 - **Task ID**: sam_trader-48c

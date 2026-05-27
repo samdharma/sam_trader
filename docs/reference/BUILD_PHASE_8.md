@@ -542,3 +542,54 @@ def _cmd_performance(args: argparse.Namespace) -> int:
 ---
 
 *Last updated: 2026-05-23 — Phase 8 revised with Nautilus-native integrations (PerformanceAnalyzer, LiveRiskEngine, PositionSnapshot, Slippage tracking)*
+
+---
+
+## Dynamic Multi-Market Extensions (Planned)
+
+> **Status:** Planning — 4 tickets  
+> **Plan:** `docs/user/DYNAMIC_MULTI_MARKET_PLAN.md`
+
+### Tickets
+
+| Ticket ID | Title | Deps |
+|-----------|-------|------|
+| `sam_trader-9z3.9.28` | Restart orchestrator: market-switch docker compose restart | 9z3.7.18, 9z3.1.25 |
+| `sam_trader-9z3.9.30` | SOD readiness CLI: sam readiness command | 9z3.7.17 |
+| `sam_trader-9z3.9.31` | EOD report CLI: sam report command | 9z3.7.19 |
+| `sam_trader-9z3.9.29` | Market-aware cron schedules | 9z3.9.28, 9z3.10.36 |
+
+### Design Notes — Restart Orchestrator
+- New `src/sam_trader/services/restart_orchestrator.py`
+- Subscribes to Redis `sam:market_switch_request` channel
+- Flow: wait for `sam:state_saved` → update `MARKET` in `.env` → `docker compose restart sam-trader` → poll `sam:state_loaded` (60s timeout)
+- On failure: rollback MARKET env var, log CRITICAL
+- CLI: `sam switch-market US` and `sam switch-market HK`
+
+### Design Notes — SOD Readiness CLI
+- `sam readiness --market US|HK [--json]`
+- Reads `sam:readiness:{market}:{date}` from Redis
+- Pass/fail table with per-check status
+- Exit code 0 if all pass, 1 if any fail
+
+### Design Notes — EOD Report CLI
+- `sam report --market US|HK [--date YYYY-MM-DD] [--json]`
+- Reads `sam:eod_report:{market}:{date}` from Redis + queries PG `daily_reports`
+- Sections: P&L, fills, health, positions
+- JSON output mode for scripting
+
+### Design Notes — Market-Aware Cron
+- US pipeline: 20:30 HKT weekdays (gated on `is_trading_day('US')`)
+- HK pipeline: 07:30 HKT weekdays (gated on `is_trading_day('HK')`)
+- Backup: 05:00 HKT weekdays (within maintenance window)
+- Performance analysis: 02:00 HKT daily
+- Log rotation: 03:00 HKT (unchanged)
+- All pipeline cron entries check `MarketCalendarService.is_trading_day()` before execution
+
+### Nautilus Types / Patterns Used
+- Docker SDK (`docker compose restart`) — standard Docker pattern
+- Redis pub/sub for inter-service communication (already in use)
+- `MarketCalendarService` (already built in Phase 9)
+- PG `daily_reports` table (new)
+
+*Last updated: 2026-05-27 — Dynamic Multi-Market extensions planned*

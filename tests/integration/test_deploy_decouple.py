@@ -51,12 +51,12 @@ class TestDeployScriptStructure:
                 flag not in content
             ), f"deploy.sh must not contain removed flag {flag}"
 
-    def test_deploy_sh_has_required_profiles(self) -> None:
-        """deploy.sh must support --with-futu, --with-ib, --with-services."""
+    def test_deploy_sh_has_no_profile_flags(self) -> None:
+        """deploy.sh must NOT have --with-futu, --with-ib, --with-services."""
         content = DEPLOY_SH.read_text()
-        assert "--with-futu" in content
-        assert "--with-ib" in content
-        assert "--with-services" in content
+        assert "--with-futu" not in content
+        assert "--with-ib" not in content
+        assert "--with-services" not in content
 
     def test_deploy_sh_has_lifecycle_actions(self) -> None:
         """deploy.sh must support start, stop, build actions."""

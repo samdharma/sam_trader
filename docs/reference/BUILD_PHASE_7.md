@@ -247,3 +247,51 @@ This enables immediate fallback to long-only without code changes.
 ---
 
 *Last updated: 2026-05-26 — Fixed OrbStrategy _in_range_accumulation_window dead code (session_start gate now checked in on_bar before _update_range). MomentumStrategy already has _in_session() guard — not affected. Template updated with session-start pattern comment.*
+
+---
+
+## Dynamic Multi-Market Extensions (Planned)
+
+> **Status:** Planning — 3 tickets  
+> **Plan:** `docs/user/DYNAMIC_MULTI_MARKET_PLAN.md`
+
+### Tickets
+
+| Ticket ID | Title | Deps |
+|-----------|-------|------|
+| `sam_trader-9z3.8.14` | Bundle schema: add `market` field with backward compat | 9z3.2.5 |
+| `sam_trader-9z3.8.12` | BundleController: Nautilus Controller for dynamic strategy lifecycle | 9z3.8.14, 9z3.6.15 |
+| `sam_trader-9z3.8.13` | Strategy: configurable HK lunch pause | 9z3.8.14 |
+
+### Design Notes — Bundle Schema
+- Add `market: str = "US"` field to bundle schema in `bundle_loader.py`
+- Backward compat: bundles without `market` field default to `"US"`
+- `bundle_validation.py`: validate `market` is `"US"` or `"HK"`
+- Update `bundles.example.yaml` with HK examples using `market: HK`
+- Each bundle = instrument × strategy × market × broker (four-dimensional key)
+
+### Design Notes — BundleController
+- New `src/sam_trader/controllers/bundle_controller.py`
+- Subclass of `nautilus_trader.trading.controller.Controller`
+- `load_bundle(bundle_dict)`: dict → `ImportableStrategyConfig` → `self.create_strategy_from_config(config, start=True)`
+- `unload_bundle(strategy_id)`: `self.remove_strategy_from_id(strategy_id)`
+- `reload_market(market)`: unload all strategies for inactive market, load bundles for active market
+- Subscribes to Redis `sam:bundle:load` and `sam:bundle:unload` channels in `on_start()`
+- Wired into `main.py` via `ImportableControllerConfig` → `TradingNodeConfig.controller`
+
+### Design Notes — Lunch Pause
+- New fields in `OrbStrategyConfig` and `MomentumStrategyConfig`: `lunch_pause_enabled: bool`, `lunch_start: str`, `lunch_end: str`
+- In `on_start()`: if enabled, register `LiveClock.set_time_alert()` for lunch_start → `self.pause()`, lunch_end → `self.resume()`
+- Pause: stop evaluating new entries (existing positions remain, stops still active)
+- Timezone from venue→timezone mapping (already in `_VENUE_TO_TZ`)
+
+### Nautilus Types / Patterns Used
+- `nautilus_trader.trading.controller.Controller` — standard Nautilus runtime strategy management
+- `Controller.create_strategy_from_config()` — instantiate + start strategy
+- `Controller.remove_strategy_from_id()` — stop + remove strategy
+- `Controller.start_strategy_from_id()` / `stop_strategy_from_id()` — pause/resume
+- `ImportableControllerConfig` — standard wiring pattern
+- `Strategy.on_pause()` / `Strategy.on_resume()` — Nautilus lifecycle hooks
+- `LiveClock.set_time_alert()` — scheduled pause/resume
+
+*Last updated: 2026-05-27 — Dynamic Multi-Market extensions planned*

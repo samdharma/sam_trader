@@ -8,7 +8,7 @@
 #   bash scripts/ralph/validate_ib_stack.sh
 #
 # Acceptance Criteria:
-#   1. docker compose --profile ib up brings up all services
+#   1. docker compose up brings up all services
 #   2. IB Gateway connection established
 #   3. Instruments loaded from IB_SYMBOLS
 #   4. Market data streaming
@@ -21,7 +21,7 @@ PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "${PROJECT_DIR}"
 
 DOCKER_DIR="${PROJECT_DIR}/docker"
-COMPOSE="docker compose -f ${DOCKER_DIR}/docker-compose.yml --profile ib"
+COMPOSE="docker compose -f ${DOCKER_DIR}/docker-compose.yml"
 LOG_FILE="${PROJECT_DIR}/logs/validate_ib_stack.log"
 FAILED=0
 
@@ -65,7 +65,7 @@ log_info "Tearing down existing stack..."
 ${COMPOSE} down --remove-orphans 2>/dev/null || true
 
 # ─── Start stack ─────────────────────────────────────────────────────────────
-log_info "Starting stack with --profile ib ..."
+log_info "Starting stack ..."
 WAIT_FOR_IB_GATEWAY=1 ${COMPOSE} up -d
 
 # ─── Wait for services to be healthy ─────────────────────────────────────────
@@ -152,7 +152,7 @@ echo "Acceptance Criteria"
 echo "========================================="
 
 checks=(
-    "docker compose --profile ib up: PASS"
+    "docker compose up: PASS"
     "IB Gateway connection established: MANUAL (check VNC if 2FA required)"
     "Instruments loaded from IB_SYMBOLS: $(echo "${NAUTILUS_LOGS}" | grep -qi 'instrument' && echo 'PASS' || echo 'PENDING')"
     "Market data streaming: $(echo "${NAUTILUS_LOGS}" | grep -qi 'bar\|tick\|quote\|market_data' && echo 'PASS' || echo 'PENDING')"

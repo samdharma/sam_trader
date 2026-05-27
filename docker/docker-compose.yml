@@ -134,8 +134,6 @@ services:
       - ../docker/futu-opend/futu.pem:/.futu/futu.pem:ro
     networks:
       - sam-net
-    profiles:
-      - futu
     healthcheck:
       test: ["CMD-SHELL", "/bin/healthcheck.sh"]
       interval: 30s
@@ -162,8 +160,6 @@ services:
       EXISTING_SESSION_DETECTED_ACTION: ${EXISTING_SESSION_DETECTED_ACTION:-primary}
     networks:
       - sam-net
-    profiles:
-      - ib
     healthcheck:
       test: ["CMD-SHELL", "pgrep java > /dev/null 2>&1 && bash -c 'echo > /dev/tcp/localhost/4004'"]
       interval: 30s
@@ -204,8 +200,6 @@ services:
       - FUTU_CONTAINER=sam-futu-opend
       - FUTU_OPEND_VER=${FUTU_OPEND_VER:-10.6.6608}
       - CONFIG_DIR=/opt/sam_trader/config
-    profiles:
-      - services
     healthcheck:
       test: ["CMD-SHELL", "pgrep python > /dev/null 2>&1 && bash -c 'true > /dev/tcp/localhost/8080' 2>/dev/null && (curl -sf http://localhost:8080/health > /dev/null 2>&1 || true)"]
       interval: 30s

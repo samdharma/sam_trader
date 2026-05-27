@@ -134,3 +134,54 @@ if __name__ == "__main__":
 ---
 
 *Last updated: 2026-05-21*
+
+---
+
+## Dynamic Multi-Market Extensions (Planned)
+
+> **Status:** Planning — 2 tickets (1 task + 1 EXIT)  
+> **Plan:** `docs/user/DYNAMIC_MULTI_MARKET_PLAN.md`
+
+### Tickets
+
+| Ticket ID | Title | Deps |
+|-----------|-------|------|
+| `sam_trader-9z3.12.8` | deploy.sh: always-on brokers, MARKET env var, updated wizard | 9z3.1.25, 9z3.2.4 |
+| `sam_trader-9z3.12.9` | [EXIT] E2E: full daily cycle simulation | 9z3.12.8 |
+
+### Design Notes — Deploy Script
+- Remove `--with-futu`, `--with-ib`, `--with-services` flags
+- `docker compose up -d` starts all 6 containers (no profile flags)
+- Wizard: prompt "Default market? [auto/US/HK]" (default: auto-detect from HKT time)
+- Auto-detect: if current HKT time between 16:00-03:59 → MARKET=US, else MARKET=HK
+- Generate `.env` with `MARKET=US` or `MARKET=HK` (+ backward compat `FUTU_TRD_MARKET`)
+- Under 300 lines (existing constraint)
+- `deploy.sh --stop` cleans up all 6 containers
+
+### Design Notes — E2E Daily Cycle Test
+- Test file: `tests/integration/test_daily_cycle_e2e.py`
+- 15-test suite:
+  1. Start MARKET=HK → Futu HK, no IB, HK bundles
+  2. HK SOD readiness passes all 7 checks
+  3. HK lunch pause at 12:00 → strategies paused
+  4. HK lunch resume at 13:00 → strategies resume
+  5. HK close (16:00) → MarketSchedulerActor triggers switch
+  6. State saved to Redis, sam:state_saved published
+  7. Restart orchestrator updates MARKET=US, restarts sam-trader
+  8. After restart: Futu US, IB registered, US bundles loaded
+  9. US SOD readiness passes (includes IB connectivity)
+  10. US EOD report with correct P&L, fills, health
+  11. US close (04:00) → switch back to HK
+  12. Weekend: scheduler skips alerts, strategies paused
+  13. Dual-broker gap scanner cross-validates Futu vs IB
+  14. HK EOD report after full cycle
+  15. State preserved across all restarts
+
+### Nautilus Types / Patterns Used
+- `TestClock` for time simulation in integration tests
+- `TradingNode` full lifecycle (build → run → save → stop → rebuild → run → load)
+- Redis state persistence verification
+- Docker Compose lifecycle via deploy.sh
+- All actors verified: MarketScheduler, ReadinessChecker, EndOfDayReporter, BundleController
+
+*Last updated: 2026-05-27 — Dynamic Multi-Market extensions planned*

@@ -31,18 +31,18 @@ This eliminates redundant research and saves ~20-30 steps per iteration.
 
 | Phase | Doc | Status |
 |-------|-----|--------|
-| Phase 0 | `BUILD_PHASE_0.md` | ✅ Complete |
-| Phase 1 | `BUILD_PHASE_1.md` | ✅ Complete |
-| Phase 2 | `BUILD_PHASE_2.md` | ✅ Complete |
+| Phase 0 | `BUILD_PHASE_0.md` | ✅ Complete (+DM extension: always-on brokers) |
+| Phase 1 | `BUILD_PHASE_1.md` | ✅ Complete (+DM extension: MarketConfig, MARKET env var) |
+| Phase 2 | `BUILD_PHASE_2.md` | ✅ Complete (+DM extension: multi-market context verify) |
 | Phase 3 | `BUILD_PHASE_3.md` | ✅ Complete |
 | Phase 4 | `BUILD_PHASE_4.md` | ✅ Complete |
-| Phase 5 | `BUILD_PHASE_5.md` | ✅ Complete |
-| Phase 6 | `BUILD_PHASE_6.md` | ✅ Complete |
-| Phase 7 | `BUILD_PHASE_7.md` | ✅ Complete |
-| Phase 8 | `BUILD_PHASE_8.md` | ✅ Complete |
-| Phase 9 | `BUILD_PHASE_9.md` | ✅ Complete |
+| Phase 5 | `BUILD_PHASE_5.md` | ✅ Complete (+DM extension: IB conditional enable) |
+| Phase 6 | `BUILD_PHASE_6.md` | ✅ Complete (+DM extension: 3 new actors, tz refactor) |
+| Phase 7 | `BUILD_PHASE_7.md` | ✅ Complete (+DM extension: market field, Controller, lunch pause) |
+| Phase 8 | `BUILD_PHASE_8.md` | ✅ Complete (+DM extension: orchestrator, SOD/EOD CLI, cron) |
+| Phase 9 | `BUILD_PHASE_9.md` | ✅ Complete (+DM extension: dual scanner, market pipeline) |
 | Phase 10 | `BUILD_PHASE_10.md` | ✅ Complete |
-| Phase 11 | `BUILD_PHASE_11.md` | ✅ Complete |
+| Phase 11 | `BUILD_PHASE_11.md` | ✅ Complete (+DM extension: deploy update, daily cycle E2E) |
 
 The Ralph loop auto-detects the ticket's phase label and injects the corresponding BUILD_PHASE doc into the agent prompt.
 

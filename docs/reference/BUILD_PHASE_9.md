@@ -202,3 +202,51 @@ from sam_trader.services.quote_collector import QuoteCollectionService
 ---
 
 *Last updated: 2026-05-24 — Renumbered: 12 sequential tickets 10.16–10.27 matching build order.*
+
+---
+
+## Dynamic Multi-Market Extensions (Planned)
+
+> **Status:** Planning — 3 tickets  
+> **Plan:** `docs/user/DYNAMIC_MULTI_MARKET_PLAN.md`
+
+### Tickets
+
+| Ticket ID | Title | Deps |
+|-----------|-------|------|
+| `sam_trader-9z3.10.37` | Dual-broker gap scanner: Futu primary + IB cross-validation | 9z3.6.15, 9z3.2.5 |
+| `sam_trader-9z3.10.36` | Market-aware pipeline scheduling | 9z3.2.5 |
+| `sam_trader-9z3.10.35` | Pipeline → BundleController integration via Redis | 9z3.10.36, 9z3.8.12 |
+
+### Design Notes — Dual-Broker Scanner
+- New `src/sam_trader/services/dual_broker_scanner.py`
+- New `config/gap_scanner.yaml` with per-market primary/secondary broker config
+- Wraps two `QuoteCollectionService` instances (Futu + IB)
+- US market: runs both in parallel via `asyncio.gather()`, cross-validates mid-price discrepancies > threshold_pct (default 1.0%)
+- HK market: Futu only (IB QuoteCollectionService not created — IB disabled for HK)
+- Results include `cross_validated` flag and `cross_validation_note` per candidate
+
+### Design Notes — Market-Aware Pipeline
+- Removes `PIPELINE_MARKET` env var dependency
+- Pipeline reads `MARKET` env var or `market_config.yaml` to determine active market
+- US pipeline: gap scan at 08:30 ET (converted to HKT dynamically via `zoneinfo` for DST)
+- HK pipeline: gap scan at 07:30 HKT
+- Holiday check via `MarketCalendarService` before execution
+- CLI: `sam pipeline --market US` and `sam pipeline --market HK`
+
+### Design Notes — Pipeline → BundleController Integration
+- After pipeline generates approved bundles, publish each to Redis channel `sam:bundle:load` as JSON
+- Publish `sam:bundle:load_complete {market, count}` after all bundles sent
+- `BundleController.subscribe()` in sam-trader receives and calls `create_strategy_from_config()`
+- `bundles.yaml` still read at node startup as initial strategy set (fallback)
+- Error handling: if Controller fails to load a bundle, log ERROR, continue with remaining
+
+### Nautilus Types / Patterns Used
+- `QuoteCollectionService` — already built, wraps `FutuLiveDataClient` / `InteractiveBrokersDataClient`
+- `PreMarketGapScanner` — already built, extended with cross-validation
+- `asyncio.gather()` — parallel quote collection (standard async pattern)
+- Redis pub/sub — inter-service communication between sam-services and sam-trader
+- `zoneinfo` — DST-aware timezone conversion (Python 3.12 standard library)
+- `MarketCalendarService` — already built in Phase 9
+
+*Last updated: 2026-05-27 — Dynamic Multi-Market extensions planned*

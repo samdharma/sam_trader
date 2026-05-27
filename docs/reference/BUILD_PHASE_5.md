@@ -204,3 +204,31 @@ from nautilus_trader.adapters.interactive_brokers.providers import InteractiveBr
 ---
 
 *Last updated: 2026-05-24 — Status updated to Complete during gap audit; ticket summary added*
+
+---
+
+## Dynamic Multi-Market Extensions (Planned)
+
+> **Status:** Planning — 1 ticket  
+> **Plan:** `docs/user/DYNAMIC_MULTI_MARKET_PLAN.md`
+
+### Tickets
+
+| Ticket ID | Title | Deps |
+|-----------|-------|------|
+| `sam_trader-9z3.6.15` | IB: conditional enable/disable via MarketConfig | 9z3.2.5 |
+
+### Design Notes
+- IB factories registered only when `cfg.market_config.ib_enabled is True`
+- `MARKET=US` → IB data + exec factories registered normally
+- `MARKET=HK` → IB factories NOT registered, log INFO "IB disabled for HK market"
+- IB Gateway container stays running 24/7 (docker-compose always-on from Phase 0 DM)
+- Only the Nautilus client registration is conditional — the gateway is unaffected
+- Backward compat: if `MARKET` not set, uses existing `IB_ENABLED` env var
+
+### Nautilus Types / Patterns Used
+- `InteractiveBrokersLiveDataClientFactory` / `InteractiveBrokersLiveExecClientFactory`
+- `TradingNode.add_data_client_factory()` / `add_exec_client_factory()`
+- Conditional factory registration — already supported by Nautilus (lazy import pattern)
+
+*Last updated: 2026-05-27 — Dynamic Multi-Market extensions planned*

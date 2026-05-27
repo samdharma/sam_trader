@@ -8,9 +8,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 COMPOSE_FILE="${SCRIPT_DIR}/docker/docker-compose.yml"
 ENV_FILE="${SCRIPT_DIR}/.env"
 
-WITH_FUTU=false
-WITH_IB=false
-WITH_SERVICES=false
 DO_BUILD=false
 TAG=""
 ACTION="start"
@@ -21,9 +18,6 @@ usage() {
 Usage: ./deploy.sh [options] [action]
 
 Options:
-  --with-futu      Include Futu OpenD broker profile
-  --with-ib        Include IB Gateway broker profile
-  --with-services  Include sam-services operations container
   --build          Build images before starting (or just build if no explicit start)
   --tag <tag>      Git tag to checkout before building
   --setup          Re-run first-run wizard to regenerate .env
@@ -32,8 +26,8 @@ Options:
 Actions: start (default), stop, build
 
 Examples:
-  ./deploy.sh --with-futu start
-  ./deploy.sh --with-futu --build start
+  ./deploy.sh start
+  ./deploy.sh --build start
   ./deploy.sh --tag v1.0.0 --build
   ./deploy.sh stop
   ./deploy.sh --setup
@@ -71,14 +65,6 @@ ensure_network() {
   fi
 }
 
-_profile_args() {
-  local args=()
-  [[ "$WITH_FUTU" == true ]] && args+=("--profile" "futu")
-  [[ "$WITH_IB" == true ]] && args+=("--profile" "ib")
-  [[ "$WITH_SERVICES" == true ]] && args+=("--profile" "services")
-  printf '%s\n' "${args[@]}"
-}
-
 run_git_ops() {
   cd "${SCRIPT_DIR}"
   if [[ -n "${TAG}" ]]; then
@@ -96,8 +82,7 @@ run_build() {
   run_git_ops
   cd "${SCRIPT_DIR}"
   echo "INFO: Building Docker images..."
-  mapfile -t profiles < <(_profile_args)
-  docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" "${profiles[@]}" build
+  docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" build
   echo "INFO: Build complete"
 }
 
@@ -115,34 +100,27 @@ wait_for_healthy() {
 
 start_stack() {
   cd "${SCRIPT_DIR}"
-  mapfile -t profiles < <(_profile_args)
 
   echo "INFO: Starting core infrastructure (postgres, redis)"
   docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" up -d sam-postgres sam-redis
   wait_for_healthy sam-postgres
   wait_for_healthy sam-redis
 
-  if [[ "$WITH_FUTU" == true ]]; then
-    echo "INFO: Starting Futu OpenD"
-    docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" "${profiles[@]}" up -d sam-futu-opend
-    wait_for_healthy sam-futu-opend 60
-  fi
+  echo "INFO: Starting Futu OpenD"
+  docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" up -d sam-futu-opend
+  wait_for_healthy sam-futu-opend 60
 
-  if [[ "$WITH_IB" == true ]]; then
-    echo "INFO: Starting IB Gateway"
-    docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" "${profiles[@]}" up -d sam-ib-gateway
-    wait_for_healthy sam-ib-gateway 60
-  fi
+  echo "INFO: Starting IB Gateway"
+  docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" up -d sam-ib-gateway
+  wait_for_healthy sam-ib-gateway 60
 
   echo "INFO: Starting sam-trader"
-  docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" "${profiles[@]}" up -d sam-trader
+  docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" up -d sam-trader
   wait_for_healthy sam-trader 60
 
-  if [[ "$WITH_SERVICES" == true ]]; then
-    echo "INFO: Starting sam-services"
-    docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" "${profiles[@]}" up -d sam-services
-    wait_for_healthy sam-services 60
-  fi
+  echo "INFO: Starting sam-services"
+  docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" up -d sam-services
+  wait_for_healthy sam-services 60
 
   echo "INFO: Stack is up"
   echo "INFO: Ops commands: docker exec sam-services sam <command>"
@@ -151,16 +129,13 @@ start_stack() {
 stop_stack() {
   cd "${SCRIPT_DIR}"
   echo "INFO: Stopping all containers"
-  docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" --profile futu --profile ib --profile services down
+  docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" down
   echo "INFO: Stack stopped"
 }
 
 main() {
   while [[ $# -gt 0 ]]; do
     case "$1" in
-      --with-futu) WITH_FUTU=true; shift ;;
-      --with-ib) WITH_IB=true; shift ;;
-      --with-services) WITH_SERVICES=true; shift ;;
       --build) DO_BUILD=true; shift ;;
       --tag)
         [[ -n "${2:-}" ]] || { echo "ERROR: --tag requires a value"; usage; }

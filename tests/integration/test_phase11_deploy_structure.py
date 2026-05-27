@@ -32,12 +32,14 @@ ALL_SERVICES = [
     "sam-services",
 ]
 
-CORE_SERVICES = ["sam-trader", "sam-postgres", "sam-redis"]
-PROFILED_SERVICES = {
-    "sam-futu-opend": "futu",
-    "sam-ib-gateway": "ib",
-    "sam-services": "services",
-}
+CORE_SERVICES = [
+    "sam-trader",
+    "sam-postgres",
+    "sam-redis",
+    "sam-futu-opend",
+    "sam-ib-gateway",
+    "sam-services",
+]
 
 HEALTHCHECK_TIMING = {
     "sam-trader": {"start_period": "60s"},
@@ -224,29 +226,14 @@ class TestHealthCheckPattern:
 
 @pytest.mark.integration
 class TestProfileGating:
-    """AC: Optional services are gated by Docker Compose profiles."""
+    """AC: All 6 services are always-on — no Docker Compose profiles."""
 
-    def test_core_infra_has_no_profiles(self, compose: dict[str, Any]) -> None:
-        """sam-trader, sam-postgres, sam-redis must NOT have profiles."""
-        for svc in CORE_SERVICES:
+    def test_no_service_has_profiles(self, compose: dict[str, Any]) -> None:
+        """All 6 services are always-on — NO service must declare profiles."""
+        for svc in ALL_SERVICES:
             assert (
                 "profiles" not in compose["services"][svc]
-            ), f"{svc} must not declare profiles"
-
-    def test_futu_opend_has_futu_profile(self, compose: dict[str, Any]) -> None:
-        """sam-futu-opend has profile 'futu'."""
-        profiles = compose["services"]["sam-futu-opend"].get("profiles", [])
-        assert "futu" in profiles
-
-    def test_ib_gateway_has_ib_profile(self, compose: dict[str, Any]) -> None:
-        """sam-ib-gateway has profile 'ib'."""
-        profiles = compose["services"]["sam-ib-gateway"].get("profiles", [])
-        assert "ib" in profiles
-
-    def test_services_has_services_profile(self, compose: dict[str, Any]) -> None:
-        """sam-services has profile 'services'."""
-        profiles = compose["services"]["sam-services"].get("profiles", [])
-        assert "services" in profiles
+            ), f"{svc} must not declare profiles (all containers are always-on)"
 
 
 # ── TestDeployE2EFlow ─────────────────────────────────────────────────────────
@@ -260,17 +247,11 @@ class TestDeployE2EFlow:
         """deploy.sh must reference docker/docker-compose.yml."""
         assert "docker/docker-compose.yml" in deploy_sh_text
 
-    def test_deploy_sh_uses_profile_args_for_optional_services(
-        self, deploy_sh_text: str
-    ) -> None:
-        """deploy.sh passes --profile futu, --profile ib, --profile services."""
+    def test_deploy_sh_has_no_profile_args(self, deploy_sh_text: str) -> None:
+        """deploy.sh must NOT use --profile flags (all containers always-on)."""
         assert (
-            '--profile" "futu"' in deploy_sh_text
-            or "'--profile' 'futu'" in deploy_sh_text
-            or "--profile futu" in deploy_sh_text
-        )
-        assert "ib" in deploy_sh_text
-        assert "services" in deploy_sh_text
+            "--profile" not in deploy_sh_text
+        ), "deploy.sh must not use --profile flags"
 
     def test_deploy_sh_core_start_order(self, deploy_sh_text: str) -> None:
         """Core infra (postgres, redis) is started before sam-trader in deploy.sh."""
