@@ -1,5 +1,14 @@
 > **Note: see first-entry Iteration 20 for Phase 2 config dataclasses.**
 
+## Iteration 118
+- **Task**: P6-DM: EndOfDayReporterActor — EOD aggregated report
+- **Task ID**: sam_trader-9z3.7.19
+- **Status**: COMPLETE
+- **Decisions**: Created `EndOfDayReporterActor` as a Nautilus Actor triggered by `LiveClock.set_time_alert()` at `market_config.eod_report_time` (default 16:05 local — 5 min after market close). 6-section aggregated report: (1) Daily P&L per strategy from Redis `sam:pnl:*` keys with PG fallback computation, (2) Total fills + commissions from PG `fills` table grouped by strategy, (3) Max drawdown estimated from fill time-series peak-to-trough, (4) Position summary via `cache.positions()`, (5) Rejection events from Redis circuit breaker state, (6) Health events from Redis heartbeat log. Output: Redis `sam:eod_report:{market}:{date}` JSON (7-day TTL) + PG `daily_reports` table (market, date, report_json JSONB, created_at). Wired behind `ACTOR_EOD_REPORTER_ENABLED` env var with `actor_eod_reporter_enabled` field in `SamTraderConfig`. Skips on non-trading days via MarketCalendarService. Follows same patterns as MarketSchedulerActor and ReadinessCheckerActor (time alert scheduling, async Redis/PG I/O, calendar integration).
+- **Files Changed**: `src/sam_trader/actors/eod_reporter.py` (new), `tests/unit/actors/test_eod_reporter.py` (new, 31 tests), `src/sam_trader/actors/__init__.py`, `src/sam_trader/config.py`, `src/sam_trader/main.py`, `docker/postgres/init/01_schema.sql`, `tests/unit/test_config.py`, `tests/unit/test_kill_switch_subscriber.py`, `tests/unit/test_restart_subscriber.py`, `tests/integration/test_phase10_exit.py`
+- **Validation Result**: PASS (302 targeted tests pass; 6 pre-existing Docker-dependent TestDashboard timeouts excluded). Black, isort, flake8, mypy all green.
+- **Blockers / Notes**: None. PG daily_reports table uses INSERT ON CONFLICT (market, date) DO UPDATE for idempotent re-runs. Drawdown section is estimated from fills — full per-trade P&L time series requires RealizedPnLTrackerActor enhancements (future).
+
 ## Iteration 117
 - **Task**: P6-DM: MarketSchedulerActor — LiveClock alerts for market-switch + maintenance window
 - **Task ID**: sam_trader-9z3.7.18
