@@ -1,5 +1,14 @@
 > **Note: see first-entry Iteration 20 for Phase 2 config dataclasses.**
 
+## Iteration 111
+- **Task**: P1-DM: MARKET env var → derived config fields
+- **Task ID**: sam_trader-9z3.2.4
+- **Status**: COMPLETE
+- **Decisions**: Updated `SamTraderConfig.from_env()` to read `MARKET` env var. When MARKET is set (US/HK), loads `MarketConfig` from `config/market_config.yaml` via `MarketConfig.get_market(market)`. Derives: `futu_trd_market`, `ib_enabled`, `futu_routing_venues`, `health_monitor_market`, `bar_resub_market` from market config. When MARKET is unset/empty, backward compat path uses existing FUTU_TRD_MARKET, IB_ENABLED, HEALTH_MONITOR_MARKET, BAR_RESUB_MARKET env vars. Graceful fallback to env vars when market_config.yaml not found or market is invalid. Added 3 new fields with defaults: `market: str = ""`, `market_config: MarketConfig | None = None`, `futu_routing_venues: list[str] = field(default_factory=list)`. Fields placed last in dataclass (Python requires default fields after non-default). Fixed pre-existing missing-field errors in test_kill_switch_subscriber.py, test_restart_subscriber.py, and test_phase10_exit.py (missing futu_account_id, futu_keep_alive_interval_secs, health_monitor_market, bar_resub_market, market_calendar_enabled). Added 13 new tests covering: MARKET=US/HK loading, backward compat (unset, empty), yaml not found fallback, invalid market fallback, default field values.
+- **Files Changed**: `src/sam_trader/config.py`, `tests/unit/test_config.py`, `tests/unit/test_kill_switch_subscriber.py`, `tests/unit/test_restart_subscriber.py`, `tests/integration/test_phase10_exit.py`
+- **Validation Result**: PASS (26/26 targeted tests, black/isort/flake8/mypy all green. 6 pre-existing dashboard timeout failures in test_phase10_exit.py — Docker daemon not available)
+- **Blockers / Notes**: None. Ready for sam_trader-9z3.2.5 (main.py: market-aware config propagation).
+
 ## Iteration 110
 - **Task**: P1-DM: MarketConfig — frozen dataclass + market_config.yaml
 - **Task ID**: sam_trader-9z3.2.3
