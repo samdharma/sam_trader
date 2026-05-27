@@ -696,3 +696,208 @@ class TestStatePersistence:
         strategy.on_load(state)
         assert len(strategy._closes) == 10
         assert strategy._daily_loss == 50.0
+
+
+# ---------------------------------------------------------------------------
+# Lunch pause
+# ---------------------------------------------------------------------------
+
+
+class TestLunchPauseConfig:
+    def test_default_values(self) -> None:
+        cfg = _make_config()
+        assert cfg.lunch_pause_enabled is False
+        assert cfg.lunch_start == ""
+        assert cfg.lunch_end == ""
+
+    def test_custom_values(self) -> None:
+        cfg = _make_config(
+            lunch_pause_enabled=True,
+            lunch_start="12:00",
+            lunch_end="13:00",
+        )
+        assert cfg.lunch_pause_enabled is True
+        assert cfg.lunch_start == "12:00"
+        assert cfg.lunch_end == "13:00"
+
+    def test_parse_lunch_times(self) -> None:
+        cfg = _make_config(lunch_start="12:00", lunch_end="13:00")
+        strategy = MomentumStrategy(cfg)
+        from datetime import time
+
+        assert strategy._lunch_start_time == time(12, 0)
+        assert strategy._lunch_end_time == time(13, 0)
+
+    def test_parse_lunch_times_with_none(self) -> None:
+        cfg = _make_config(lunch_start="", lunch_end="")
+        strategy = MomentumStrategy(cfg)
+        assert strategy._lunch_start_time is None
+        assert strategy._lunch_end_time is None
+
+
+class TestLunchPauseOnStart:
+    def test_on_start_schedules_alerts_when_enabled(self) -> None:
+        """When lunch_pause_enabled, ``_schedule_lunch_alerts`` is called."""
+        strategy = MomentumStrategy(
+            _make_config(
+                lunch_pause_enabled=True,
+                lunch_start="12:00",
+                lunch_end="13:00",
+            )
+        )
+        _register_strategy(strategy)
+        _mock_instrument(strategy)
+        strategy._schedule_lunch_alerts = MagicMock()  # type: ignore[method-assign]
+
+        strategy.on_start()
+        strategy._schedule_lunch_alerts.assert_called_once()
+
+    def test_on_start_no_alerts_when_disabled(self) -> None:
+        """When lunch_pause_enabled=False (default), no scheduling."""
+        strategy = MomentumStrategy(_make_config())
+        _register_strategy(strategy)
+        _mock_instrument(strategy)
+        strategy._schedule_lunch_alerts = MagicMock()  # type: ignore[method-assign]
+
+        strategy.on_start()
+        strategy._schedule_lunch_alerts.assert_not_called()
+
+    def test_schedule_lunch_alerts_skips_when_times_invalid(self) -> None:
+        """When lunch_start is empty (None), scheduling is skipped."""
+        strategy = MomentumStrategy(
+            _make_config(
+                lunch_pause_enabled=True,
+                lunch_start="",  # invalid — empty
+                lunch_end="13:00",
+            )
+        )
+        _register_strategy(strategy)
+        # type: ignore[method-assign]
+        strategy._schedule_single_lunch_alert = (  # type: ignore[method-assign]
+            MagicMock()
+        )
+
+        strategy._schedule_lunch_alerts()
+        strategy._schedule_single_lunch_alert.assert_not_called()
+
+
+class TestLunchPauseCallbacks:
+    def test_on_lunch_pause_calls_pause(self) -> None:
+        """``_on_lunch_pause`` calls ``self.pause()`` and reschedules."""
+        strategy = MomentumStrategy(
+            _make_config(
+                lunch_pause_enabled=True,
+                lunch_start="12:00",
+                lunch_end="13:00",
+            )
+        )
+        _register_strategy(strategy)
+        # type: ignore[method-assign]
+        strategy._schedule_single_lunch_alert = (  # type: ignore[method-assign]
+            MagicMock()
+        )
+        strategy.pause = MagicMock()  # type: ignore[method-assign]
+
+        strategy._on_lunch_pause()
+
+        strategy.pause.assert_called_once()
+        strategy._schedule_single_lunch_alert.assert_called_once()
+        assert (
+            strategy._schedule_single_lunch_alert.call_args.args[0] == "mom_lunch_pause"
+        )
+
+    def test_on_lunch_resume_calls_resume(self) -> None:
+        """``_on_lunch_resume`` calls ``self.resume()`` and reschedules."""
+        strategy = MomentumStrategy(
+            _make_config(
+                lunch_pause_enabled=True,
+                lunch_start="12:00",
+                lunch_end="13:00",
+            )
+        )
+        _register_strategy(strategy)
+        # type: ignore[method-assign]
+        strategy._schedule_single_lunch_alert = (  # type: ignore[method-assign]
+            MagicMock()
+        )
+        strategy.resume = MagicMock()  # type: ignore[method-assign]
+
+        strategy._on_lunch_resume()
+
+        strategy.resume.assert_called_once()
+        strategy._schedule_single_lunch_alert.assert_called_once()
+        assert (
+            strategy._schedule_single_lunch_alert.call_args.args[0]
+            == "mom_lunch_resume"
+        )
+
+    def test_lunch_pause_no_reschedule_when_time_none(self) -> None:
+        """Callback does not reschedule when ``_lunch_start_time`` is ``None``."""
+        cfg = _make_config(lunch_start="", lunch_end="13:00")
+        strategy = MomentumStrategy(cfg)
+        _register_strategy(strategy)
+        # type: ignore[method-assign]
+        strategy._schedule_single_lunch_alert = (  # type: ignore[method-assign]
+            MagicMock()
+        )
+        strategy.pause = MagicMock()  # type: ignore[method-assign]
+
+        strategy._on_lunch_pause()
+        strategy._schedule_single_lunch_alert.assert_not_called()
+
+
+class TestLunchPauseScheduleLogic:
+    def test_schedule_lunch_alerts_dispatches_both_alerts(self) -> None:
+        """``_schedule_lunch_alerts`` schedules both pause and resume."""
+        strategy = MomentumStrategy(
+            _make_config(
+                lunch_pause_enabled=True,
+                lunch_start="12:00",
+                lunch_end="13:00",
+            )
+        )
+        _register_strategy(strategy)
+        # type: ignore[method-assign]
+        strategy._schedule_single_lunch_alert = (  # type: ignore[method-assign]
+            MagicMock()
+        )
+
+        strategy._schedule_lunch_alerts()
+
+        assert strategy._schedule_single_lunch_alert.call_count == 2
+        call_names = [
+            c.args[0] for c in strategy._schedule_single_lunch_alert.call_args_list
+        ]
+        assert "mom_lunch_pause" in call_names
+        assert "mom_lunch_resume" in call_names
+
+    def test_get_timezone_name_nasdaq(self) -> None:
+        """NASDAQ instrument returns America/New_York."""
+        strategy = MomentumStrategy(_make_config(instrument_id="AAPL.NASDAQ"))
+        _register_strategy(strategy)
+        strategy.instrument_id = InstrumentId.from_str("AAPL.NASDAQ")
+
+        assert strategy._get_timezone_name() == "America/New_York"
+
+    def test_get_timezone_name_hkex(self) -> None:
+        """HKEX instrument returns Asia/Hong_Kong."""
+        strategy = MomentumStrategy(_make_config(instrument_id="00700.HKEX"))
+        _register_strategy(strategy)
+        strategy.instrument_id = InstrumentId.from_str("00700.HKEX")
+
+        assert strategy._get_timezone_name() == "Asia/Hong_Kong"
+
+    def test_get_timezone_name_fallback_from_config(self) -> None:
+        """When instrument_id is None, falls back to config string."""
+        strategy = MomentumStrategy(_make_config(instrument_id="00700.HKEX"))
+        _register_strategy(strategy)
+
+        assert strategy._get_timezone_name() == "Asia/Hong_Kong"
+
+    def test_get_timezone_name_unknown_venue(self) -> None:
+        """Unknown venue defaults to America/New_York."""
+        strategy = MomentumStrategy(_make_config(instrument_id="AAPL.UNKNOWN"))
+        _register_strategy(strategy)
+        strategy.instrument_id = InstrumentId.from_str("AAPL.UNKNOWN")
+
+        assert strategy._get_timezone_name() == "America/New_York"

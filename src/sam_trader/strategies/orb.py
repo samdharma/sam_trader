@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import pickle
-from datetime import time
+from datetime import time, timedelta
 from typing import Literal
 from zoneinfo import ZoneInfo
 
@@ -83,6 +83,14 @@ class OrbStrategyConfig(StrategyConfig, frozen=True):  # type: ignore[call-arg]
         Futu security code injected by the bundle loader.
     market : str, default "US"
         Target market (``"US"`` or ``"HK"``) injected by the bundle loader.
+    lunch_pause_enabled : bool, default False
+        If ``True``, the strategy pauses during a lunch break window.
+    lunch_start : str, default ""
+        Lunch pause start time in ``HH:MM`` format (instrument local timezone).
+        HK default: ``"12:00"``.
+    lunch_end : str, default ""
+        Lunch pause end time in ``HH:MM`` format (instrument local timezone).
+        HK default: ``"13:00"``.
 
     """
 
@@ -110,6 +118,9 @@ class OrbStrategyConfig(StrategyConfig, frozen=True):  # type: ignore[call-arg]
     exchange: str = ""
     futu_code: str = ""
     market: str = "US"
+    lunch_pause_enabled: bool = False
+    lunch_start: str = ""
+    lunch_end: str = ""
 
 
 class OrbStrategy(Strategy):
@@ -170,6 +181,10 @@ class OrbStrategy(Strategy):
         # Cached ATR
         self._cached_atr: float | None = None
 
+        # Lunch pause state
+        self._lunch_start_time: time | None = self._parse_time(config.lunch_start)
+        self._lunch_end_time: time | None = self._parse_time(config.lunch_end)
+
         # STOP_MARKET entry tracking
         self._entry_order = None
 
@@ -191,8 +206,8 @@ class OrbStrategy(Strategy):
             self.log.warning(f"Invalid time string '{value}'; treating as disabled")
             return None
 
-    def _get_et_time(self) -> time:
-        """Return current clock time converted to the instrument's local timezone."""
+    def _get_timezone_name(self) -> str:
+        """Return the IANA timezone name for the instrument's venue."""
         venue = ""
         if self.instrument_id is not None:
             venue = self.instrument_id.venue.value
@@ -201,7 +216,11 @@ class OrbStrategy(Strategy):
                 venue = InstrumentId.from_str(self.config.instrument_id).venue.value
             except Exception:
                 pass
-        tz_name = _VENUE_TO_TZ.get(venue, "America/New_York")
+        return _VENUE_TO_TZ.get(venue, "America/New_York")
+
+    def _get_et_time(self) -> time:
+        """Return current clock time converted to the instrument's local timezone."""
+        tz_name = self._get_timezone_name()
         local = self.clock.utc_now().astimezone(ZoneInfo(tz_name))
         return time(local.hour, local.minute, local.second)
 
@@ -355,6 +374,10 @@ class OrbStrategy(Strategy):
         self.subscribe_bars(self.bar_type)
         self.subscribe_quote_ticks(self.instrument_id)
         self.subscribe_trade_ticks(self.instrument_id)
+
+        # Schedule lunch pause alerts if enabled
+        if self.config.lunch_pause_enabled:
+            self._schedule_lunch_alerts()
 
     def on_bar(self, bar: Bar) -> None:
         """Actions to be performed when the strategy receives a bar."""
@@ -833,3 +856,83 @@ class OrbStrategy(Strategy):
 
     def on_dispose(self) -> None:
         """Actions to be performed when the strategy is disposed."""
+
+    # ------------------------------------------------------------------
+    # Lunch pause
+    # ------------------------------------------------------------------
+
+    def _schedule_lunch_alerts(self) -> None:
+        """Schedule both lunch pause and resume alerts for the next occurrence."""
+        if self._lunch_start_time is None or self._lunch_end_time is None:
+            self.log.warning(
+                "Lunch pause enabled but lunch_start or lunch_end not valid; "
+                "skipping lunch pause scheduling."
+            )
+            return
+        self._schedule_single_lunch_alert(
+            "orb_lunch_pause", self._lunch_start_time, self._on_lunch_pause
+        )
+        self._schedule_single_lunch_alert(
+            "orb_lunch_resume", self._lunch_end_time, self._on_lunch_resume
+        )
+
+    def _schedule_single_lunch_alert(
+        self,
+        name: str,
+        target_time: time,
+        callback,
+    ) -> None:
+        """Schedule a single lunch time alert at *target_time* (local time).
+
+        Converts the local time to a naive UTC datetime for
+        ``LiveClock.set_time_alert()``.  If today's occurrence has already
+        passed, schedules for tomorrow.
+        """
+        tz_name = self._get_timezone_name()
+        tz = ZoneInfo(tz_name)
+        now_utc = self.clock.utc_now()
+        now_local = now_utc.astimezone(tz)
+
+        target_local = now_local.replace(
+            hour=target_time.hour,
+            minute=target_time.minute,
+            second=target_time.second,
+            microsecond=0,
+        )
+        if target_local <= now_local:
+            target_local += timedelta(days=1)
+
+        target_utc = target_local.astimezone(ZoneInfo("UTC"))
+        target_utc_naive = target_utc.replace(tzinfo=None)
+
+        self.clock.set_time_alert(name, target_utc_naive, callback, override=True)
+        self.log.info(
+            f"Lunch pause: '{name}' alert scheduled for "
+            f"{target_utc_naive.isoformat()} UTC"
+        )
+
+    def _on_lunch_pause(self, alert=None) -> None:  # noqa: ARG002
+        """Callback executed at lunch_start — pauses the strategy."""
+        self.pause()
+        self.log.info(
+            f"Lunch pause: strategy paused at "
+            f"{self.config.lunch_start} ({self._get_timezone_name()})"
+        )
+        # Re-schedule for tomorrow
+        if self._lunch_start_time is not None:
+            self._schedule_single_lunch_alert(
+                "orb_lunch_pause", self._lunch_start_time, self._on_lunch_pause
+            )
+
+    def _on_lunch_resume(self, alert=None) -> None:  # noqa: ARG002
+        """Callback executed at lunch_end — resumes the strategy."""
+        self.resume()
+        self.log.info(
+            f"Lunch pause: strategy resumed at "
+            f"{self.config.lunch_end} ({self._get_timezone_name()})"
+        )
+        # Re-schedule for tomorrow
+        if self._lunch_end_time is not None:
+            self._schedule_single_lunch_alert(
+                "orb_lunch_resume", self._lunch_end_time, self._on_lunch_resume
+            )

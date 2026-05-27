@@ -73,6 +73,14 @@ class TemplateStrategyConfig(StrategyConfig, frozen=True):  # type: ignore[call-
         Futu security code injected by the bundle loader.
     market : str, default "US"
         Target market (``"US"`` or ``"HK"``) injected by the bundle loader.
+    lunch_pause_enabled : bool, default False
+        If ``True``, the strategy pauses during a lunch break window.
+    lunch_start : str, default ""
+        Lunch pause start time in ``HH:MM`` format (instrument local timezone).
+        HK default: ``"12:00"``.
+    lunch_end : str, default ""
+        Lunch pause end time in ``HH:MM`` format (instrument local timezone).
+        HK default: ``"13:00"``.
 
     # -- Add your own parameters below ----------------------------------------
     # window : int, default 20
@@ -95,6 +103,9 @@ class TemplateStrategyConfig(StrategyConfig, frozen=True):  # type: ignore[call-
     exchange: str = ""
     futu_code: str = ""
     market: str = "US"
+    lunch_pause_enabled: bool = False
+    lunch_start: str = ""
+    lunch_end: str = ""
 
     # -- Example custom fields (uncomment and adapt as needed) -----------------
     # window: int = 20
@@ -173,7 +184,19 @@ class TemplateStrategy(Strategy):
         # self.subscribe_quote_ticks(self.instrument_id)
         # self.subscribe_trade_ticks(self.instrument_id)
 
-        # 4. Register indicators ------------------------------------------------
+        # 4. Lunch pause scheduling (optional) ----------------------------------
+        # If your strategy needs to pause during a lunch break (e.g., HK market
+        # 12:00-13:00 HKT), add ``lunch_pause_enabled``, ``lunch_start``, and
+        # ``lunch_end`` to your config and call ``_schedule_lunch_alerts()`` here:
+        #
+        #   if self.config.lunch_pause_enabled:
+        #       self._schedule_lunch_alerts()
+        #
+        # See ``orb.py`` or ``momentum.py`` for the full implementation pattern
+        # (``_get_timezone_name()``, ``_schedule_single_lunch_alert()``,
+        # ``_on_lunch_pause()``, ``_on_lunch_resume()``).
+
+        # 5. Register indicators ------------------------------------------------
         # Nautilus has built-in indicator adapters.  Example:
         #
         #   from nautilus_trader.indicators.average.ema import ExponentialMovingAverage
