@@ -1,5 +1,14 @@
 > **Note: see first-entry Iteration 20 for Phase 2 config dataclasses.**
 
+## Iteration 120
+- **Task**: P7-DM: Strategy — configurable HK lunch pause
+- **Task ID**: sam_trader-9z3.8.13
+- **Status**: COMPLETE
+- **Decisions**: Added `lunch_pause_enabled: bool = False`, `lunch_start: str = ""`, `lunch_end: str = ""` fields to both `OrbStrategyConfig` and `MomentumStrategyConfig`. In `on_start()`, if enabled, registers `LiveClock.set_time_alert()` for lunch_start → `self.pause()` and lunch_end → `self.resume()`. Alerts self-reschedule for the next day after each callback fires. Timezone resolved from instrument venue via `_VENUE_TO_TZ` mapping (consistent with existing `_get_et_time()`). Extracted `_get_timezone_name()` helper from `_get_et_time()` to avoid code duplication. Template updated with lunch pause fields and pattern comments. 30 new unit tests (15 per strategy) covering config defaults/custom values, time parsing, `on_start()` scheduling dispatch, callback behavior (pause/resume/reschedule), invalid-time skip, and timezone name resolution.
+- **Files Changed**: `src/sam_trader/strategies/orb.py`, `src/sam_trader/strategies/momentum.py`, `src/sam_trader/strategies/_template.py`, `tests/unit/strategies/test_orb.py`, `tests/unit/strategies/test_momentum.py`
+- **Validation Result**: PASS (RALPH_GATE_PASSED — 107/107 targeted tests, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. LiveClock is a Cython immutable type — `set_time_alert` and `utc_now` cannot be mocked at the instance or class level. Tests mock strategy-level methods (`_schedule_lunch_alerts`, `_schedule_single_lunch_alert`, `pause`, `resume`) instead. Ready for sam_trader-9z3.8.12 (BundleController).
+
 ## Iteration 119
 - **Task**: P7-DM: Bundle schema — add market field with backward compat
 - **Task ID**: sam_trader-9z3.8.14
