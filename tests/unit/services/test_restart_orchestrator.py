@@ -13,6 +13,7 @@ from sam_trader.services.restart_orchestrator import (
     MARKET_SWITCH_FAILED_CHANNEL,
     RESTART_REQUEST_CHANNEL,
     STATE_SAVED_CHANNEL,
+    OrchestratorConfig,
     RestartOrchestrator,
     _find_env_file,
     _read_market_from_env,
@@ -199,7 +200,7 @@ class TestRestartOrchestrator:
         mock_redis.publish.assert_awaited_once_with(RESTART_REQUEST_CHANNEL, "graceful")
 
     def test_wait_for_state_saved_timeout(self) -> None:
-        orch = RestartOrchestrator()
+        orch = RestartOrchestrator(config=OrchestratorConfig(state_save_timeout=0.01))
         mock_redis = MagicMock()
         mock_pubsub = MagicMock()
         mock_redis.pubsub.return_value = mock_pubsub
@@ -213,7 +214,8 @@ class TestRestartOrchestrator:
             ]
         )
 
-        result = asyncio.run(orch._wait_for_state_saved(mock_redis))
+        with patch("asyncio.sleep", new_callable=AsyncMock):
+            result = asyncio.run(orch._wait_for_state_saved(mock_redis))
         assert result is False
 
     def test_poll_state_loaded_found(self) -> None:
@@ -225,11 +227,12 @@ class TestRestartOrchestrator:
         assert result is True
 
     def test_poll_state_loaded_timeout(self) -> None:
-        orch = RestartOrchestrator()
+        orch = RestartOrchestrator(config=OrchestratorConfig(state_loaded_timeout=0.01))
         mock_redis = MagicMock()
         mock_redis.exists = AsyncMock(return_value=0)
 
-        result = asyncio.run(orch._poll_state_loaded(mock_redis))
+        with patch("asyncio.sleep", new_callable=AsyncMock):
+            result = asyncio.run(orch._poll_state_loaded(mock_redis))
         assert result is False
 
     def test_recreate_trader_success(self) -> None:

@@ -195,6 +195,7 @@ class TestRestartCommand:
         )
         assert any("inspect" in str(c) for c in calls)
 
+    @patch("sam_trader.services.cli.STATE_SAVE_HANDSHAKE_TIMEOUT", 0.01)
     @patch("sam_trader.services.cli._redis_cli")
     @patch("sam_trader.services.cli.subprocess.run")
     def test_restart_timeout_aborts(
