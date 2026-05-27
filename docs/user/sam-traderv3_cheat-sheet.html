@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SAM Trader V3 — Operator Cheat Sheet</title>
+<style>
+  /* GitHub-inspired theme */
+  :root {
+    --color-bg: #ffffff;
+    --color-fg: #1f2328;
+    --color-muted: #656d76;
+    --color-border: #d0d7de;
+    --color-accent: #0969da;
+    --color-accent-subtle: #ddf4ff;
+    --color-danger: #cf222e;
+    --color-success: #1a7f37;
+    --color-warning: #9a6700;
+    --color-code-bg: #f6f8fa;
+    --color-table-stripe: #f6f8fa;
+    --color-section-bg: #f6f8fa;
+    --font-mono: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+    --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;
+    --radius: 6px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --color-bg: #0d1117;
+      --color-fg: #e6edf3;
+      --color-muted: #8b949e;
+      --color-border: #30363d;
+      --color-accent: #58a6ff;
+      --color-accent-subtle: #0c2d6b;
+      --color-danger: #f85149;
+      --color-success: #3fb950;
+      --color-warning: #d29922;
+      --color-code-bg: #161b22;
+      --color-table-stripe: #161b22;
+      --color-section-bg: #161b22;
+    }
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: var(--font-sans);
+    font-size: 15px;
+    line-height: 1.6;
+    color: var(--color-fg);
+    background: var(--color-bg);
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 32px 24px 80px;
+  }
+
+  h1 { font-size: 2em; font-weight: 700; margin: 0 0 4px; border-bottom: 1px solid var(--color-border); padding-bottom: 12px; }
+  h2 { font-size: 1.45em; font-weight: 600; margin: 40px 0 12px; padding-bottom: 6px; border-bottom: 1px solid var(--color-border); }
+  h3 { font-size: 1.1em; font-weight: 600; margin: 24px 0 8px; }
+  h4 { font-size: 1em; font-weight: 600; margin: 16px 0 4px; color: var(--color-muted); }
+
+  p { margin: 0 0 10px; }
+  ul, ol { margin: 0 0 12px 24px; }
+  li { margin: 3px 0; }
+  a { color: var(--color-accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  code {
+    font-family: var(--font-mono);
+    font-size: 0.88em;
+    background: var(--color-code-bg);
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+  pre {
+    font-family: var(--font-mono);
+    font-size: 0.85em;
+    background: var(--color-code-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    overflow-x: auto;
+    line-height: 1.5;
+    margin: 0 0 14px;
+  }
+  pre code { background: none; padding: 0; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0 0 16px;
+    font-size: 0.93em;
+  }
+  th, td {
+    text-align: left;
+    padding: 8px 12px;
+    border: 1px solid var(--color-border);
+  }
+  th { background: var(--color-code-bg); font-weight: 600; }
+  tr:nth-child(even) td { background: var(--color-table-stripe); }
+
+  .subtitle { color: var(--color-muted); font-size: 1.05em; margin: 0 0 24px; }
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 2em;
+    font-size: 0.78em;
+    font-weight: 600;
+    margin: 0 2px;
+  }
+  .badge-ok { background: #dafbe1; color: #1a7f37; }
+  .badge-warn { background: #fff8c5; color: #9a6700; }
+  .badge-danger { background: #ffebe9; color: #cf222e; }
+  .badge-info { background: var(--color-accent-subtle); color: var(--color-accent); }
+  @media (prefers-color-scheme: dark) {
+    .badge-ok { background: #033a16; color: #3fb950; }
+    .badge-warn { background: #3b2300; color: #d29922; }
+    .badge-danger { background: #490202; color: #f85149; }
+    .badge-info { background: #0c2d6b; color: #58a6ff; }
+  }
+
+  .note {
+    border-left: 4px solid var(--color-accent);
+    background: var(--color-accent-subtle);
+    padding: 12px 16px;
+    margin: 0 0 16px;
+    border-radius: 0 var(--radius) var(--radius) 0;
+    font-size: 0.93em;
+  }
+  .warn {
+    border-left: 4px solid var(--color-warning);
+    background: #fff8c5;
+    padding: 12px 16px;
+    margin: 0 0 16px;
+    border-radius: 0 var(--radius) var(--radius) 0;
+    font-size: 0.93em;
+  }
+  @media (prefers-color-scheme: dark) { .warn { background: #3b2300; } }
+
+  .mermaid { margin: 8px 0 20px; text-align: center; }
+  .mermaid svg { max-width: 100%; }
+
+  .cmd-block { margin: 0 0 14px; }
+  .cmd-block .desc { color: var(--color-muted); font-size: 0.85em; margin: 2px 0 0; }
+
+  hr { border: none; border-top: 1px solid var(--color-border); margin: 32px 0; }
+
+  .toc { background: var(--color-code-bg); border: 1px solid var(--color-border); border-radius: var(--radius); padding: 16px 20px; margin: 0 0 24px; }
+  .toc ol { margin: 0; padding-left: 20px; }
+  .toc li { margin: 4px 0; }
+
+  .two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin: 0 0 16px;
+  }
+  @media (max-width: 700px) { .two-col { grid-template-columns: 1fr; } }
+
+  .tag { display: inline-block; font-size: 0.75em; padding: 1px 6px; margin-left: 6px; border-radius: 3px; background: var(--color-border); vertical-align: middle; }
+</style>
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+  mermaid.initialize({ startOnLoad: true, theme: 'default', securityLevel: 'loose',
+    themeVariables: { fontSize: '14px' } });
+</script>
+</head>
+<body>
+
+<h1>SAM Trader V3 — Operator Cheat Sheet</h1>
+<p class="subtitle">
+  Dual-market autonomous trading platform (US + HK) on NautilusTrader.
+  6 containers · 8 actors · 2 controllers · 30 CLI commands.
+</p>
+
+<!-- ───────────────────────────────────────────────────────────────── -->
+<!-- TOC                                                               -->
+<!-- ───────────────────────────────────────────────────────────────── -->
+<div class="toc">
+<strong>Contents</strong>
+<ol>
+  <li><a href="#architecture">Architecture</a></li>
+  <li><a href="#env-and-config">Environment &amp; Config Files</a></li>
+  <li><a href="#daily-cycle">Daily Cycle (Dual-Market Timeline)</a></li>
+  <li><a href="#deploy">Deploy &amp; Container Lifecycle</a></li>
+  <li><a href="#status-health">Status &amp; Health</a></li>
+  <li><a href="#market-switch">Market Switch US ↔ HK</a></li>
+  <li><a href="#premarket-pipeline">Pre-Market &amp; Pipeline</a></li>
+  <li><a href="#bundle-mgmt">Bundle Management</a></li>
+  <li><a href="#during-hours">During-Hours Monitoring</a></li>
+  <li><a href="#emergency">Emergency &amp; Safety</a></li>
+  <li><a href="#eod-reports">EOD &amp; Reports</a></li>
+  <li><a href="#backup-restore">Backup &amp; Restore</a></li>
+  <li><a href="#troubleshooting">Troubleshooting</a></li>
+  <li><a href="#key-files">Key Files Reference</a></li>
+</ol>
+</div>
+
+<!-- ───────────────────────────────────────────────────────────────── -->
+<!-- 1. ARCHITECTURE                                                   -->
+<!-- ───────────────────────────────────────────────────────────────── -->
+<h2 id="architecture">1. Architecture</h2>
+
+<div class="mermaid">
+flowchart LR
+  subgraph Host ["Host (macOS / Linux)"]
+    deploy["deploy.sh"]
+    env[".env"]
+    config["config/*.yaml"]
+  end
+  subgraph Docker ["Docker Network: sam-net"]
+    pg[("sam-postgres<br/>PostgreSQL 16")]
+    redis[("sam-redis<br/>Redis 7")]
+    futu["sam-futu-opend<br/>Futu OpenD<br/>HK broker"]
+    ib["sam-ib-gateway<br/>IB Gateway<br/>US broker"]
+    trader["sam-trader<br/>NautilusTrader engine<br/>8 actors + 2 controllers"]
+    svc["sam-services<br/>Dashboard + RestartOrchestrator<br/>CLI host"]
+  end
+
+  deploy -->|"docker compose up -d"| Docker
+  env -->|"sets MARKET=US or HK"| trader
+  env -->|"mounted rw"| svc
+  config -->|bundles, scanner, market| trader
+  trader -->|trade journal, reports| pg
+  trader -->|state cache, pub/sub| redis
+  trader -->|orders + data| futu
+  trader -.->|"optional (IB_ENABLED)"| ib
+  svc -->|"Redis pub/sub (switch requests)"| redis
+  svc -->|"docker restart"| trader
+</div>
+
+<table>
+  <tr><th>Container</th><th>Role</th><th>Key Ports</th></tr>
+  <tr><td><code>sam-postgres</code></td><td>Trade journal, daily reports, fills</td><td>5432</td></tr>
+  <tr><td><code>sam-redis</code></td><td>State cache, pub/sub bus, snapshots</td><td>6379</td></tr>
+  <tr><td><code>sam-futu-opend</code></td><td>Futu OpenD gateway (HK + US broker)</td><td>11111, 22222</td></tr>
+  <tr><td><code>sam-ib-gateway</code></td><td>IB Gateway (US broker — optional)</td><td>4004, 5900</td></tr>
+  <tr><td><code>sam-trader</code></td><td>NautilusTrader engine + actors + controllers</td><td>—</td></tr>
+  <tr><td><code>sam-services</code></td><td>Web dashboard + CLI host + RestartOrchestrator</td><td>8080</td></tr>
+</table>
+
+<h3>Actors (run inside sam-trader)</h3>
+<table>
+  <tr><th>Actor</th><th>What It Does</th><th>Toggle Env Var</th></tr>
+  <tr><td><code>MarketSchedulerActor</code></td><td>Market-close alerts + auto market-switch trigger</td><td><em>always on</em></td></tr>
+  <tr><td><code>ReadinessCheckerActor</code></td><td>SOD 7-check operational readiness</td><td><em>always on</em></td></tr>
+  <tr><td><code>EndOfDayReporterActor</code></td><td>EOD 6-section aggregated report</td><td><em>always on</em></td></tr>
+  <tr><td><code>HealthMonitorActor</code></td><td>Connectivity heartbeats + stall detection</td><td><code>ACTOR_HEALTH_ENABLED</code></td></tr>
+  <tr><td><code>TradeJournalActor</code></td><td>Trade journaling to PostgreSQL</td><td><code>ACTOR_JOURNAL_ENABLED</code></td></tr>
+  <tr><td><code>PositionSnapshotActor</code></td><td>Periodic position snapshots</td><td><code>ACTOR_POSITION_SNAPSHOT_ENABLED</code></td></tr>
+  <tr><td><code>RealizedPnLTrackerActor</code></td><td>Per-strategy realized P&L tracking</td><td><code>ACTOR_REALIZED_PNL_ENABLED</code></td></tr>
+  <tr><td><code>RejectionMonitorActor</code></td><td>Order rejection circuit breaker</td><td><code>ACTOR_REJECTION_MONITOR_ENABLED</code></td></tr>
+  <tr><td><code>BarResubscriptionActor</code></td><td>Bar data resubscription on reconnect</td><td><code>ACTOR_BAR_RESUB_ENABLED</code></td></tr>
+</table>
+
+<h3>Controllers (run inside sam-trader)</h3>
+<table>
+  <tr><th>Controller</th><th>What It Does</th></tr>
+  <tr><td><code>BundleController</code></td><td>Dynamic strategy lifecycle — load/unload at runtime via Redis pub/sub</td></tr>
+</table>
+
+<!-- ───────────────────────────────────────────────────────────────── -->
+<!-- 2. ENV & CONFIG                                                   -->
+<!-- ───────────────────────────────────────────────────────────────── -->
+<h2 id="env-and-config">2. Environment &amp; Config Files</h2>
+
+<p>All paths relative to project root (<code>/opt/sam_trader/</code> in container, repo root on host).</p>
+
+<table>
+  <tr><th>File</th><th>Purpose</th><th>Location</th></tr>
+  <tr><td><code>.env</code></td><td><strong>Primary config.</strong> MARKET, broker credentials, feature toggles, timeouts.</td><td><code>&lt;project-root&gt;/.env</code></td></tr>
+  <tr><td><code>config/market_config.yaml</code></td><td>Per-market hours, timezones, pipeline/readiness/EOD timings.</td><td><code>&lt;project-root&gt;/config/market_config.yaml</code></td></tr>
+  <tr><td><code>config/bundles.yaml</code></td><td>Active strategies — filtered by <code>market</code> field at boot.</td><td><code>&lt;project-root&gt;/config/bundles.yaml</code></td></tr>
+  <tr><td><code>config/bundles.example.yaml</code></td><td>Annotated bundle reference with all supported fields.</td><td><code>&lt;project-root&gt;/config/bundles.example.yaml</code></td></tr>
+  <tr><td><code>config/gap_scanner.yaml</code></td><td>Dual-broker scanner params per market (primary/secondary, thresholds).</td><td><code>&lt;project-root&gt;/config/gap_scanner.yaml</code></td></tr>
+  <tr><td><code>config/premarket_watchlist.yaml</code></td><td>Universe of symbols scanned pre-market.</td><td><code>&lt;project-root&gt;/config/premarket_watchlist.yaml</code></td></tr>
+  <tr><td><code>docker/docker-compose.yml</code></td><td>6-container service definitions.</td><td><code>&lt;project-root&gt;/docker/docker-compose.yml</code></td></tr>
+</table>
+
+<div class="note">
+<strong>THE control variable:</strong> <code>MARKET=US</code> or <code>MARKET=HK</code> in <code>.env</code> determines which market the trader boots into.
+The <code>RestartOrchestrator</code> updates this field during market switches.
+All other per-market parameters are read from <code>config/market_config.yaml</code>.
+</div>
+
+<!-- ───────────────────────────────────────────────────────────────── -->
+<!-- 3. DAILY CYCLE                                                    -->
+<!-- ───────────────────────────────────────────────────────────────── -->
+<h2 id="daily-cycle">3. Daily Cycle (Dual-Market Timeline)</h2>
+
+<div class="mermaid">
+gantt
+  title      SAM Trader V3 — Dual-Market Daily Cycle (all times HKT UTC+8)
+  dateFormat HH:mm
+  axisFormat %H:%M
+
+  section HK Day
+  US→HK Switch (maint window)   :crit, hk-switch, 04:00, 1m
+  SOD Readiness Check           :hk-ready, 07:00, 2m
+  Pre-Market Pipeline           :hk-pipe, 07:30, 30m
+  Gap Scan Pass 1               :hk-gap1, 09:20, 5m
+  Gap Scan Pass 2               :hk-gap2, 09:25, 5m
+  HK Trading (09:30-16:00)      :hk-trade, 09:30, 390m
+  Lunch Pause (12:00-13:00)     :hk-lunch, 12:00, 60m
+  HK→US Switch + EOD Report     :crit, hk-sw-out, 16:00, 6m
+
+  section US Day (ET times in labels)
+  SOD Readiness (08:00 ET)     :us-ready, 20:00, 2m
+  Pre-Market Pipeline (08:30 ET) :us-pipe, 20:30, 30m
+  Gap Scan Pass 1 (09:20 ET)    :us-gap1, 21:20, 5m
+  Gap Scan Pass 2 (09:25 ET)    :us-gap2, 21:25, 5m
+  US Trading (09:30-04:00 ET)   :us-trade, 21:30, 390m
+</div>
+<p style="font-size:0.85em; color:var(--color-muted); margin-top:4px;">
+  US close at 16:00 ET = 04:00 HKT (next calendar day). US→HK switch fires at 04:00 HKT.
+</p>
+
+<div class="note">
+<strong>Timing note:</strong> US pre-market & open times are shown in <strong>HKT</strong> (UTC+8) above for cross-reference.
+US ET = HKT − 12 hours (standard) or HKT − 13 hours (daylight).
+</div>
+
+<h3>Quick Reference</h3>
+<table>
+  <tr><th>Event</th><th>HK (HKT)</th><th>US (ET)</th><th>US (≈ HKT)</th></tr>
+  <tr><td>Maintenance window</td><td colspan="3" style="text-align:center">04:00 – 07:00 HKT (same for both markets)</td></tr>
+  <tr><td>SOD readiness</td><td>07:00</td><td>08:00</td><td>20:00 / 21:00*</td></tr>
+  <tr><td>Pre-market pipeline</td><td>07:30</td><td>08:30</td><td>20:30 / 21:30*</td></tr>
+  <tr><td>Gap scan pass 1</td><td>09:20</td><td>09:20</td><td>21:20 / 22:20*</td></tr>
+  <tr><td>Gap scan pass 2</td><td>09:25</td><td>09:25</td><td>21:25 / 22:25*</td></tr>
+  <tr><td>Market open</td><td>09:30</td><td>09:30</td><td>21:30 / 22:30*</td></tr>
+  <tr><td>Lunch pause</td><td>12:00–13:00</td><td>—</td><td>—</td></tr>
+  <tr><td>Market close</td><td>16:00</td><td>16:00</td><td>04:00 / 05:00*</td></tr>
+  <tr><td>EOD report</td><td>16:05</td><td>16:05</td><td>04:05 / 05:05*</td></tr>
+  <tr><td>Auto-switch trigger</td><td>16:00 (→ US)</td><td>—</td><td>04:00 (→ HK)</td></tr>
+</table>
+<p style="font-size:0.85em; color:var(--color-muted)">* = during US daylight saving (Mar–Nov)</p>
+
+<!-- ───────────────────────────────────────────────────────────────── -->
+<!-- 4. DEPLOY                                                         -->
+<!-- ───────────────────────────────────────────────────────────────── -->
+<h2 id="deploy">4. Deploy &amp; Container Lifecycle</h2>
+
+<pre><code># Start all 6 containers
+./deploy.sh start
+
+# Stop all
+./deploy.sh stop
+
+# Rebuild images + start
+./deploy.sh --build start
+
+# Restart a single container (e.g., after config change)
+docker compose -f docker/docker-compose.yml restart sam-trader
+docker compose -f docker/docker-compose.yml restart sam-services
+
+# View container status
+docker compose -f docker/docker-compose.yml ps</code></pre>
+
+<div class="note">
+<strong>All CLI commands run inside sam-services:</strong><br>
+<code>docker exec sam-services sam &lt;command&gt;</code><br>
+Tip: add <code>alias sam='docker exec sam-services sam'</code> to your shell profile.
+</div>
+
+<!-- ───────────────────────────────────────────────────────────────── -->
+<!-- 5. STATUS & HEALTH                                                -->
+<!-- ───────────────────────────────────────────────────────────────── -->
+<h2 id="status-health">5. Status &amp; Health</h2>
+
+<div class="cmd-block"><pre><code>sam status</code></pre>
+<div class="desc">Docker <code>ps</code> filtered to sam-* containers (name, state, health, ports).</div></div>
+
+<div class="cmd-block"><pre><code>sam health</code></pre>
+<div class="desc">Deep health check: PostgreSQL, Redis, Futu OpenD connectivity, Nautilus engine heartbeat.</div></div>
+
+<div class="cmd-block"><pre><code>sam data-health</code></pre>
+<div class="desc">Verify market-data bar flow end-to-end after restart or market switch.
+Checks latest bar timestamps per instrument against expected freshness.</div></div>
+
+<div class="cmd-block"><pre><code>sam deploy-window</code></pre>
+<div class="desc">Check whether current time is inside the safe deploy window (default 05:00–08:00 HKT).</div></div>
+
+<div class="cmd-block"><pre><code>sam logs [service]</code></pre>
+<div class="desc">Tail logs for a specific service or all sam-* containers.</div></div>
+
+<div class="cmd-block"><pre><code>sam version</code></pre>
+<div class="desc">Show deployed version: git tag/commit + build timestamp.</div></div>
+
+<!-- ───────────────────────────────────────────────────────────────── -->
+<!-- 6. MARKET SWITCH                                                  -->
+<!-- ───────────────────────────────────────────────────────────────── -->
+<h2 id="market-switch">6. Market Switch US ↔ HK</h2>
+
+<div class="mermaid">
+flowchart TD
+  A["MarketSchedulerActor<br/>detects HK close (16:00 HKT)<br/>or US close — maintenance open (04:00 HKT)"] --> B{"Pre-switch gate checks<br/>(calendar, account, connectivity)"}
+  B -->|PASS| C["Publish sam:market_switch_request<br/>to Redis"]
+  B -->|FAIL| X["Skip — log warning"]
+  C --> D["RestartOrchestrator (sam-services)<br/>receives request"]
+  D --> E["Wait for sam:state_saved<br/>from RestartSubscriber (sam-trader)"]
+  E -->|timeout 30s| F["❌ Publish sam:market_switch_failed"]
+  E -->|confirmed| G["Update MARKET=US|HK in .env"]
+  G --> H["docker compose restart sam-trader"]
+  H --> I["Poll sam:state_loaded<br/>Redis key (timeout 60s)"]
+  I -->|timeout| J["❌ Rollback MARKET in .env<br/>Publish sam:market_switch_failed"]
+  I -->|found| K["✅ Publish sam:market_switch_complete"]
+</div>
+
+<h3>Automatic (preferred)</h3>
+<p>The <code>MarketSchedulerActor</code> runs inside sam-trader and publishes switch requests automatically:</p>
+<ul>
+  <li><strong>HK → US:</strong> 16:00 HKT (HK market close)</li>
+  <li><strong>US → HK:</strong> 04:00 HKT (US close + maintenance window open)</li>
+</ul>
+<p>No manual intervention needed — the scheduler waits for the maintenance window, runs gate checks, and triggers the switch.</p>
+
+<h3>Manual (emergency / test)</h3>
+<div class="cmd-block"><pre><code>sam switch-market US
+sam switch-market HK
+sam switch-market US --timeout 300</code></pre>
+<div class="desc">Request market switch and wait for orchestrator to complete the full flow
+(save → env update → container restart → state_loaded). Default timeout 120s.</div></div>
+
+<div class="warn">
+<strong>Switch only inside the maintenance window (04:00–07:00 HKT).</strong>
+The RestartOrchestrator enforces this gate — requests outside the window are rejected.
+</div>
+
+<!-- ───────────────────────────────────────────────────────────────── -->
+<!-- 7. PRE-MARKET & PIPELINE                                          -->
+<!-- ───────────────────────────────────────────────────────────────── -->
+<h2 id="premarket-pipeline">7. Pre-Market &amp; Pipeline</h2>
+
+<div class="cmd-block"><pre><code>sam pipeline [--market US|HK]</code></pre>
+<div class="desc">Full pre-market pipeline: gap scan → AI scoring → bundle generation → readiness report.
+If <code>--market</code> is omitted, uses the current MARKET from .env.</div></div>
+
+<div class="cmd-block"><pre><code>sam gapscan --market US --pass 1
+sam gapscan --market HK --pass 1
+sam gapscan --market US --pass 2</code></pre>
+<div class="desc">Dual-broker pre-market gap scanner.
+<strong>Pass 1:</strong> initial scan from premarket_watchlist.yaml.
+<strong>Pass 2:</strong> re-scan narrowed candidates. Results cross-validated between primary
+and secondary brokers (US: Futu + IB; HK: Futu only).</div></div>
+
+<div class="cmd-block"><pre><code>sam watchlist [--market US|HK]</code></pre>
+<div class="desc">Show the current pre-market watchlist universe for the given market.</div></div>
+
+<div class="cmd-block"><pre><code>sam readiness-report</code></pre>
+<div class="desc">Generate the full SOD readiness report (7 checks: broker connectivity, quote flow,
+instruments resolved, account status, bundles loaded, Redis/PG health, calendar trading day).
+Results written to Redis <code>sam:readiness:{market}:{date}</code>.</div></div>
+
+<div class="cmd-block"><pre><code>sam readiness --market HK</code></pre>
+<div class="desc">Read the published readiness report from Redis (previously generated by
+ReadinessCheckerActor or readiness-report).</div></div>
+
+<h3>Scanner Configuration</h3>
+<p>Dual-broker parameters live in <code>config/gap_scanner.yaml</code>:</p>
+<table>
+  <tr><th>Market</th><th>Primary Broker</th><th>Secondary</th><th>Cross-Validation Threshold</th><th>Min Gap %</th></tr>
+  <tr><td>US</td><td>FUTU</td><td>IB</td><td>1.0%</td><td>2.0%</td></tr>
+  <tr><td>HK</td><td>FUTU</td><td><em>none</em> (IB unavailable)</td><td>1.0%</td><td>1.5%</td></tr>
+</table>
+
+<!-- ───────────────────────────────────────────────────────────────── -->
+<!-- 8. BUNDLE MANAGEMENT                                              -->
+<!-- ───────────────────────────────────────────────────────────────── -->
+<h2 id="bundle-mgmt">8. Bundle Management</h2>
+
+<p>Bundles define active strategies. Filtered by <code>market</code> field at boot so only
+strategies matching the current MARKET are loaded.</p>
+
+<h3>CLI</h3>
+<div class="cmd-block"><pre><code>sam validate-bundles</code></pre>
+<div class="desc">Validate bundle YAML: schema check + strategy class import + optional backtest gate.</div></div>
+
+<div class="cmd-block"><pre><code>sam bundle-diff</code></pre>
+<div class="desc">Show pending bundle changes compared to the last deployed snapshot in Redis.</div></div>
+
+<h3>Runtime Bundle Control (via Redis pub/sub)</h3>
+<p>The <code>BundleController</code> inside sam-trader subscribes to Redis channels for
+hot-reload of strategies without restart:</p>
+
+<div class="cmd-block"><pre><code># Load a new bundle at runtime
+redis-cli -h sam-redis PUBLISH sam:bundle:load '{"id":"my-strat","venue":"FUTU","market":"HK","strategy":{"path":"sam_trader.strategies.orb:OrbStrategy","config":{"instrument_id":"00700.HKEX","bar_type":"00700.HKEX-15-MINUTE-LAST-EXTERNAL","first_candle_minutes":15,"trade_size":100}},"bracket":{"stop_loss_ticks":20,"take_profit_ticks":60},"risk":{"max_position":1000,"max_daily_loss":5000}}'
+
+# Unload a strategy by ID
+redis-cli -h sam-redis PUBLISH sam:bundle:unload '{"strategy_id":"OrbStrategy-0"}'</code></pre>
+</div>
+
+<div class="note">
+<strong>Bundle fields:</strong> <code>id</code>, <code>enabled</code>, <code>venue</code> (FUTU|IB),
+<code>market</code> (US|HK), <code>strategy.path</code>, <code>strategy.config</code>,
+<code>bracket.stop_loss_ticks</code>, <code>bracket.take_profit_ticks</code>,
+<code>risk.max_position</code>, <code>risk.max_daily_loss</code>.
+See <code>config/bundles.example.yaml</code> for full annotated reference.
+</div>
+
+<!-- ───────────────────────────────────────────────────────────────── -->
+<!-- 9. DURING HOURS                                                   -->
+<!-- ───────────────────────────────────────────────────────────────── -->
+<h2 id="during-hours">9. During-Hours Monitoring</h2>
+
+<div class="cmd-block"><pre><code>sam quote --symbol AAPL.US
+sam quote --symbol 00700.HKEX</code></pre>
+<div class="desc">Real-time quote: tries Redis cache first, falls back to broker.</div></div>
+
+<div class="cmd-block"><pre><code>sam probe --broker futu --data-type quotes
+sam probe --broker ib --data-type bars --bar-type 1-MINUTE</code></pre>
+<div class="desc">Probe broker data feed independently of the running engine.
+Useful for diagnosing connectivity without touching the trader.</div></div>
+
+<div class="cmd-block"><pre><code>sam safety-monitor</code></pre>
+<div class="desc">Run circuit breaker checks manually: daily P&L, rejection streak, connectivity timeout.</div></div>
+
+<!-- ───────────────────────────────────────────────────────────────── -->
+<!-- 10. EMERGENCY                                                     -->
+<!-- ───────────────────────────────────────────────────────────────── -->
+<h2 id="emergency">10. Emergency &amp; Safety</h2>
+
+<div class="two-col">
+<div>
+<h3>Kill / Halt / Resume</h3>
+<div class="cmd-block"><pre><code>sam kill</code></pre>
+<div class="desc"><span class="badge badge-danger">EMERGENCY</span>
+Cancel ALL orders + halt trading immediately. Use when you need to flatten everything NOW.</div></div>
+
+<div class="cmd-block"><pre><code>sam halt</code></pre>
+<div class="desc"><span class="badge badge-warn">HALT</span>
+Halt trading: cancel open orders, switch to position-close-only mode. Strategies remain loaded but cannot submit new orders.</div></div>
+
+<div class="cmd-block"><pre><code>sam resume</code></pre>
+<div class="desc"><span class="badge badge-ok">RESUME</span>
+Resume trading: clear halt state, strategies can submit orders again.</div></div>
+</div>
+<div>
+<h3>Cache Flush</h3>
+<div class="cmd-block"><pre><code>sam flush-cache --force</code></pre>
+<div class="desc"><span class="badge badge-warn">USE SPARINGLY</span>
+Emergency Redis cache flush. Removes ALL keys from the Redis DB — clears stale orders,
+strategy state, and cached data. Use when the node cannot start because of orphaned
+orders persisted across restarts.</div></div>
+
+<h3>Safety Env Vars</h3>
+<table>
+  <tr><td><code>SAFETY_MAX_DAILY_LOSS=0</code></td><td>Max daily P&L loss (0 = disabled)</td></tr>
+  <tr><td><code>SAFETY_MAX_REJECTION_STREAK=3</code></td><td>Order rejections before auto-halt</td></tr>
+  <tr><td><code>SAFETY_CONNECTIVITY_TIMEOUT_SECS=60</code></td><td>Stale connection detection</td></tr>
+  <tr><td><code>RISK_BYPASS=0</code></td><td>Set to 1 to bypass all risk checks (paper only!)</td></tr>
+</table>
+</div>
+</div>
+
+<!-- ───────────────────────────────────────────────────────────────── -->
+<!-- 11. EOD & REPORTS                                                 -->
+<!-- ───────────────────────────────────────────────────────────────── -->
+<h2 id="eod-reports">11. EOD &amp; Reports</h2>
+
+<div class="cmd-block"><pre><code>sam report --market US
+sam report --market HK
+sam report --market US --date 2026-05-26</code></pre>
+<div class="desc">Display the EOD aggregated report. Pulls from Redis
+(<code>sam:eod_report:{market}:{date}</code>) or falls back to PostgreSQL <code>daily_reports</code> table.</div></div>
+
+<h3>EOD Report — 6 Sections</h3>
+<p>Generated automatically by <code>EndOfDayReporterActor</code> at market close + 5 minutes:</p>
+<table>
+  <tr><th>#</th><th>Section</th><th>Source</th><th>Content</th></tr>
+  <tr><td>1</td><td>Daily P&amp;L</td><td>Redis P&amp;L keys (+ PG fills fallback)</td><td>Realized P&amp;L per strategy</td></tr>
+  <tr><td>2</td><td>Fills Summary</td><td>PG <code>fills</code> table</td><td>Total fills + commissions by strategy</td></tr>
+  <tr><td>3</td><td>Max Drawdown</td><td>Redis P&amp;L timeseries / PG fills</td><td>Peak-to-trough drawdown per strategy</td></tr>
+  <tr><td>4</td><td>Position Summary</td><td>Nautilus PositionStore</td><td>Open positions (should be zero at EOD)</td></tr>
+  <tr><td>5</td><td>Rejection Events</td><td>RejectionMonitorActor state</td><td>Order rejection count + streak</td></tr>
+  <tr><td>6</td><td>Health Events</td><td>HealthMonitorActor state</td><td>Connectivity stalls, heartbeat gaps</td></tr>
+</table>
+
+<div class="cmd-block"><pre><code>sam performance
+sam performance --strategy orb --days 7</code></pre>
+<div class="desc">Display performance stats from Nautilus portfolio: P&amp;L, win rate, Sharpe ratio, etc.</div></div>
+
+<div class="cmd-block"><pre><code>sam rotate-logs</code></pre>
+<div class="desc">Rotate oversized log files and purge archives older than <code>LOG_RETENTION_DAYS</code>.</div></div>
+
+<!-- ───────────────────────────────────────────────────────────────── -->
+<!-- 12. BACKUP & RESTORE                                              -->
+<!-- ───────────────────────────────────────────────────────────────── -->
+<h2 id="backup-restore">12. Backup &amp; Restore</h2>
+
+<div class="cmd-block"><pre><code>sam backup</code></pre>
+<div class="desc">Trigger full backup to <code>BACKUP_HOST_DIR</code> (default <code>~/Documents/ai_agent_docs/backup-sam_trader_v3</code>).
+Backs up: PostgreSQL dump + Redis RDB + bundle configs + logs.</div></div>
+
+<div class="cmd-block"><pre><code>sam restore --date 20260526</code></pre>
+<div class="desc">Restore from a date-specific archive (YYYYMMDD format).</div></div>
+
+<!-- ───────────────────────────────────────────────────────────────── -->
+<!-- 13. TROUBLESHOOTING                                               -->
+<!-- ───────────────────────────────────────────────────────────────── -->
+<h2 id="troubleshooting">13. Troubleshooting</h2>
+
+<table>
+  <tr><th>Symptom</th><th>Likely Cause</th><th>Fix</th></tr>
+  <tr>
+    <td><code>sam readiness</code> shows broker FAIL</td>
+    <td>Futu OpenD or IB Gateway not healthy</td>
+    <td><code>docker compose restart sam-futu-opend sam-ib-gateway</code></td>
+  </tr>
+  <tr>
+    <td>Zero bundles loaded at boot</td>
+    <td>MARKET in .env mismatches bundle <code>market</code> field</td>
+    <td>Check <code>MARKET=</code> in <code>.env</code> vs <code>market:</code> field in <code>config/bundles.yaml</code></td>
+  </tr>
+  <tr>
+    <td>Bars stale after market switch</td>
+    <td>State loaded but execution client not reconnected</td>
+    <td><code>sam flush-cache --force</code> then restart</td>
+  </tr>
+  <tr>
+    <td>Scanner discrepancies &gt;1% between brokers</td>
+    <td>Futu vs IB price drift (pre/post-market spread differences)</td>
+    <td>Run <code>sam data-health</code>; disable secondary broker in <code>config/gap_scanner.yaml</code> if persistent</td>
+  </tr>
+  <tr>
+    <td>Market switch request rejected</td>
+    <td>Outside maintenance window (04:00–07:00 HKT)</td>
+    <td>Wait for window or use <code>sam deploy-window</code> to check timing</td>
+  </tr>
+  <tr>
+    <td>Strategies not trading after resume</td>
+    <td>Halt state not fully cleared or bundle not re-loaded</td>
+    <td>Run <code>sam resume</code> then re-publish bundle via Redis if needed</td>
+  </tr>
+  <tr>
+    <td>Redis connection refused from CLI</td>
+    <td>sam-redis container not running or network issue</td>
+    <td><code>sam status</code> → verify sam-redis is healthy; restart if needed</td>
+  </tr>
+</table>
+
+<!-- ───────────────────────────────────────────────────────────────── -->
+<!-- 14. KEY FILES                                                     -->
+<!-- ───────────────────────────────────────────────────────────────── -->
+<h2 id="key-files">14. Key Files Reference</h2>
+
+<table>
+  <tr><th>Path</th><th>Description</th></tr>
+  <tr><td><code>.env</code></td><td>Primary env vars — MARKET, broker credentials, actor toggles, timeouts</td></tr>
+  <tr><td><code>.env.example</code></td><td>Annotated template — copy to .env and fill in</td></tr>
+  <tr><td><code>config/market_config.yaml</code></td><td>Per-market session hours, timezones, pipeline/readiness/EOD trigger times</td></tr>
+  <tr><td><code>config/bundles.yaml</code></td><td>Active strategy bundles — one per strategy, filtered by market at boot</td></tr>
+  <tr><td><code>config/bundles.example.yaml</code></td><td>Full annotated bundle reference with all fields explained</td></tr>
+  <tr><td><code>config/gap_scanner.yaml</code></td><td>Dual-broker scanner: per-market primary/secondary broker, thresholds, filters</td></tr>
+  <tr><td><code>config/premarket_watchlist.yaml</code></td><td>Watchlist universe for pre-market gap scanning</td></tr>
+  <tr><td><code>docker/docker-compose.yml</code></td><td>6-container service definitions + health checks</td></tr>
+  <tr><td><code>deploy.sh</code></td><td>Host-side deploy wrapper (start, stop, build)</td></tr>
+  <tr><td><code>scripts/ralph/</code></td><td>Ralph Wiggum agentic dev loop scripts</td></tr>
+  <tr><td><code>docs/agent/PROGRESS.md</code></td><td>Build iteration log</td></tr>
+  <tr><td><code>docs/reference/BUILD_PHASE_*.md</code></td><td>Per-phase implementation reference</td></tr>
+</table>
+
+<hr>
+<p style="text-align:center; color:var(--color-muted); font-size:0.85em;">
+  SAM Trader V3 · Phase 0–11 complete · Last updated May 2026
+</p>
+
+</body>
+</html>
