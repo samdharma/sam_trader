@@ -137,7 +137,7 @@ Run the full pre-market analysis pipeline:
 
 ```bash
 # Gap scan → AI scoring → bundle generation → readiness report
-docker exec sam-services sam readiness
+docker exec sam-services sam readiness-report
 
 # Or run individual stages
 docker exec sam-services sam gapscan --market US --pass 1
@@ -604,7 +604,8 @@ docker exec sam-redis redis-cli dbsize
 | 03:00 | `sam rotate-logs` | Log rotation and cleanup |
 | 06:00 | `sam backup` | Daily backup (weekdays) |
 | 06:30 | `sam performance` | Nightly performance analysis |
-| 08:00 | `sam readiness` | Pre-market pipeline |
+| 08:00 | `sam readiness-report` | Pre-market pipeline |
+| 08:00 | `sam readiness --market US` | SOD readiness check (from Redis) |
 
 ---
 

@@ -601,9 +601,9 @@ class TestGapscanCommand:
         assert "pass must be 1 or 2" in captured.err or "ERROR" in captured.err
 
 
-class TestReadinessCommand:
-    def test_readiness_simulate_human(self, capsys: Any) -> None:
-        rc = main(["readiness", "--simulate", "--market", "US"])
+class TestReadinessReportCommand:
+    def test_readiness_report_simulate_human(self, capsys: Any) -> None:
+        rc = main(["readiness-report", "--simulate", "--market", "US"])
         captured = capsys.readouterr()
         assert rc == 0
         assert "SAM Trader V3" in captured.out
@@ -613,33 +613,33 @@ class TestReadinessCommand:
         assert "Bundle Generation" in captured.out
         assert "Market Regime" in captured.out
 
-    def test_readiness_simulate_json(self, capsys: Any) -> None:
-        rc = main(["--json", "readiness", "--simulate", "--market", "US"])
+    def test_readiness_report_simulate_json(self, capsys: Any) -> None:
+        rc = main(["--json", "readiness-report", "--simulate", "--market", "US"])
         captured = capsys.readouterr()
         assert rc == 0
         data = json.loads(captured.out)
-        assert data["command"] == "readiness"
+        assert data["command"] == "readiness-report"
         assert data["market"] == "US"
         assert data["approved_count"] == 2
         assert data["bundles_generated"] == 2
 
-    def test_readiness_simulate_no_save(
+    def test_readiness_report_simulate_no_save(
         self, capsys: Any, tmp_path: pathlib.Path
     ) -> None:
-        rc = main(["readiness", "--simulate", "--no-save", "--market", "US"])
+        rc = main(["readiness-report", "--simulate", "--no-save", "--market", "US"])
         out = capsys.readouterr().out
         assert rc == 0
         assert "SAM Trader V3" in out
 
-    def test_readiness_invalid_market(self, capsys: Any) -> None:
-        rc = main(["readiness", "--simulate", "--market", "EU"])
+    def test_readiness_report_invalid_market(self, capsys: Any) -> None:
+        rc = main(["readiness-report", "--simulate", "--market", "EU"])
         captured = capsys.readouterr()
         assert rc == 1
         assert "Unknown market" in captured.err or "ERROR" in captured.err
 
     @patch("sam_trader.services.cli.build_watchlist")
     @patch("sam_trader.services.cli.load_watchlist_config")
-    def test_readiness_empty_watchlist(
+    def test_readiness_report_empty_watchlist(
         self,
         mock_load_cfg: Any,
         mock_build: Any,
@@ -648,14 +648,14 @@ class TestReadinessCommand:
         mock_build.return_value = {"US": []}
         mock_load_cfg.return_value = {}
 
-        rc = main(["readiness", "--market", "US"])
+        rc = main(["readiness-report", "--market", "US"])
         captured = capsys.readouterr()
         assert rc == 0
         assert "No symbols" in captured.out
 
     @patch("sam_trader.services.cli.ReadinessReportGenerator.send_webhook")
     @patch("sam_trader.services.cli.ReadinessReportGenerator.save_audit")
-    def test_readiness_webhook_and_save(
+    def test_readiness_report_webhook_and_save(
         self,
         mock_save: Any,
         mock_webhook: Any,
@@ -666,7 +666,7 @@ class TestReadinessCommand:
 
         rc = main(
             [
-                "readiness",
+                "readiness-report",
                 "--simulate",
                 "--webhook-url",
                 "https://hooks.slack.com/test",
@@ -680,15 +680,145 @@ class TestReadinessCommand:
 
     @patch("sam_trader.services.cli.ReadinessReportGenerator.send_webhook")
     @patch("sam_trader.services.cli.ReadinessReportGenerator.save_audit")
-    def test_readiness_no_save_flag(
+    def test_readiness_report_no_save_flag(
         self,
         mock_save: Any,
         mock_webhook: Any,
         capsys: Any,
     ) -> None:
-        rc = main(["readiness", "--simulate", "--no-save", "--market", "US"])
+        rc = main(["readiness-report", "--simulate", "--no-save", "--market", "US"])
         assert rc == 0
         mock_save.assert_not_called()
+
+
+class TestReadinessCommand:
+    @patch("sam_trader.services.cli._redis_cli")
+    def test_readiness_all_pass(self, mock_redis_mod: Any, capsys: Any) -> None:
+        mock_r = MagicMock()
+        mock_r.get.return_value = json.dumps(
+            {
+                "market": "US",
+                "date": "2026-05-27",
+                "overall": "PASS",
+                "checks": [
+                    {
+                        "name": "broker_connectivity",
+                        "result": "PASS",
+                        "detail": "all expected brokers connected",
+                    },
+                    {
+                        "name": "quote_flow",
+                        "result": "PASS",
+                        "detail": "all 2 instruments fresh",
+                    },
+                    {
+                        "name": "instruments_resolved",
+                        "result": "PASS",
+                        "detail": "all 2 instruments resolved",
+                    },
+                ],
+            }
+        )
+        mock_redis_mod.Redis.return_value = mock_r
+
+        rc = main(["readiness", "--market", "US"])
+        captured = capsys.readouterr()
+        assert rc == 0
+        assert "SOD Readiness [US]" in captured.out
+        assert "PASS" in captured.out
+        assert "broker_connectivity" in captured.out
+
+    @patch("sam_trader.services.cli._redis_cli")
+    def test_readiness_some_fail(self, mock_redis_mod: Any, capsys: Any) -> None:
+        mock_r = MagicMock()
+        mock_r.get.return_value = json.dumps(
+            {
+                "market": "US",
+                "date": "2026-05-27",
+                "overall": "FAIL",
+                "checks": [
+                    {"name": "broker_connectivity", "result": "PASS", "detail": "ok"},
+                    {"name": "quote_flow", "result": "FAIL", "detail": "stale"},
+                ],
+            }
+        )
+        mock_redis_mod.Redis.return_value = mock_r
+
+        rc = main(["readiness", "--market", "US"])
+        captured = capsys.readouterr()
+        assert rc == 1
+        assert "FAIL" in captured.out
+        assert "stale" in captured.out
+
+    @patch("sam_trader.services.cli._redis_cli")
+    def test_readiness_json(self, mock_redis_mod: Any, capsys: Any) -> None:
+        mock_r = MagicMock()
+        mock_r.get.return_value = json.dumps(
+            {
+                "market": "HK",
+                "date": "2026-05-27",
+                "overall": "PASS",
+                "checks": [
+                    {
+                        "name": "calendar_trading_day",
+                        "result": "PASS",
+                        "detail": "trading day",
+                    },
+                ],
+            }
+        )
+        mock_redis_mod.Redis.return_value = mock_r
+
+        rc = main(["--json", "readiness", "--market", "HK"])
+        captured = capsys.readouterr()
+        assert rc == 0
+        data = json.loads(captured.out)
+        assert data["command"] == "readiness"
+        assert data["market"] == "HK"
+        assert data["overall"] == "PASS"
+        assert data["exit_code"] == 0
+        assert len(data["checks"]) == 1
+
+    @patch("sam_trader.services.cli._redis_cli")
+    def test_readiness_not_found(self, mock_redis_mod: Any, capsys: Any) -> None:
+        mock_r = MagicMock()
+        mock_r.get.return_value = None
+        mock_redis_mod.Redis.return_value = mock_r
+
+        rc = main(["readiness", "--market", "US"])
+        captured = capsys.readouterr()
+        assert rc == 0
+        assert "not yet run" in captured.out
+
+    @patch("sam_trader.services.cli._redis_cli")
+    def test_readiness_not_found_json(self, mock_redis_mod: Any, capsys: Any) -> None:
+        mock_r = MagicMock()
+        mock_r.get.return_value = None
+        mock_redis_mod.Redis.return_value = mock_r
+
+        rc = main(["--json", "readiness", "--market", "US"])
+        captured = capsys.readouterr()
+        assert rc == 0
+        data = json.loads(captured.out)
+        assert data["status"] == "NOT_FOUND"
+        assert data["market"] == "US"
+
+    def test_readiness_invalid_market(self, capsys: Any) -> None:
+        rc = main(["readiness", "--market", "EU"])
+        captured = capsys.readouterr()
+        assert rc == 1
+        assert "Unknown market" in captured.err or "ERROR" in captured.err
+
+    @patch("sam_trader.services.cli._redis_cli")
+    def test_readiness_corrupt_data(self, mock_redis_mod: Any, capsys: Any) -> None:
+        mock_r = MagicMock()
+        mock_r.get.return_value = "not-json{{"
+        mock_redis_mod.Redis.return_value = mock_r
+
+        rc = main(["readiness", "--market", "US"])
+        captured = capsys.readouterr()
+        assert rc == 1
+        assert "Corrupt" in captured.err or "ERROR" in captured.err
 
 
 class TestPreflightCommand:

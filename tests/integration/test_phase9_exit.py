@@ -372,7 +372,9 @@ class TestSamPipelineRun:
         from sam_trader.services.cli import cli
 
         runner = CliRunner()
-        result = runner.invoke(cli, ["readiness", "--simulate", "--market", "US"])
+        result = runner.invoke(
+            cli, ["readiness-report", "--simulate", "--market", "US"]
+        )
         assert result.exit_code == 0, result.output
         assert "SAM Trader V3" in result.output or result.output == ""
 
