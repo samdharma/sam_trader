@@ -1073,3 +1073,43 @@ class TestMarketConfigPropagation:
         finally:
             loop.close()
             asyncio.set_event_loop(None)
+
+    def test_ib_disabled_log_for_hk_market(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """MARKET=HK → INFO log 'IB disabled for HK market' is emitted."""
+        monkeypatch.setenv("MARKET", "HK")
+        monkeypatch.setenv("FUTU_ENABLED", "true")
+        monkeypatch.setenv("FUTU_OPEND_HOST", "test-futu-host")
+        monkeypatch.setenv("FUTU_OPEND_PORT", "11111")
+        monkeypatch.setenv("FUTU_TRD_ENV", "SIMULATE")
+        monkeypatch.setenv("IB_GATEWAY_HOST", "test-ib-gateway")
+        monkeypatch.setenv("IB_GATEWAY_PORT", "4001")
+        monkeypatch.setenv("IB_GATEWAY_CLIENT_ID", "42")
+        monkeypatch.setenv("IB_ACCOUNT_ID", "DU12345")
+        monkeypatch.setenv("IB_TRADING_MODE", "paper")
+        monkeypatch.setenv("IB_READ_ONLY_API", "false")
+        monkeypatch.setenv("IB_MARKET_DATA_TYPE", "REALTIME")
+        monkeypatch.setenv("BUNDLES_PATH", "config/nonexistent_bundles.yaml")
+        monkeypatch.setenv("STATE_SAVE_ENABLED", "false")
+        monkeypatch.setenv("STATE_LOAD_ENABLED", "false")
+        monkeypatch.delenv("IB_ENABLED", raising=False)
+        monkeypatch.delenv("FUTU_TRD_MARKET", raising=False)
+        monkeypatch.delenv("HEALTH_MONITOR_MARKET", raising=False)
+        monkeypatch.delenv("BAR_RESUB_MARKET", raising=False)
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            with caplog.at_level(logging.INFO):
+                build_trading_node()
+
+            info_msgs = [r.message for r in caplog.records if r.levelno == logging.INFO]
+            assert any(
+                "IB disabled for HK market" in m for m in info_msgs
+            ), f"Expected 'IB disabled for HK market' in INFO logs, got: {info_msgs}"
+        finally:
+            loop.close()
+            asyncio.set_event_loop(None)

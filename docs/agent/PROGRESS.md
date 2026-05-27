@@ -1,5 +1,14 @@
 > **Note: see first-entry Iteration 20 for Phase 2 config dataclasses.**
 
+## Iteration 114
+- **Task**: P5-DM: IB — conditional enable/disable via MarketConfig
+- **Task ID**: sam_trader-9z3.6.15
+- **Status**: COMPLETE
+- **Decisions**: Added `elif cfg.market_config is not None:` clause to the IB section in `build_trading_node()` — when `cfg.ib_enabled` is False and `cfg.market_config` exists (i.e., MARKET is set), logs INFO "IB disabled for {market} market". This makes the HK-market IB skip visible in operational logs instead of silent. The condition uses `cfg.ib_enabled` (which is already correctly derived from `MarketConfig.ib_enabled` when MARKET is set, or from `IB_ENABLED` env var as backward compat). No changes to factory registration — already gated on `ib_data_factory/ib_exec_factory is not None`.
+- **Files Changed**: `src/sam_trader/main.py`, `tests/unit/test_main.py`
+- **Validation Result**: PASS (RALPH_GATE_PASSED — 29/29 tests, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. DM extension complete.
+
 ## Iteration 113
 - **Task**: P2-DM: Futu — verify per-market connection context coexistence
 - **Task ID**: sam_trader-9z3.3.11

@@ -272,6 +272,8 @@ def build_trading_node() -> TradingNode:
                 "ibapi not available; IBKR clients will not be registered: %s",
                 exc,
             )
+    elif cfg.market_config is not None:
+        logger.info("IB disabled for %s market", cfg.market)
 
     # Build CacheConfig with Redis database for state persistence.
     # Only wire Redis when state persistence is enabled to avoid unnecessary
