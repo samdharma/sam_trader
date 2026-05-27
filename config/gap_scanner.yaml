@@ -1,0 +1,35 @@
+# SAM Trader V3 — Dual-broker gap scanner configuration
+#
+# Defines per-market primary/secondary broker selection and scanner parameters.
+# Loaded by DualBrokerGapScanner via load_gap_scanner_config().
+
+gap_scanner:
+  US:
+    primary_broker: "FUTU"
+    secondary_broker: "IB"
+    cross_validation_threshold_pct: 1.0
+    collection_period_secs: 30
+    connection_timeout_secs: 10
+    min_gap_pct: 2.0
+    max_gap_pct: 20.0
+    min_price: 1.0
+    max_price: 5000.0
+    min_volume: null
+    blacklist: []
+    exclude_otc: true
+    exclude_etf: true
+
+  HK:
+    primary_broker: "FUTU"
+    secondary_broker: null        # IB not available for HK equities
+    cross_validation_threshold_pct: 1.0
+    collection_period_secs: 30
+    connection_timeout_secs: 10
+    min_gap_pct: 1.5
+    max_gap_pct: 20.0
+    min_price: 1.0
+    max_price: 5000.0
+    min_volume: null
+    blacklist: []
+    exclude_otc: true
+    exclude_etf: true
