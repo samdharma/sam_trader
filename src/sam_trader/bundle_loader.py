@@ -122,6 +122,10 @@ def _load_bundle(bundle: dict[str, Any]) -> ImportableStrategyConfig:
     if venue == "IB":
         config.setdefault("exchange", "SMART")
 
+    # Extract market field (default "US" for backward compat)
+    market = bundle.get("market", "US")
+    config.setdefault("market", market)
+
     # Ensure venue is available to the strategy for routing decisions
     config.setdefault("venue", venue)
 

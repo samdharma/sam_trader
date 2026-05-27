@@ -86,6 +86,11 @@ def _validate_bundle_schema(bundle: dict[str, Any]) -> tuple[list[str], list[str
     elif venue not in VALID_VENUES:
         errors.append(f"Unknown venue: {venue!r}")
 
+    # market (optional, defaults to "US" — must be US or HK if present)
+    market = bundle.get("market")
+    if market is not None and market not in ("US", "HK"):
+        errors.append(f"Field 'market' must be 'US' or 'HK', got: {market!r}")
+
     # strategy
     strategy = bundle.get("strategy")
     if not strategy:
@@ -480,6 +485,8 @@ def validate_bundles(
                                 )
                     if venue == "IB":
                         config.setdefault("exchange", "SMART")
+                    market = bundle.get("market", "US")
+                    config.setdefault("market", market)
                     config.setdefault("venue", venue)
                     config.setdefault("bundle_id", bundle_id)
 

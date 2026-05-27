@@ -81,6 +81,8 @@ class OrbStrategyConfig(StrategyConfig, frozen=True):  # type: ignore[call-arg]
         Exchange override injected by the bundle loader.
     futu_code : str, default ""
         Futu security code injected by the bundle loader.
+    market : str, default "US"
+        Target market (``"US"`` or ``"HK"``) injected by the bundle loader.
 
     """
 
@@ -107,6 +109,7 @@ class OrbStrategyConfig(StrategyConfig, frozen=True):  # type: ignore[call-arg]
     bundle_id: str = "unknown"
     exchange: str = ""
     futu_code: str = ""
+    market: str = "US"
 
 
 class OrbStrategy(Strategy):

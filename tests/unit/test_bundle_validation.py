@@ -153,6 +153,27 @@ class TestValidateBundleSchema:
         errors, _ = _validate_bundle_schema(bundle)
         assert errors == []
 
+    def test_market_hk_valid(self) -> None:
+        bundle = _make_bundle(market="HK")
+        errors, _ = _validate_bundle_schema(bundle)
+        assert not any("market" in e for e in errors)
+
+    def test_market_us_valid(self) -> None:
+        bundle = _make_bundle(market="US")
+        errors, _ = _validate_bundle_schema(bundle)
+        assert not any("market" in e for e in errors)
+
+    def test_market_missing_ok(self) -> None:
+        """Missing market field is valid (defaults to US in loader)."""
+        bundle = _make_bundle()
+        errors, _ = _validate_bundle_schema(bundle)
+        assert not any("market" in e for e in errors)
+
+    def test_market_invalid_rejected(self) -> None:
+        bundle = _make_bundle(market="JP")
+        errors, _ = _validate_bundle_schema(bundle)
+        assert any("Field 'market' must be 'US' or 'HK'" in e for e in errors)
+
 
 # ---------------------------------------------------------------------------
 # Strategy class validation
@@ -458,6 +479,50 @@ bundles:
         result = validate_bundles(str(path))
         assert result.all_passed is False
         assert "'bundles' must be a list" in result.summary
+
+    def test_bundle_with_market_hk(self, tmp_path: pathlib.Path) -> None:
+        """Bundle with market=HK passes validation."""
+        yaml_content = """
+bundles:
+  - id: "hk-bundle"
+    enabled: true
+    venue: FUTU
+    market: HK
+    strategy:
+      path: sam_trader.strategies.orb:OrbStrategy
+      config:
+        instrument_id: "00700.HKEX"
+        bar_type: "00700.HKEX-5-MINUTE-LAST-EXTERNAL"
+"""
+        path = tmp_path / "bundles.yaml"
+        path.write_text(yaml_content)
+
+        result = validate_bundles(str(path), backtest_gate=False)
+        assert result.all_passed is True
+        assert result.summary == "1/1 bundles passed validation"
+
+    def test_bundle_with_invalid_market_fails(self, tmp_path: pathlib.Path) -> None:
+        """Bundle with invalid market fails schema validation."""
+        yaml_content = """
+bundles:
+  - id: "bad-market"
+    enabled: true
+    venue: FUTU
+    market: JP
+    strategy:
+      path: sam_trader.strategies.orb:OrbStrategy
+      config:
+        instrument_id: "00700.HKEX"
+        bar_type: "00700.HKEX-5-MINUTE-LAST-EXTERNAL"
+"""
+        path = tmp_path / "bundles.yaml"
+        path.write_text(yaml_content)
+
+        result = validate_bundles(str(path), backtest_gate=False)
+        assert result.all_passed is False
+        assert any(
+            "Field 'market' must be 'US' or 'HK'" in e for e in result.bundles[0].errors
+        )
 
     def test_bundle_not_a_mapping(self, tmp_path: pathlib.Path) -> None:
         path = tmp_path / "bad.yaml"

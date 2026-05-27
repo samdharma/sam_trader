@@ -12,6 +12,7 @@ bundles:
   - id: "tsla-orb-15m-futu"
     enabled: true
     venue: FUTU
+    market: US
     strategy:
       path: sam_trader.strategies.orb:OrbStrategy
       config:
@@ -32,6 +33,7 @@ bundles:
   - id: "tencent-orb-5m-futu"
     enabled: false
     venue: FUTU
+    market: HK
     strategy:
       path: sam_trader.strategies.orb:OrbStrategy
       config:
@@ -100,6 +102,7 @@ bundles:
   - id: "nvda-momentum-5m-ib"
     enabled: false
     venue: IB
+    market: US
     strategy:
       path: sam_trader.strategies.momentum:MomentumStrategy
       config:

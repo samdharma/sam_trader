@@ -49,6 +49,7 @@ bundles:
         assert cfg.config["instrument_id"] == "TSLA.NASDAQ"
         assert cfg.config["futu_code"] == "US.TSLA"
         assert cfg.config["venue"] == "FUTU"
+        assert cfg.config["market"] == "US"  # default when missing
         assert cfg.config["bar_type"] == "TSLA.NASDAQ-15-MINUTE-LAST-EXTERNAL"
         assert cfg.config["first_candle_minutes"] == 15
         assert cfg.config["trade_size"] == 5
@@ -356,6 +357,68 @@ bundles:
         assert cfg["family"] == "ORB_aggressive"
         assert cfg["version"] == "1.0.0"
         assert cfg["variant"] == "aggressive"
+
+    def test_market_defaults_to_us(self, tmp_path: pathlib.Path) -> None:
+        """Bundles without 'market' field default to 'US'."""
+        yaml_content = """
+bundles:
+  - id: "no-market-field"
+    enabled: true
+    venue: FUTU
+    strategy:
+      path: sam_trader.strategies.orb:OrbStrategy
+      config:
+        instrument_id: "TSLA.NASDAQ"
+        bar_type: "TSLA.NASDAQ-15-MINUTE-LAST-EXTERNAL"
+"""
+        path = tmp_path / "bundles.yaml"
+        path.write_text(yaml_content)
+
+        configs = load_bundles(str(path))
+        assert len(configs) == 1
+        assert configs[0].config["market"] == "US"
+
+    def test_market_hk_propagates(self, tmp_path: pathlib.Path) -> None:
+        """Bundles with market=HK pass 'HK' through to config."""
+        yaml_content = """
+bundles:
+  - id: "hk-bundle"
+    enabled: true
+    venue: FUTU
+    market: HK
+    strategy:
+      path: sam_trader.strategies.orb:OrbStrategy
+      config:
+        instrument_id: "00700.HKEX"
+        bar_type: "00700.HKEX-5-MINUTE-LAST-EXTERNAL"
+"""
+        path = tmp_path / "bundles.yaml"
+        path.write_text(yaml_content)
+
+        configs = load_bundles(str(path))
+        assert len(configs) == 1
+        assert configs[0].config["market"] == "HK"
+
+    def test_market_us_explicit(self, tmp_path: pathlib.Path) -> None:
+        """Bundles with market=US pass 'US' through to config."""
+        yaml_content = """
+bundles:
+  - id: "us-bundle"
+    enabled: true
+    venue: IB
+    market: US
+    strategy:
+      path: sam_trader.strategies.momentum:MomentumStrategy
+      config:
+        instrument_id: "NVDA.NASDAQ"
+        bar_type: "NVDA.NASDAQ-5-MINUTE-LAST-INTERNAL"
+"""
+        path = tmp_path / "bundles.yaml"
+        path.write_text(yaml_content)
+
+        configs = load_bundles(str(path))
+        assert len(configs) == 1
+        assert configs[0].config["market"] == "US"
 
     def test_missing_metadata_ok(self, tmp_path: pathlib.Path) -> None:
         """Bundles without family/version/variant load identically."""

@@ -67,6 +67,8 @@ class MomentumStrategyConfig(StrategyConfig, frozen=True):  # type: ignore[call-
         Exchange override injected by the bundle loader.
     futu_code : str, default ""
         Futu security code injected by the bundle loader.
+    market : str, default "US"
+        Target market (``"US"`` or ``"HK"``) injected by the bundle loader.
 
     """
 
@@ -88,6 +90,7 @@ class MomentumStrategyConfig(StrategyConfig, frozen=True):  # type: ignore[call-
     bundle_id: str = "unknown"
     exchange: str = ""
     futu_code: str = ""
+    market: str = "US"
 
 
 class MomentumStrategy(Strategy):
