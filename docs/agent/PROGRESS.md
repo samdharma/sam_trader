@@ -1,5 +1,14 @@
 > **Note: see first-entry Iteration 20 for Phase 2 config dataclasses.**
 
+## Iteration 116
+- **Task**: P6-DM: ReadinessCheckerActor — SOD operational readiness check
+- **Task ID**: sam_trader-9z3.7.17
+- **Status**: COMPLETE
+- **Decisions**: Created `ReadinessCheckerActor` as a Nautilus Actor triggered by `LiveClock.set_time_alert()` at `market_config.sod_readiness_time`. Runs 7 checks: (1) broker connectivity, (2) QuoteTick flow freshness, (3) instruments resolved in cache, (4) account balance/margin status, (5) bundle count verification, (6) Redis/PG async health pings, (7) calendar trading-day confirmation. Overall=PASS only if no checks FAIL (SKIP is allowed). Results persisted to Redis `sam:readiness:{market}:{date}` with 48h TTL. Wired in `main.py` behind `ACTOR_READINESS_CHECKER_ENABLED` env var with full market-config propagation (sod_readiness_time, session_timezone from MARKET). `actor_readiness_checker_enabled` field added to `SamTraderConfig`. Actor respects MARKET env var for HK (07:00 HKT, Asia/Hong_Kong) vs US (08:00 ET, America/New_York) with backward-compat ternary fallback.
+- **Files Changed**: `src/sam_trader/actors/readiness_checker.py` (new), `tests/unit/actors/test_readiness_checker.py` (new), `src/sam_trader/config.py`, `src/sam_trader/main.py`, `tests/unit/test_main.py`
+- **Validation Result**: PASS (RALPH_GATE_PASSED — 78/78 targeted tests, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Cython object mocking required TestComponentStubs + asyncio.run() pattern for async tests.
+
 ## Iteration 115
 - **Task**: P6-DM: Actor timezone refactor — existing actors use MarketConfig
 - **Task ID**: sam_trader-9z3.7.16

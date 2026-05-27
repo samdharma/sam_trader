@@ -1113,3 +1113,280 @@ class TestMarketConfigPropagation:
         finally:
             loop.close()
             asyncio.set_event_loop(None)
+
+
+class TestReadinessCheckerActorWiring:
+    """Tests for ReadinessCheckerActor config wiring in build_trading_node."""
+
+    def test_readiness_checker_registered_with_market_config(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """MARKET=HK → ReadinessCheckerActor registered with HK settings."""
+        monkeypatch.setenv("MARKET", "HK")
+        monkeypatch.setenv("FUTU_ENABLED", "true")
+        monkeypatch.setenv("FUTU_OPEND_HOST", "test-futu-host")
+        monkeypatch.setenv("FUTU_OPEND_PORT", "11111")
+        monkeypatch.setenv("FUTU_TRD_ENV", "SIMULATE")
+        monkeypatch.setenv("IB_ENABLED", "false")
+        monkeypatch.setenv("BUNDLES_PATH", "config/nonexistent_bundles.yaml")
+        monkeypatch.setenv("STATE_SAVE_ENABLED", "false")
+        monkeypatch.setenv("STATE_LOAD_ENABLED", "false")
+        monkeypatch.setenv("ACTOR_READINESS_CHECKER_ENABLED", "true")
+        monkeypatch.delenv("FUTU_TRD_MARKET", raising=False)
+        monkeypatch.delenv("HEALTH_MONITOR_MARKET", raising=False)
+        monkeypatch.delenv("BAR_RESUB_MARKET", raising=False)
+        monkeypatch.setenv("ACTOR_HEALTH_ENABLED", "false")
+        monkeypatch.setenv("ACTOR_BAR_RESUB_ENABLED", "false")
+        monkeypatch.setenv("ACTOR_REJECTION_MONITOR_ENABLED", "false")
+        monkeypatch.setenv("ACTOR_REALIZED_PNL_ENABLED", "false")
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            node = build_trading_node()
+
+            actors = node._config.actors
+            rc_actor = [a for a in actors if "ReadinessChecker" in a.actor_path][0]
+            assert rc_actor.config["market"] == "HK"
+            assert rc_actor.config["sod_readiness_time"] == "07:00"
+            assert rc_actor.config["session_timezone"] == "Asia/Hong_Kong"
+            assert rc_actor.config["futu_enabled"] is True
+            assert rc_actor.config["ib_enabled"] is False
+            assert rc_actor.config["market_calendar_enabled"] is True
+        finally:
+            loop.close()
+            asyncio.set_event_loop(None)
+
+    def test_readiness_checker_registered_with_market_us(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """MARKET=US → ReadinessCheckerActor registered with US settings."""
+        monkeypatch.setenv("MARKET", "US")
+        monkeypatch.setenv("FUTU_ENABLED", "true")
+        monkeypatch.setenv("FUTU_OPEND_HOST", "test-futu-host")
+        monkeypatch.setenv("FUTU_OPEND_PORT", "11111")
+        monkeypatch.setenv("FUTU_TRD_ENV", "SIMULATE")
+        monkeypatch.setenv("IB_ENABLED", "false")
+        monkeypatch.setenv("BUNDLES_PATH", "config/nonexistent_bundles.yaml")
+        monkeypatch.setenv("STATE_SAVE_ENABLED", "false")
+        monkeypatch.setenv("STATE_LOAD_ENABLED", "false")
+        monkeypatch.setenv("ACTOR_READINESS_CHECKER_ENABLED", "true")
+        monkeypatch.delenv("FUTU_TRD_MARKET", raising=False)
+        monkeypatch.delenv("HEALTH_MONITOR_MARKET", raising=False)
+        monkeypatch.delenv("BAR_RESUB_MARKET", raising=False)
+        monkeypatch.setenv("ACTOR_HEALTH_ENABLED", "false")
+        monkeypatch.setenv("ACTOR_BAR_RESUB_ENABLED", "false")
+        monkeypatch.setenv("ACTOR_REJECTION_MONITOR_ENABLED", "false")
+        monkeypatch.setenv("ACTOR_REALIZED_PNL_ENABLED", "false")
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            node = build_trading_node()
+
+            actors = node._config.actors
+            rc_actor = [a for a in actors if "ReadinessChecker" in a.actor_path][0]
+            assert rc_actor.config["market"] == "US"
+            assert rc_actor.config["sod_readiness_time"] == "08:00"
+            assert rc_actor.config["session_timezone"] == "America/New_York"
+            assert rc_actor.config["ib_enabled"] is True
+        finally:
+            loop.close()
+            asyncio.set_event_loop(None)
+
+    def test_readiness_checker_disabled_by_default(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """ReadinessCheckerActor is NOT in actors list when env var unset."""
+        monkeypatch.setenv("IB_ENABLED", "false")
+        monkeypatch.setenv("FUTU_ENABLED", "false")
+        monkeypatch.setenv("BUNDLES_PATH", "config/nonexistent_bundles.yaml")
+        monkeypatch.setenv("STATE_SAVE_ENABLED", "false")
+        monkeypatch.setenv("STATE_LOAD_ENABLED", "false")
+        monkeypatch.setenv("ACTOR_HEALTH_ENABLED", "false")
+        monkeypatch.setenv("ACTOR_BAR_RESUB_ENABLED", "false")
+        monkeypatch.setenv("ACTOR_REJECTION_MONITOR_ENABLED", "false")
+        monkeypatch.setenv("ACTOR_REALIZED_PNL_ENABLED", "false")
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            node = build_trading_node()
+
+            actors = node._config.actors
+            rc_actors = [a for a in actors if "ReadinessChecker" in a.actor_path]
+            assert len(rc_actors) == 0
+        finally:
+            loop.close()
+            asyncio.set_event_loop(None)
+
+    def test_readiness_checker_explicitly_disabled(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """ReadinessCheckerActor NOT registered when env var is false."""
+        monkeypatch.setenv("MARKET", "US")
+        monkeypatch.setenv("FUTU_ENABLED", "true")
+        monkeypatch.setenv("FUTU_OPEND_HOST", "test-futu-host")
+        monkeypatch.setenv("FUTU_OPEND_PORT", "11111")
+        monkeypatch.setenv("FUTU_TRD_ENV", "SIMULATE")
+        monkeypatch.setenv("IB_ENABLED", "false")
+        monkeypatch.setenv("BUNDLES_PATH", "config/nonexistent_bundles.yaml")
+        monkeypatch.setenv("STATE_SAVE_ENABLED", "false")
+        monkeypatch.setenv("STATE_LOAD_ENABLED", "false")
+        monkeypatch.setenv("ACTOR_READINESS_CHECKER_ENABLED", "false")
+        monkeypatch.delenv("FUTU_TRD_MARKET", raising=False)
+        monkeypatch.setenv("ACTOR_HEALTH_ENABLED", "false")
+        monkeypatch.setenv("ACTOR_BAR_RESUB_ENABLED", "false")
+        monkeypatch.setenv("ACTOR_REJECTION_MONITOR_ENABLED", "false")
+        monkeypatch.setenv("ACTOR_REALIZED_PNL_ENABLED", "false")
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            node = build_trading_node()
+
+            actors = node._config.actors
+            rc_actors = [a for a in actors if "ReadinessChecker" in a.actor_path]
+            assert len(rc_actors) == 0
+        finally:
+            loop.close()
+            asyncio.set_event_loop(None)
+
+    def test_readiness_checker_with_bundles(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: pathlib.Path,
+    ) -> None:
+        """bundle_count from loaded bundles is propagated to actor config."""
+        bundles_yaml = """\
+bundles:
+  - id: "test-bundle-1"
+    enabled: true
+    venue: FUTU
+    strategy:
+      path: sam_trader.strategies.test_echo:EchoStrategy
+      config:
+        instrument_id: "AAPL.NASDAQ"
+        bar_type: "AAPL.NASDAQ-1-MINUTE-LAST-EXTERNAL"
+  - id: "test-bundle-2"
+    enabled: true
+    venue: FUTU
+    strategy:
+      path: sam_trader.strategies.test_echo:EchoStrategy
+      config:
+        instrument_id: "TSLA.NASDAQ"
+        bar_type: "TSLA.NASDAQ-1-MINUTE-LAST-EXTERNAL"
+"""
+        bundles_path = tmp_path / "bundles.yaml"
+        bundles_path.write_text(bundles_yaml)
+
+        monkeypatch.setenv("MARKET", "US")
+        monkeypatch.setenv("FUTU_ENABLED", "true")
+        monkeypatch.setenv("FUTU_OPEND_HOST", "test-futu-host")
+        monkeypatch.setenv("FUTU_OPEND_PORT", "11111")
+        monkeypatch.setenv("FUTU_TRD_ENV", "SIMULATE")
+        monkeypatch.setenv("IB_ENABLED", "false")
+        monkeypatch.setenv("BUNDLES_PATH", str(bundles_path))
+        monkeypatch.setenv("STATE_SAVE_ENABLED", "false")
+        monkeypatch.setenv("STATE_LOAD_ENABLED", "false")
+        monkeypatch.setenv("ACTOR_READINESS_CHECKER_ENABLED", "true")
+        monkeypatch.delenv("FUTU_TRD_MARKET", raising=False)
+        monkeypatch.setenv("ACTOR_HEALTH_ENABLED", "false")
+        monkeypatch.setenv("ACTOR_BAR_RESUB_ENABLED", "false")
+        monkeypatch.setenv("ACTOR_REJECTION_MONITOR_ENABLED", "false")
+        monkeypatch.setenv("ACTOR_REALIZED_PNL_ENABLED", "false")
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            node = build_trading_node()
+
+            actors = node._config.actors
+            rc_actor = [a for a in actors if "ReadinessChecker" in a.actor_path][0]
+            assert rc_actor.config["bundle_count"] == 2
+            assert rc_actor.config["instrument_ids"] == ["AAPL.NASDAQ", "TSLA.NASDAQ"]
+        finally:
+            loop.close()
+            asyncio.set_event_loop(None)
+
+    def test_readiness_checker_postgres_config(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """PostgreSQL config from env vars is propagated to actor."""
+        monkeypatch.setenv("MARKET", "US")
+        monkeypatch.setenv("FUTU_ENABLED", "true")
+        monkeypatch.setenv("FUTU_OPEND_HOST", "test-futu-host")
+        monkeypatch.setenv("FUTU_OPEND_PORT", "11111")
+        monkeypatch.setenv("FUTU_TRD_ENV", "SIMULATE")
+        monkeypatch.setenv("IB_ENABLED", "false")
+        monkeypatch.setenv("BUNDLES_PATH", "config/nonexistent_bundles.yaml")
+        monkeypatch.setenv("STATE_SAVE_ENABLED", "false")
+        monkeypatch.setenv("STATE_LOAD_ENABLED", "false")
+        monkeypatch.setenv("ACTOR_READINESS_CHECKER_ENABLED", "true")
+        monkeypatch.setenv("POSTGRES_HOST", "test-pg-host")
+        monkeypatch.setenv("POSTGRES_PORT", "6543")
+        monkeypatch.setenv("POSTGRES_DB", "test_db")
+        monkeypatch.setenv("POSTGRES_USER", "test_user")
+        monkeypatch.setenv("POSTGRES_PASSWORD", "test_pass")
+        monkeypatch.delenv("FUTU_TRD_MARKET", raising=False)
+        monkeypatch.setenv("ACTOR_HEALTH_ENABLED", "false")
+        monkeypatch.setenv("ACTOR_BAR_RESUB_ENABLED", "false")
+        monkeypatch.setenv("ACTOR_REJECTION_MONITOR_ENABLED", "false")
+        monkeypatch.setenv("ACTOR_REALIZED_PNL_ENABLED", "false")
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            node = build_trading_node()
+
+            actors = node._config.actors
+            rc_actor = [a for a in actors if "ReadinessChecker" in a.actor_path][0]
+            assert rc_actor.config["postgres_host"] == "test-pg-host"
+            assert rc_actor.config["postgres_port"] == 6543
+            assert rc_actor.config["postgres_db"] == "test_db"
+            assert rc_actor.config["postgres_user"] == "test_user"
+            assert rc_actor.config["postgres_password"] == "test_pass"
+        finally:
+            loop.close()
+            asyncio.set_event_loop(None)
+
+    def test_readiness_checker_backward_compat_no_market(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Without MARKET: backward-compat timezone fallback from trd_market."""
+        monkeypatch.setenv("FUTU_ENABLED", "true")
+        monkeypatch.setenv("FUTU_OPEND_HOST", "test-futu-host")
+        monkeypatch.setenv("FUTU_OPEND_PORT", "11111")
+        monkeypatch.setenv("FUTU_TRD_ENV", "SIMULATE")
+        monkeypatch.setenv("FUTU_TRD_MARKET", "HK")
+        monkeypatch.setenv("IB_ENABLED", "false")
+        monkeypatch.setenv("BUNDLES_PATH", "config/nonexistent_bundles.yaml")
+        monkeypatch.setenv("STATE_SAVE_ENABLED", "false")
+        monkeypatch.setenv("STATE_LOAD_ENABLED", "false")
+        monkeypatch.setenv("ACTOR_READINESS_CHECKER_ENABLED", "true")
+        monkeypatch.delenv("MARKET", raising=False)
+        monkeypatch.setenv("ACTOR_HEALTH_ENABLED", "false")
+        monkeypatch.setenv("ACTOR_BAR_RESUB_ENABLED", "false")
+        monkeypatch.setenv("ACTOR_REJECTION_MONITOR_ENABLED", "false")
+        monkeypatch.setenv("ACTOR_REALIZED_PNL_ENABLED", "false")
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            node = build_trading_node()
+
+            actors = node._config.actors
+            rc_actor = [a for a in actors if "ReadinessChecker" in a.actor_path][0]
+            # No market config → market="" and backward-compat timezone
+            assert rc_actor.config["market"] == ""
+            assert rc_actor.config["session_timezone"] == "Asia/Hong_Kong"
+            assert rc_actor.config["sod_readiness_time"] == "08:00"
+        finally:
+            loop.close()
+            asyncio.set_event_loop(None)

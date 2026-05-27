@@ -49,6 +49,7 @@ class SamTraderConfig:
     actor_rejection_monitor_enabled: bool
     actor_realized_pnl_enabled: bool
     actor_position_snapshot_enabled: bool
+    actor_readiness_checker_enabled: bool
     health_monitor_market: str
     bar_resub_market: str
     market_calendar_enabled: bool
@@ -223,6 +224,10 @@ class SamTraderConfig:
                 else os.environ.get("ACTOR_JOURNAL_ENABLED", "").lower()
                 in ("1", "true", "yes")
             ),
+            actor_readiness_checker_enabled=os.environ.get(
+                "ACTOR_READINESS_CHECKER_ENABLED", ""
+            ).lower()
+            in ("1", "true", "yes"),
             health_monitor_market=health_monitor_val,
             bar_resub_market=bar_resub_val,
             market_calendar_enabled=os.environ.get(

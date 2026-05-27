@@ -420,6 +420,57 @@ def build_trading_node() -> TradingNode:
             "RealizedPnLTrackerActor registered (%d instruments)", len(instrument_ids)
         )
 
+    # --- Phase 6 DM actors ---
+
+    if cfg.actor_readiness_checker_enabled:
+        readiness_cfg = {
+            "market": cfg.market if cfg.market_config is not None else "",
+            "sod_readiness_time": (
+                cfg.market_config.sod_readiness_time
+                if cfg.market_config is not None
+                else "08:00"
+            ),
+            "session_timezone": (
+                cfg.market_config.session_timezone
+                if cfg.market_config is not None
+                else (
+                    "Asia/Hong_Kong"
+                    if cfg.futu_trd_market == "HK"
+                    else "America/New_York"
+                )
+            ),
+            "redis_host": cfg.redis_host,
+            "redis_port": cfg.redis_port,
+            "redis_password": cfg.redis_password,
+            "futu_enabled": cfg.futu_enabled,
+            "ib_enabled": cfg.ib_enabled,
+            "postgres_host": cfg.postgres_host,
+            "postgres_port": cfg.postgres_port,
+            "postgres_db": cfg.postgres_db,
+            "postgres_user": cfg.postgres_user,
+            "postgres_password": cfg.postgres_password,
+            "instrument_ids": instrument_ids,
+            "bundle_count": len(strategies),
+            "market_calendar_enabled": cfg.market_calendar_enabled,
+        }
+        actors.append(
+            ImportableActorConfig(
+                actor_path=(
+                    "sam_trader.actors.readiness_checker:ReadinessCheckerActor"
+                ),
+                config_path=(
+                    "sam_trader.actors.readiness_checker:ReadinessCheckerActorConfig"
+                ),
+                config=readiness_cfg,
+            )
+        )
+        logger.info(
+            "ReadinessCheckerActor registered (market=%s, time=%s, tz=%s)",
+            readiness_cfg["market"],
+            readiness_cfg["sod_readiness_time"],
+            readiness_cfg["session_timezone"],
+        )
+
     # --- Phase 8 actors ---
 
     if cfg.actor_position_snapshot_enabled:
