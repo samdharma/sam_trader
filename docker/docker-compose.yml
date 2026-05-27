@@ -49,6 +49,7 @@ services:
       - FUTU_TRD_ENV=${FUTU_TRD_ENV:-SIMULATE}
       - FUTU_TRD_MARKET=${FUTU_TRD_MARKET:-US}
       - FUTU_UNLOCK_PWD_MD5=${FUTU_UNLOCK_PWD_MD5:-}
+      - MARKET=${MARKET:-US}
       - STATE_SAVE_ENABLED=${STATE_SAVE_ENABLED:-true}
       - STATE_LOAD_ENABLED=${STATE_LOAD_ENABLED:-true}
       - ACTOR_JOURNAL_ENABLED=${ACTOR_JOURNAL_ENABLED:-true}
@@ -181,6 +182,7 @@ services:
       - ../config:/opt/sam_trader/config:ro
       - ../logs:/opt/sam_trader/logs:rw
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ../.env:/opt/sam_trader/.env:rw
       - ../docker/futu-opend/futu.pem:/.futu/futu.pem:ro
       - ${BACKUP_HOST_DIR:-~/Documents/ai_agent_docs/backup-sam_trader_v3}:/opt/sam_trader/backups:rw
     environment:

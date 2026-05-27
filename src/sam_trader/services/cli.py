@@ -1473,8 +1473,8 @@ def gapscan(ctx: click.Context, market: str, pass_number: int) -> None:
     market = market.upper()
     if market not in ("US", "HK"):
         raise click.ClickException(f"Unknown market: {market}")
-    if pass_number < 1:
-        raise click.ClickException("pass must be >= 1")
+    if pass_number not in (1, 2):
+        raise click.ClickException("pass must be 1 or 2")
 
     # Load watchlist
     try:
@@ -2480,6 +2480,97 @@ def safety_monitor(ctx: click.Context) -> None:
     """Run circuit-breaker checks once (daily PnL, rejection streak, connectivity)."""
     result = run_circuit_breaker_monitor()
     _out(ctx, result)
+
+
+@cli.command("switch-market")
+@click.argument("market")
+@click.option(
+    "--timeout",
+    default=120,
+    type=int,
+    help="Seconds to wait for orchestrator completion (default 120).",
+)
+@click.pass_context
+def switch_market(ctx: click.Context, market: str, timeout: int) -> None:
+    """Request a market switch and wait for orchestrator completion.
+
+    Publishes ``sam:market_switch_request`` to Redis.  The
+    RestartOrchestrator inside sam-services performs the graceful
+    save → env update → container recreate → state_loaded poll flow.
+
+    Usage:
+        sam switch-market US
+        sam switch-market HK
+    """
+    market = market.upper()
+    if market not in ("US", "HK"):
+        raise click.ClickException("Market must be US or HK")
+
+    if _redis_cli is None:
+        raise click.ClickException("redis package not available")
+
+    try:
+        r = _redis_cli.Redis(
+            host=REDIS_HOST,
+            port=int(REDIS_PORT),
+            password=REDIS_PASSWORD or None,
+            decode_responses=True,
+            socket_connect_timeout=5,
+        )
+        r.ping()
+    except Exception as exc:
+        raise click.ClickException(f"Redis connection failed: {exc}")
+
+    # Publish request
+    payload = {"market": market, "requested_at": datetime.now(timezone.utc).isoformat()}
+    try:
+        r.publish("sam:market_switch_request", json.dumps(payload))
+    except Exception as exc:
+        raise click.ClickException(f"Failed to publish request: {exc}")
+
+    # Wait for completion or failure notification
+    pubsub = r.pubsub()
+    pubsub.subscribe("sam:market_switch_complete", "sam:market_switch_failed")
+    # Consume subscription confirmations
+    pubsub.get_message(timeout=1)
+    pubsub.get_message(timeout=1)
+
+    start = time.time()
+    result: dict[str, Any] = {
+        "command": "switch-market",
+        "market": market,
+        "status": "unknown",
+        "detail": "",
+    }
+    while time.time() - start < timeout:
+        msg = pubsub.get_message(timeout=1.0)
+        if msg and msg.get("type") == "message":
+            channel = msg.get("channel", "")
+            data = msg.get("data", "")
+            try:
+                payload = json.loads(data)
+            except json.JSONDecodeError:
+                payload = {}
+            if channel == "sam:market_switch_complete":
+                result["status"] = "completed"
+                result["detail"] = f"Switched to {payload.get('market', market)}"
+                break
+            elif channel == "sam:market_switch_failed":
+                result["status"] = "failed"
+                result["detail"] = payload.get("reason", "unknown failure")
+                break
+        time.sleep(0.1)
+
+    pubsub.unsubscribe()
+    pubsub.close()
+
+    if result["status"] == "unknown":
+        result["status"] = "timeout"
+        result["detail"] = f"No response from orchestrator within {timeout}s"
+
+    _out(ctx, result)
+    if result["status"] != "completed":
+        raise click.ClickException(result["detail"])
 
 
 def main(argv: list[str] | None = None) -> int:

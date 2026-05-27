@@ -1885,3 +1885,12 @@
 - **Files Changed**: `src/sam_trader/controllers/__init__.py` (new), `src/sam_trader/controllers/bundle_controller.py` (new), `src/sam_trader/config.py`, `src/sam_trader/main.py`, `src/sam_trader/strategies/test_echo.py`, `tests/unit/controllers/__init__.py` (new), `tests/unit/controllers/test_bundle_controller.py` (new, 32 tests)
 - **Validation Result**: PASS (RALPH_GATE_PASSED — 32/32 targeted tests, 91/91 extended tests with config+main, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ticket ready to close.
+
+## Iteration 121
+- **Task**: P8-DM: Restart orchestrator — market-switch docker compose restart
+- **Task ID**: sam_trader-9z3.9.28
+- **Status**: COMPLETE
+- **Decisions**: Created `RestartOrchestrator` in `src/sam_trader/services/restart_orchestrator.py` as a background thread service that listens on Redis `sam:market_switch_request`. On message: (1) waits for `sam:state_saved` confirmation via pub/sub, (2) updates `MARKET` env var in `.env` file, (3) recreates sam-trader container via `docker compose up -d --force-recreate --no-deps sam-trader` (plain restart does not re-evaluate env vars), (4) polls `sam:state_loaded` Redis key, (5) on any failure rolls back `MARKET` in `.env` and publishes `sam:market_switch_failed`. Added `sam switch-market US|HK` CLI command with `--timeout` flag. Wired orchestrator into `dashboard.py` main() as a background thread. Added `MARKET` env var forwarding to sam-trader in docker-compose.yml and mounted `.env` into sam-services as rw volume. Fixed pre-existing `test_gapscan_invalid_pass` by adding pass-number validation (must be 1 or 2). 100 targeted tests pass.
+- **Files Changed**: `src/sam_trader/services/restart_orchestrator.py` (new), `src/sam_trader/services/cli.py`, `src/sam_trader/services/dashboard.py`, `tests/unit/services/test_restart_orchestrator.py` (new), `tests/unit/services/test_cli.py`, `docker/docker-compose.yml`, `.env.example`
+- **Validation Result**: PASS (RALPH_GATE_PASSED — 100/100 targeted tests, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Phase 8 DM extension complete.

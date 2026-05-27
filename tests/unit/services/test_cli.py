@@ -1726,6 +1726,106 @@ class TestFlushCacheCommand:
         assert "Redis connection failed" in captured.err
 
 
+class TestSwitchMarketCommand:
+    @patch("sam_trader.services.cli._redis_cli")
+    def test_switch_market_us(self, mock_redis_mod: Any, capsys: Any) -> None:
+        """switch-market US publishes request and waits for completion."""
+        mock_r = MagicMock()
+        mock_r.ping.return_value = True
+        mock_pubsub = MagicMock()
+        mock_pubsub.get_message.side_effect = [
+            None,  # sub confirm 1
+            None,  # sub confirm 2
+            {
+                "type": "message",
+                "channel": "sam:market_switch_complete",
+                "data": '{"market": "US", "status": "completed"}',
+            },
+        ]
+        mock_r.pubsub.return_value = mock_pubsub
+        mock_redis_mod.Redis.return_value = mock_r
+
+        rc = main(["switch-market", "US"])
+        captured = capsys.readouterr()
+        assert rc == 0
+        assert "completed" in captured.out
+        assert mock_r.publish.call_count == 1
+        call_args = mock_r.publish.call_args[0]
+        assert call_args[0] == "sam:market_switch_request"
+        payload = json.loads(call_args[1])
+        assert payload["market"] == "US"
+
+    @patch("sam_trader.services.cli._redis_cli")
+    def test_switch_market_hk(self, mock_redis_mod: Any, capsys: Any) -> None:
+        """switch-market HK publishes request and waits for completion."""
+        mock_r = MagicMock()
+        mock_r.ping.return_value = True
+        mock_pubsub = MagicMock()
+        mock_pubsub.get_message.side_effect = [
+            None,
+            None,
+            {
+                "type": "message",
+                "channel": "sam:market_switch_complete",
+                "data": '{"market": "HK", "status": "completed"}',
+            },
+        ]
+        mock_r.pubsub.return_value = mock_pubsub
+        mock_redis_mod.Redis.return_value = mock_r
+
+        rc = main(["switch-market", "HK"])
+        assert rc == 0
+
+    @patch("sam_trader.services.cli._redis_cli")
+    def test_switch_market_failure(self, mock_redis_mod: Any, capsys: Any) -> None:
+        """switch-market exits non-zero when orchestrator reports failure."""
+        mock_r = MagicMock()
+        mock_r.ping.return_value = True
+        mock_pubsub = MagicMock()
+        mock_pubsub.get_message.side_effect = [
+            None,
+            None,
+            {
+                "type": "message",
+                "channel": "sam:market_switch_failed",
+                "data": '{"reason": "state-save timeout"}',
+            },
+        ]
+        mock_r.pubsub.return_value = mock_pubsub
+        mock_redis_mod.Redis.return_value = mock_r
+
+        rc = main(["switch-market", "US"])
+        assert rc != 0
+
+    def test_switch_market_invalid(self, capsys: Any) -> None:
+        """switch-market with invalid market exits non-zero."""
+        rc = main(["switch-market", "EU"])
+        assert rc != 0
+        assert "Market must be US or HK" in capsys.readouterr().err
+
+    def test_switch_market_no_redis(self, capsys: Any) -> None:
+        """switch-market exits non-zero when redis is unavailable."""
+        with patch("sam_trader.services.cli._redis_cli", None):
+            rc = main(["switch-market", "US"])
+            assert rc != 0
+            assert "redis package not available" in capsys.readouterr().err
+
+    @patch("sam_trader.services.cli._redis_cli")
+    def test_switch_market_timeout(self, mock_redis_mod: Any, capsys: Any) -> None:
+        """switch-market exits non-zero when orchestrator does not respond."""
+        mock_r = MagicMock()
+        mock_r.ping.return_value = True
+        mock_pubsub = MagicMock()
+        mock_pubsub.get_message.return_value = None
+        mock_r.pubsub.return_value = mock_pubsub
+        mock_redis_mod.Redis.return_value = mock_r
+
+        rc = main(["switch-market", "US", "--timeout", "1"])
+        assert rc != 0
+        err = capsys.readouterr().err.lower()
+        assert "no response" in err or "timeout" in err
+
+
 class TestJsonGlobalFlag:
     @patch("sam_trader.services.cli._run")
     def test_json_flag_on_status(self, mock_run: Any, capsys: Any) -> None:

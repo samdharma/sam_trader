@@ -18,6 +18,7 @@ from urllib.parse import parse_qs, urlparse
 
 from sam_trader.services.db_schema import validate_schema
 from sam_trader.services.market_calendar import MarketCalendarService
+from sam_trader.services.restart_orchestrator import RestartOrchestrator
 
 T = TypeVar("T")
 
@@ -1011,7 +1012,13 @@ def main() -> int:
         # this surfaces the init failure immediately rather than
         # generating repeated WARNING logs every 30 seconds.
         return 1
-    run_server()
+
+    orchestrator = RestartOrchestrator()
+    orchestrator.start()
+    try:
+        run_server()
+    finally:
+        orchestrator.stop()
     return 0
 
 
