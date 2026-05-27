@@ -1968,3 +1968,12 @@
 - **Files Changed**: `src/sam_trader/services/dual_broker_scanner.py`, `config/gap_scanner.yaml`, `tests/unit/services/test_dual_broker_scanner.py`
 - **Validation Result**: PASS (RALPH_GATE_PASSED — 19/19 targeted tests, black/isort/flake8/mypy all green; 688/688 unit services tests pass)
 - **Blockers / Notes**: None. Ticket closed and pushed to origin.
+
+## Iteration 123
+- **Task**: P8-DM: Market-aware cron schedules
+- **Task ID**: sam_trader-9z3.9.29
+- **Status**: COMPLETE
+- **Decisions**: Updated sam-services cron entries for market-aware scheduling per BUILD_PHASE_8.md §12: (1) Changed daily backup from 06:00 to 05:00 HKT (within maintenance window), (2) Consolidated US pipeline from 3-pass schedule (16:30/20:30/21:00 HKT) to single entry at 20:30 HKT (08:30 ET), (3) Kept HK pipeline at 07:30 HKT, (4) Kept performance analysis at 02:00 HKT and log rotation at 03:00 HKT. Moved `MarketCalendarService.is_trading_day()` check to the very beginning of `run_pipeline()` — before watchlist loading — so cron-triggered pipelines on holidays exit immediately without wasted work. Added `test_run_pipeline_holiday_skips_before_watchlist` to verify `load_watchlist_config` and `build_watchlist` are never called on holidays. Updated both `tests/unit/test_crontab.py` and `tests/unit/services/test_cron.py` to assert new schedules.
+- **Files Changed**: `src/sam_trader/services/crontab`, `src/sam_trader/services/pipeline.py`, `tests/unit/test_crontab.py`, `tests/unit/services/test_cron.py`, `tests/unit/services/test_pipeline.py`
+- **Validation Result**: PASS (RALPH_GATE_PASSED — 35/35 targeted tests, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for next task.

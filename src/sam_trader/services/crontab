@@ -5,10 +5,10 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 TZ=Asia/Hong_Kong
 
 # ---------------------------------------------------------------------------
-# Daily backup at 06:00 HKT on weekdays; skips US/HK trading holidays via
-# script logic in backup.py.
+# Daily backup at 05:00 HKT on weekdays (within maintenance window).
+# Skips US/HK trading holidays via script logic in backup.py.
 # ---------------------------------------------------------------------------
-0 6 * * 1-5 sam . /opt/sam_trader/.env_cron && cd /opt/sam_trader && /usr/local/bin/python3 -m sam_trader.services.backup backup >> /opt/sam_trader/logs/backup.log 2>&1
+0 5 * * 1-5 sam . /opt/sam_trader/.env_cron && cd /opt/sam_trader && /usr/local/bin/python3 -m sam_trader.services.backup backup >> /opt/sam_trader/logs/backup.log 2>&1
 
 # ---------------------------------------------------------------------------
 # Log rotation at 03:00 HKT daily.
@@ -25,24 +25,16 @@ TZ=Asia/Hong_Kong
 # ---------------------------------------------------------------------------
 # Pre-market pipeline — HK session
 # Runs at 07:30 HKT weekdays (2h before HK market open at 09:30 HKT).
+# Gated on MarketCalendarService.is_trading_day('HK') inside pipeline.py.
 # ---------------------------------------------------------------------------
 30 7 * * 1-5 sam . /opt/sam_trader/.env_cron && cd /opt/sam_trader && /usr/local/bin/python3 -m sam_trader.services.pipeline --market HK >> /opt/sam_trader/logs/pipeline_hk.log 2>&1
 
 # ---------------------------------------------------------------------------
 # Pre-market pipeline — US session
-# Pipeline schedule is derived from market_config.yaml (08:30 ET for US).
-# HKT equivalent is computed dynamically via zoneinfo (DST-aware):
-#   Summer (EDT): 08:30 ET = 20:30 HKT
-#   Winter (EST): 08:30 ET = 21:30 HKT
-# When US DST changes (2nd Sun Mar / 1st Sun Nov), shift these entries ±1h.
-#
-# Pass 1: early gap scan at 04:30 ET  (summer=16:30 HKT, winter=17:30 HKT)
-# Pass 2: trended scan at 08:30 ET  (summer=20:30 HKT, winter=21:30 HKT)
-# Pass 3: final AI + risk + bundles + report at 09:00 ET  (summer=21:00 HKT, winter=22:00 HKT)
+# Runs at 20:30 HKT weekdays (08:30 ET — 1h before US market open at 09:30 ET).
+# Gated on MarketCalendarService.is_trading_day('US') inside pipeline.py.
 # ---------------------------------------------------------------------------
-30 16 * * 1-5 sam . /opt/sam_trader/.env_cron && cd /opt/sam_trader && /usr/local/bin/python3 -m sam_trader.services.pipeline --market US --pass 1 >> /opt/sam_trader/logs/pipeline_us.log 2>&1
-30 20 * * 1-5 sam . /opt/sam_trader/.env_cron && cd /opt/sam_trader && /usr/local/bin/python3 -m sam_trader.services.pipeline --market US --pass 2 >> /opt/sam_trader/logs/pipeline_us.log 2>&1
-0 21 * * 1-5 sam . /opt/sam_trader/.env_cron && cd /opt/sam_trader && /usr/local/bin/python3 -m sam_trader.services.pipeline --market US --pass 3 >> /opt/sam_trader/logs/pipeline_us.log 2>&1
+30 20 * * 1-5 sam . /opt/sam_trader/.env_cron && cd /opt/sam_trader && /usr/local/bin/python3 -m sam_trader.services.pipeline --market US >> /opt/sam_trader/logs/pipeline_us.log 2>&1
 
 # ---------------------------------------------------------------------------
 # Performance analysis — nightly stats computation (02:00 HKT daily).

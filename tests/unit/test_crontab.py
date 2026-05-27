@@ -17,8 +17,8 @@ def crontab_text() -> str:
 @pytest.mark.unit
 def test_backup_schedule_present(crontab_text: str) -> None:
     assert "sam_trader.services.backup backup" in crontab_text
-    # 06:00 HKT on weekdays
-    assert "0 6 * * 1-5" in crontab_text
+    # 05:00 HKT on weekdays (within maintenance window)
+    assert "0 5 * * 1-5" in crontab_text
 
 
 @pytest.mark.unit
@@ -36,10 +36,17 @@ def test_deploy_window_schedule_present(crontab_text: str) -> None:
 
 
 @pytest.mark.unit
-def test_pipeline_schedule_present(crontab_text: str) -> None:
-    assert "sam_trader.services.pipeline" in crontab_text
-    # 08:00 HKT weekdays
-    assert "0 8 * * 1-5" in crontab_text
+def test_us_pipeline_schedule_present(crontab_text: str) -> None:
+    assert "sam_trader.services.pipeline --market US" in crontab_text
+    # 20:30 HKT weekdays (08:30 ET)
+    assert "30 20 * * 1-5" in crontab_text
+
+
+@pytest.mark.unit
+def test_hk_pipeline_schedule_present(crontab_text: str) -> None:
+    assert "sam_trader.services.pipeline --market HK" in crontab_text
+    # 07:30 HKT weekdays
+    assert "30 7 * * 1-5" in crontab_text
 
 
 @pytest.mark.unit

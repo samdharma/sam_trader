@@ -113,39 +113,7 @@ def run_pipeline(
         schedule,
     )
 
-    # 1. Load watchlist
-    try:
-        wl_cfg = load_watchlist_config("config/premarket_watchlist.yaml")
-        universe = build_watchlist(wl_cfg)
-    except Exception as exc:
-        logger.error("Failed to load watchlist: %s", exc)
-        return {
-            "command": "pipeline",
-            "status": "error",
-            "market": market,
-            "schedule": schedule,
-            "error": f"Failed to load watchlist: {exc}",
-        }
-
-    symbols = universe.get(market, [])
-    if not symbols:
-        msg = f"No symbols in watchlist for market={market}"
-        logger.warning(msg)
-        return {
-            "command": "pipeline",
-            "status": "success",
-            "market": market,
-            "schedule": schedule,
-            "candidate_count": 0,
-            "approved_count": 0,
-            "rejected_count": 0,
-            "bundles_generated": 0,
-            "bundles_published": 0,
-            "bundle_path": None,
-            "note": msg,
-        }
-
-    # 2. Market holiday check
+    # 1. Market holiday check — before any real work
     calendar = MarketCalendarService.from_env()
     today = datetime.now(timezone.utc).date()
     if not calendar.is_trading_day(market, today):
@@ -191,6 +159,38 @@ def run_pipeline(
             "trace_id": pipeline_result.trace_id,
             "holiday_skipped": True,
             "holiday_name": holiday_name,
+        }
+
+    # 2. Load watchlist
+    try:
+        wl_cfg = load_watchlist_config("config/premarket_watchlist.yaml")
+        universe = build_watchlist(wl_cfg)
+    except Exception as exc:
+        logger.error("Failed to load watchlist: %s", exc)
+        return {
+            "command": "pipeline",
+            "status": "error",
+            "market": market,
+            "schedule": schedule,
+            "error": f"Failed to load watchlist: {exc}",
+        }
+
+    symbols = universe.get(market, [])
+    if not symbols:
+        msg = f"No symbols in watchlist for market={market}"
+        logger.warning(msg)
+        return {
+            "command": "pipeline",
+            "status": "success",
+            "market": market,
+            "schedule": schedule,
+            "candidate_count": 0,
+            "approved_count": 0,
+            "rejected_count": 0,
+            "bundles_generated": 0,
+            "bundles_published": 0,
+            "bundle_path": None,
+            "note": msg,
         }
 
     # 3. Gap scan
