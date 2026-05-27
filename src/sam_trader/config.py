@@ -156,6 +156,20 @@ class SamTraderConfig:
             health_monitor_val = os.environ.get("HEALTH_MONITOR_MARKET", "")
             bar_resub_val = os.environ.get("BAR_RESUB_MARKET", "")
 
+            # Deprecation warnings for legacy per-actor market env vars
+            if "HEALTH_MONITOR_MARKET" in os.environ:
+                logger.warning(
+                    "DEPRECATED: HEALTH_MONITOR_MARKET env var is deprecated. "
+                    "Set MARKET=HK or MARKET=US instead. "
+                    "HEALTH_MONITOR_MARKET will be removed in a future release."
+                )
+            if "BAR_RESUB_MARKET" in os.environ:
+                logger.warning(
+                    "DEPRECATED: BAR_RESUB_MARKET env var is deprecated. "
+                    "Set MARKET=HK or MARKET=US instead. "
+                    "BAR_RESUB_MARKET will be removed in a future release."
+                )
+
         # ── Remaining env var parsing ────────────────────────────
         raw_symbols = os.environ.get("IB_SYMBOLS", "")
         symbols = [s.strip() for s in raw_symbols.split(",") if s.strip()]

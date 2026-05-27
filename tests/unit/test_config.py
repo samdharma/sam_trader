@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import FrozenInstanceError
 from unittest.mock import patch
 
@@ -461,6 +462,76 @@ class TestMarketEnvVarDerivation:
         assert cfg.futu_trd_market == "US"
         assert cfg.ib_enabled is False
         assert cfg.market == "INVALID"
+        assert cfg.market_config is None
+
+    # ── Deprecation warnings for legacy env vars ───────────────
+
+    def test_health_monitor_market_deprecation_warning(
+        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """HEALTH_MONITOR_MARKET set (no MARKET) → deprecation warning logged."""
+        monkeypatch.setenv("FUTU_TRD_MARKET", "US")
+        monkeypatch.setenv("HEALTH_MONITOR_MARKET", "HK")
+
+        with caplog.at_level(logging.WARNING):
+            SamTraderConfig.from_env()
+
+        deprecation_msgs = [
+            r.message for r in caplog.records if "HEALTH_MONITOR_MARKET" in r.message
+        ]
+        assert len(deprecation_msgs) == 1
+        assert "DEPRECATED" in deprecation_msgs[0]
+
+    def test_bar_resub_market_deprecation_warning(
+        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """BAR_RESUB_MARKET set (no MARKET) → deprecation warning logged."""
+        monkeypatch.setenv("FUTU_TRD_MARKET", "US")
+        monkeypatch.setenv("BAR_RESUB_MARKET", "HK")
+
+        with caplog.at_level(logging.WARNING):
+            SamTraderConfig.from_env()
+
+        deprecation_msgs = [
+            r.message for r in caplog.records if "BAR_RESUB_MARKET" in r.message
+        ]
+        assert len(deprecation_msgs) == 1
+        assert "DEPRECATED" in deprecation_msgs[0]
+
+    def test_no_deprecation_warning_when_market_set(
+        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """MARKET=HK set → no deprecation warning even if legacy vars set."""
+        monkeypatch.setenv("MARKET", "HK")
+        monkeypatch.setenv("HEALTH_MONITOR_MARKET", "US")
+        monkeypatch.setenv("BAR_RESUB_MARKET", "US")
+
+        with caplog.at_level(logging.WARNING):
+            SamTraderConfig.from_env()
+
+        deprecation_msgs = [
+            r.message
+            for r in caplog.records
+            if "DEPRECATED" in r.message
+            and (
+                "HEALTH_MONITOR_MARKET" in r.message or "BAR_RESUB_MARKET" in r.message
+            )
+        ]
+        assert len(deprecation_msgs) == 0
+
+    def test_legacy_vars_still_used_when_no_market(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Legacy vars still populate fields when MARKET is not set."""
+        monkeypatch.setenv("FUTU_TRD_MARKET", "US")
+        monkeypatch.setenv("HEALTH_MONITOR_MARKET", "legacy_hk")
+        monkeypatch.setenv("BAR_RESUB_MARKET", "legacy_us")
+
+        cfg = SamTraderConfig.from_env()
+
+        assert cfg.health_monitor_market == "legacy_hk"
+        assert cfg.bar_resub_market == "legacy_us"
+        assert cfg.market == ""
         assert cfg.market_config is None
 
     def test_new_fields_have_defaults(self) -> None:

@@ -1,5 +1,14 @@
 > **Note: see first-entry Iteration 20 for Phase 2 config dataclasses.**
 
+## Iteration 115
+- **Task**: P6-DM: Actor timezone refactor — existing actors use MarketConfig
+- **Task ID**: sam_trader-9z3.7.16
+- **Status**: COMPLETE
+- **Decisions**: Timezone ternary → `cfg.market_config.session_timezone` was already done in Iteration 112. This iteration completed the deprecation: (1) Added `logging.warning("DEPRECATED: ...")` in `config.py` when `HEALTH_MONITOR_MARKET` or `BAR_RESUB_MARKET` env vars are set and MARKET is not (backward-compat path). (2) Updated `main.py` to use `cfg.market` (when `market_config is not None`) instead of `cfg.health_monitor_market`/`cfg.bar_resub_market` for the `market` field in both HealthMonitorActor and BarResubscriptionActor configs. (3) Added 4 unit tests: deprecation warning for HEALTH_MONITOR_MARKET, deprecation warning for BAR_RESUB_MARKET, no warning when MARKET is set, legacy vars still populate when MARKET unset.
+- **Files Changed**: `src/sam_trader/config.py`, `src/sam_trader/main.py`, `tests/unit/test_config.py`
+- **Validation Result**: PASS (RALPH_GATE_PASSED — 46/46 targeted tests, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Pre-existing module-name conflict between `tests/unit/test_config.py` and `tests/unit/adapters/futu/test_config.py` prevents running the full unit suite in one command (unrelated to this change).
+
 ## Iteration 114
 - **Task**: P5-DM: IB — conditional enable/disable via MarketConfig
 - **Task ID**: sam_trader-9z3.6.15

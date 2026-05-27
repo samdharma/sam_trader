@@ -342,7 +342,11 @@ def build_trading_node() -> TradingNode:
                     "redis_port": cfg.redis_port,
                     "redis_password": cfg.redis_password,
                     "market_timezone": health_tz,
-                    "market": cfg.health_monitor_market,
+                    "market": (
+                        cfg.market
+                        if cfg.market_config is not None
+                        else cfg.health_monitor_market
+                    ),
                     "market_calendar_enabled": cfg.market_calendar_enabled,
                     "bar_type_strs": bar_type_strs,
                 },
@@ -370,7 +374,11 @@ def build_trading_node() -> TradingNode:
                 config_path=bar_resub_config,
                 config={
                     "market_open_tz": bar_resub_tz,
-                    "market": cfg.bar_resub_market,
+                    "market": (
+                        cfg.market
+                        if cfg.market_config is not None
+                        else cfg.bar_resub_market
+                    ),
                     "market_calendar_enabled": cfg.market_calendar_enabled,
                 },
             )
