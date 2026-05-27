@@ -1912,3 +1912,12 @@
 - **Files Changed**: `src/sam_trader/services/restart_orchestrator.py` (new), `src/sam_trader/services/cli.py`, `src/sam_trader/services/dashboard.py`, `tests/unit/services/test_restart_orchestrator.py` (new), `tests/unit/services/test_cli.py`, `docker/docker-compose.yml`, `.env.example`
 - **Validation Result**: PASS (RALPH_GATE_PASSED — 100/100 targeted tests, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Phase 8 DM extension complete.
+
+## Iteration 141
+- **Task**: P8-DM: EOD report CLI — sam report command
+- **Task ID**: sam_trader-9z3.9.31
+- **Status**: COMPLETE
+- **Decisions**: Added `sam report --market US|HK [--date YYYY-MM-DD] [--json]` CLI command to `cli.py`. Command tries Redis key `sam:eod_report:{market}:{date}` first (fast path for today's report), then falls back to PG `daily_reports` table for historical reports. Displays 6 sections: P&L Summary (per-strategy realized P&L, total P&L, total commission, net P&L), Fills Summary (total fills, volume, commission, per-strategy breakdown with avg fill price computed as volume/qty), Health Events (heartbeat count, last heartbeat, status, CRITICAL alerts), Position Check (flat/open with instrument details), Rejection Events (total rejections, active circuit breakers), and Max Drawdown. Returns exit code 1 if report not found. Added 9 comprehensive unit tests covering: Redis hit, PG fallback, JSON output, not found (human + JSON), invalid market, invalid date, corrupt Redis fallback to PG, and critical alerts / open positions handling. All 95 targeted tests pass.
+- **Files Changed**: `src/sam_trader/services/cli.py`, `tests/unit/services/test_cli.py`
+- **Validation Result**: PASS (RALPH_GATE_PASSED — 95/95 targeted tests, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ticket ready to close.

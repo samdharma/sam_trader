@@ -1957,6 +1957,308 @@ class TestSwitchMarketCommand:
         assert "no response" in err or "timeout" in err
 
 
+class TestReportCommand:
+    @patch("sam_trader.services.cli._redis_cli")
+    def test_report_redis_today(self, mock_redis_mod: Any, capsys: Any) -> None:
+        mock_r = MagicMock()
+        mock_r.get.return_value = json.dumps(
+            {
+                "market": "US",
+                "date": "2026-05-27",
+                "generated_at_utc": "2026-05-27T20:05:00+00:00",
+                "daily_pnl": [
+                    {
+                        "strategy_id": "tsla-orb-futu",
+                        "realized_pnl": 123.45,
+                        "source": "redis",
+                    }
+                ],
+                "fills_summary": {
+                    "total_fills": 5,
+                    "total_commission": 2.5,
+                    "total_volume": 5000.0,
+                    "by_strategy": [
+                        {
+                            "strategy_id": "tsla-orb-futu",
+                            "fill_count": 5,
+                            "total_qty": 50.0,
+                            "total_commission": 2.5,
+                            "total_volume": 5000.0,
+                        }
+                    ],
+                },
+                "position_summary": {
+                    "total_open_positions": 0,
+                    "all_flat": True,
+                    "positions": [],
+                },
+                "rejection_events": {
+                    "total_rejections": 0,
+                    "circuit_breakers_active": 0,
+                    "status": "ok",
+                },
+                "health_events": {
+                    "heartbeat_count": 48,
+                    "last_heartbeat": "2026-05-27T20:00:00Z",
+                    "status": "ok",
+                    "alerts": [],
+                },
+            }
+        )
+        mock_redis_mod.Redis.return_value = mock_r
+
+        rc = main(["report", "--market", "US", "--date", "2026-05-27"])
+        captured = capsys.readouterr()
+        assert rc == 0
+        assert "EOD Report [US] 2026-05-27" in captured.out
+        assert "tsla-orb-futu" in captured.out
+        assert "123.45" in captured.out
+        assert "Total Fills:        5" in captured.out
+        assert "All positions flat" in captured.out
+        assert "redis" in captured.out.lower()
+
+    @patch("sam_trader.services.cli.asyncpg.connect")
+    @patch("sam_trader.services.cli._redis_cli")
+    def test_report_pg_fallback(
+        self, mock_redis_mod: Any, mock_connect: Any, capsys: Any
+    ) -> None:
+        mock_r = MagicMock()
+        mock_r.get.return_value = None
+        mock_redis_mod.Redis.return_value = mock_r
+
+        mock_conn = AsyncMock()
+        mock_conn.fetchrow.return_value = {
+            "report_json": json.dumps(
+                {
+                    "market": "HK",
+                    "date": "2026-05-20",
+                    "generated_at_utc": "2026-05-20T08:05:00+00:00",
+                    "daily_pnl": [],
+                    "fills_summary": {
+                        "total_fills": 0,
+                        "total_commission": 0.0,
+                        "total_volume": 0.0,
+                        "by_strategy": [],
+                    },
+                    "position_summary": {
+                        "total_open_positions": 0,
+                        "all_flat": True,
+                        "positions": [],
+                    },
+                    "rejection_events": {
+                        "total_rejections": 0,
+                        "circuit_breakers_active": 0,
+                    },
+                    "health_events": {
+                        "heartbeat_count": 0,
+                        "status": "ok",
+                        "alerts": [],
+                    },
+                }
+            )
+        }
+        mock_connect.return_value = mock_conn
+
+        rc = main(["report", "--market", "HK", "--date", "2026-05-20"])
+        captured = capsys.readouterr()
+        assert rc == 0
+        assert "EOD Report [HK] 2026-05-20" in captured.out
+        assert "No P&L data available" in captured.out
+        assert "postgres" in captured.out.lower()
+
+    @patch("sam_trader.services.cli._redis_cli")
+    def test_report_json_output(self, mock_redis_mod: Any, capsys: Any) -> None:
+        mock_r = MagicMock()
+        mock_r.get.return_value = json.dumps(
+            {
+                "market": "US",
+                "date": "2026-05-27",
+                "generated_at_utc": "2026-05-27T20:05:00+00:00",
+                "daily_pnl": [
+                    {
+                        "strategy_id": "orb-15m",
+                        "realized_pnl": 99.0,
+                        "source": "redis",
+                    }
+                ],
+                "fills_summary": {
+                    "total_fills": 2,
+                    "total_commission": 1.0,
+                    "total_volume": 2000.0,
+                    "by_strategy": [],
+                },
+                "position_summary": {
+                    "total_open_positions": 0,
+                    "all_flat": True,
+                    "positions": [],
+                },
+                "rejection_events": {},
+                "health_events": {
+                    "heartbeat_count": 10,
+                    "last_heartbeat": "2026-05-27T20:00:00Z",
+                    "status": "ok",
+                    "alerts": [],
+                },
+            }
+        )
+        mock_redis_mod.Redis.return_value = mock_r
+
+        rc = main(["--json", "report", "--market", "US", "--date", "2026-05-27"])
+        captured = capsys.readouterr()
+        assert rc == 0
+        data = json.loads(captured.out)
+        assert data["command"] == "report"
+        assert data["market"] == "US"
+        assert data["date"] == "2026-05-27"
+        assert data["status"] == "OK"
+        assert data["source"] == "redis"
+        assert data["report"]["daily_pnl"][0]["realized_pnl"] == 99.0
+
+    @patch("sam_trader.services.cli.asyncpg.connect")
+    @patch("sam_trader.services.cli._redis_cli")
+    def test_report_not_found(
+        self, mock_redis_mod: Any, mock_connect: Any, capsys: Any
+    ) -> None:
+        mock_r = MagicMock()
+        mock_r.get.return_value = None
+        mock_redis_mod.Redis.return_value = mock_r
+
+        mock_conn = AsyncMock()
+        mock_conn.fetchrow.return_value = None
+        mock_connect.return_value = mock_conn
+
+        rc = main(["report", "--market", "US", "--date", "2026-01-01"])
+        captured = capsys.readouterr()
+        assert rc == 1
+        assert "No EOD report for 2026-01-01" in captured.out
+
+    @patch("sam_trader.services.cli.asyncpg.connect")
+    @patch("sam_trader.services.cli._redis_cli")
+    def test_report_not_found_json(
+        self, mock_redis_mod: Any, mock_connect: Any, capsys: Any
+    ) -> None:
+        mock_r = MagicMock()
+        mock_r.get.return_value = None
+        mock_redis_mod.Redis.return_value = mock_r
+
+        mock_conn = AsyncMock()
+        mock_conn.fetchrow.return_value = None
+        mock_connect.return_value = mock_conn
+
+        rc = main(["--json", "report", "--market", "HK", "--date", "2026-01-01"])
+        captured = capsys.readouterr()
+        assert rc == 1
+        data = json.loads(captured.out)
+        assert data["status"] == "NOT_FOUND"
+        assert data["market"] == "HK"
+
+    def test_report_invalid_market(self, capsys: Any) -> None:
+        rc = main(["report", "--market", "EU"])
+        captured = capsys.readouterr()
+        assert rc == 1
+        assert "Unknown market" in captured.err or "ERROR" in captured.err
+
+    def test_report_invalid_date(self, capsys: Any) -> None:
+        rc = main(["report", "--market", "US", "--date", "not-a-date"])
+        captured = capsys.readouterr()
+        assert rc == 1
+        assert "Invalid date format" in captured.err or "ERROR" in captured.err
+
+    @patch("sam_trader.services.cli.asyncpg.connect")
+    @patch("sam_trader.services.cli._redis_cli")
+    def test_report_corrupt_redis_fallback_pg(
+        self, mock_redis_mod: Any, mock_connect: Any, capsys: Any
+    ) -> None:
+        mock_r = MagicMock()
+        mock_r.get.return_value = "not-json{{"
+        mock_redis_mod.Redis.return_value = mock_r
+
+        mock_conn = AsyncMock()
+        mock_conn.fetchrow.return_value = {
+            "report_json": json.dumps(
+                {
+                    "market": "US",
+                    "date": "2026-05-27",
+                    "generated_at_utc": "2026-05-27T20:05:00+00:00",
+                    "daily_pnl": [],
+                    "fills_summary": {
+                        "total_fills": 0,
+                        "total_commission": 0.0,
+                        "total_volume": 0.0,
+                        "by_strategy": [],
+                    },
+                    "position_summary": {
+                        "total_open_positions": 0,
+                        "all_flat": True,
+                    },
+                    "rejection_events": {},
+                    "health_events": {
+                        "heartbeat_count": 0,
+                        "status": "ok",
+                        "alerts": [],
+                    },
+                }
+            )
+        }
+        mock_connect.return_value = mock_conn
+
+        rc = main(["report", "--market", "US", "--date", "2026-05-27"])
+        captured = capsys.readouterr()
+        assert rc == 0
+        assert "EOD Report [US] 2026-05-27" in captured.out
+
+    @patch("sam_trader.services.cli._redis_cli")
+    def test_report_critical_alerts(self, mock_redis_mod: Any, capsys: Any) -> None:
+        mock_r = MagicMock()
+        mock_r.get.return_value = json.dumps(
+            {
+                "market": "US",
+                "date": "2026-05-27",
+                "generated_at_utc": "2026-05-27T20:05:00+00:00",
+                "daily_pnl": [],
+                "fills_summary": {
+                    "total_fills": 0,
+                    "total_commission": 0.0,
+                    "total_volume": 0.0,
+                    "by_strategy": [],
+                },
+                "position_summary": {
+                    "total_open_positions": 1,
+                    "all_flat": False,
+                    "positions": [
+                        {
+                            "instrument_id": "TSLA.NASDAQ",
+                            "net_quantity": 100,
+                        }
+                    ],
+                },
+                "rejection_events": {
+                    "total_rejections": 3,
+                    "circuit_breakers_active": 1,
+                },
+                "health_events": {
+                    "heartbeat_count": 10,
+                    "last_heartbeat": "2026-05-27T20:00:00Z",
+                    "status": "ok",
+                    "alerts": [
+                        {
+                            "key": "sam:heartbeat:sam-trader",
+                            "value": '{"level": "CRITICAL", "msg": "down"}',
+                        }
+                    ],
+                },
+            }
+        )
+        mock_redis_mod.Redis.return_value = mock_r
+
+        rc = main(["report", "--market", "US", "--date", "2026-05-27"])
+        captured = capsys.readouterr()
+        assert rc == 0
+        assert "CRITICAL Alerts" in captured.out
+        assert "1 open position(s)" in captured.out
+        assert "TSLA.NASDAQ" in captured.out
+
+
 class TestJsonGlobalFlag:
     @patch("sam_trader.services.cli._run")
     def test_json_flag_on_status(self, mock_run: Any, capsys: Any) -> None:
