@@ -1,5 +1,14 @@
 > **Note: see first-entry Iteration 20 for Phase 2 config dataclasses.**
 
+## Iteration 124
+- **Task**: P11-DM: [EXIT] E2E — full daily cycle simulation
+- **Task ID**: sam_trader-9z3.12.9
+- **Status**: COMPLETE
+- **Decisions**: Created `tests/integration/test_daily_cycle_e2e.py` with 94 tests across 15 test classes covering the full 24-hour daily trading cycle: HK startup, SOD readiness (7 checks), lunch pause/resume, HK close→US switch, state preservation, restart orchestrator, US market startup, US SOD readiness (with IB), US EOD report (6 sections), US close→HK switch, weekend/holiday behavior, dual-broker gap scanner, HK EOD, and state preservation across restarts. Tests validate config-level behaviour, method signatures, Redis key formats, calendar operations, and structural correctness. Cython-read-only Actor properties (clock/cache) are avoided in favor of inspect-based source verification, standalone method tests, and config validation.
+- **Files Changed**: `tests/integration/test_daily_cycle_e2e.py` (new, 1000+ lines)
+- **Validation Result**: PASS (RALPH_GATE_PASSED — 94/94 tests, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: Dynamic Multi-Market extensions EXIT gate complete. All 24 DM tickets (phases 0-11) are now closed. Ready for Phase 12.
+
 ## Iteration 123
 - **Task**: P11-DM: deploy.sh — always-on brokers, MARKET env var, updated wizard
 - **Task ID**: sam_trader-9z3.12.8
