@@ -1,5 +1,14 @@
 > **Note: see first-entry Iteration 20 for Phase 2 config dataclasses.**
 
+## Iteration 110
+- **Task**: P1-DM: MarketConfig — frozen dataclass + market_config.yaml
+- **Task ID**: sam_trader-9z3.2.3
+- **Status**: COMPLETE
+- **Decisions**: Created `MarketConfig` frozen dataclass in `src/sam_trader/market_config.py` with 10 fields per the DYNAMIC_MULTI_MARKET_PLAN.md §3.2 spec: futu_trd_market, futu_routing_venues, ib_enabled, session_timezone, session_open, session_close, lunch_start, lunch_end, premarket_pipeline_time, sod_readiness_time, eod_report_time. US market has ib_enabled=true, no lunch break. HK market has ib_enabled=false, lunch 12:00-13:00 HKT. `from_yaml(path)` classmethod parses YAML and returns dict[str, MarketConfig]. `get_market(market, path)` helper returns single market entry with clear ValueError for unknown markets. Time fields validated as HH:MM format via regex; empty string allowed for lunch_start/lunch_end (US no lunch). Created `config/market_config.yaml` with both market entries. 24 unit tests covering: YAML load (US/HK), get_market (US/HK/unknown), time validation (valid/invalid/boundary), frozen immutability, defaults, error messages.
+- **Files Changed**: `src/sam_trader/market_config.py` (new), `config/market_config.yaml` (new), `tests/unit/test_market_config.py` (new)
+- **Validation Result**: PASS (RALPH_GATE_PASSED — 24/24 tests, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for sam_trader-9z3.2.4 (MARKET env var → derived config fields).
+
 ## Iteration 109
 - **Task**: P0-DM: IB Gateway — US-market-only environment label
 - **Task ID**: sam_trader-9z3.1.27

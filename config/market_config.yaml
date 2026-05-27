@@ -1,0 +1,33 @@
+# Market Configuration — Per-market parameters for dynamic multi-market operations.
+# Loaded at startup by MarketConfig.from_yaml().
+# See: docs/user/DYNAMIC_MULTI_MARKET_PLAN.md §3.2
+
+markets:
+  US:
+    futu_trd_market: "US"
+    futu_routing_venues:
+      - "NASDAQ"
+      - "NYSE"
+    ib_enabled: true
+    session_timezone: "America/New_York"
+    session_open: "09:30"
+    session_close: "16:00"
+    lunch_start: ""                     # No lunch break for US markets
+    lunch_end: ""
+    premarket_pipeline_time: "08:30"    # ET — 1 hour before US open
+    sod_readiness_time: "08:00"         # ET — 1.5 hours before US open
+    eod_report_time: "16:05"            # ET — 5 min after US close
+
+  HK:
+    futu_trd_market: "HK"
+    futu_routing_venues:
+      - "HKEX"
+    ib_enabled: false
+    session_timezone: "Asia/Hong_Kong"
+    session_open: "09:30"
+    session_close: "16:00"
+    lunch_start: "12:00"
+    lunch_end: "13:00"
+    premarket_pipeline_time: "07:30"    # HKT — 2 hours before HK open
+    sod_readiness_time: "07:00"         # HKT — 2.5 hours before HK open
+    eod_report_time: "16:05"            # HKT — 5 min after HK close
