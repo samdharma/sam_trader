@@ -15,7 +15,7 @@ from sam_trader.services.pipeline import (
 
 class TestRunPipeline:
     @patch("sam_trader.services.pipeline.ReadinessReportGenerator")
-    @patch("sam_trader.services.pipeline.write_bundles")
+    @patch("sam_trader.services.pipeline.publish_bundles_to_redis")
     @patch("sam_trader.services.pipeline.generate_bundles")
     @patch("sam_trader.services.pipeline.PipelineExecutor")
     @patch("sam_trader.services.pipeline.PreMarketGapScanner")
@@ -30,7 +30,7 @@ class TestRunPipeline:
         mock_scanner_cls: Any,
         mock_executor_cls: Any,
         mock_gen_bundles: Any,
-        mock_write_bundles: Any,
+        mock_publish: Any,
         mock_report_gen_cls: Any,
     ) -> None:
         mock_load_wl.return_value = {"US": MagicMock(min_gap_pct=2.0)}
@@ -53,14 +53,14 @@ class TestRunPipeline:
         mock_executor_cls.return_value = mock_executor
 
         mock_gen_bundles.return_value = [{"strategy": "test"}]
-        mock_write_bundles.return_value = "/path/to/bundles.yaml"
+        mock_publish.return_value = {"published": 1}
 
         mock_report = MagicMock()
         mock_report.candidate_count = 1
         mock_report.approved_count = 1
         mock_report.rejected_count = 0
         mock_report.bundles_generated = 1
-        mock_report.bundle_path = "/path/to/bundles.yaml"
+        mock_report.bundle_path = None
         mock_report.regime_state = {"regime": "NEUTRAL"}
         mock_report.trace_id = "test-trace"
 
@@ -76,17 +76,18 @@ class TestRunPipeline:
         assert result["candidate_count"] == 1
         assert result["approved_count"] == 1
         assert result["bundles_generated"] == 1
-        assert result["bundle_path"] == "/path/to/bundles.yaml"
+        assert result["bundles_published"] == 1
+        assert result["bundle_path"] is None
         assert result["trace_id"] == "test-trace"
 
         mock_executor.run.assert_called_once()
         mock_gen_bundles.assert_called_once_with(mock_pipeline_result.approved)
-        mock_write_bundles.assert_called_once()
+        mock_publish.assert_called_once()
         mock_report_gen.generate.assert_called_once()
         mock_report_gen.save_audit.assert_called_once_with(mock_report)
 
     @patch("sam_trader.services.pipeline.ReadinessReportGenerator")
-    @patch("sam_trader.services.pipeline.write_bundles")
+    @patch("sam_trader.services.pipeline.publish_bundles_to_redis")
     @patch("sam_trader.services.pipeline.generate_bundles")
     @patch("sam_trader.services.pipeline.PipelineExecutor")
     @patch("sam_trader.services.pipeline.PreMarketGapScanner")
@@ -101,7 +102,7 @@ class TestRunPipeline:
         mock_scanner_cls: Any,
         mock_executor_cls: Any,
         mock_gen_bundles: Any,
-        mock_write_bundles: Any,
+        mock_publish: Any,
         mock_report_gen_cls: Any,
     ) -> None:
         mock_load_wl.return_value = {"HK": MagicMock(min_gap_pct=2.0)}

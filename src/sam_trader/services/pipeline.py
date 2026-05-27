@@ -14,7 +14,10 @@ from datetime import datetime, timezone
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from sam_trader.services.bundle_generator import generate_bundles, write_bundles
+from sam_trader.services.bundle_generator import (
+    generate_bundles,
+    publish_bundles_to_redis,
+)
 from sam_trader.services.gap_scanner import (
     CompositePrevCloseLoader,
     FutuKLinePrevCloseLoader,
@@ -100,7 +103,7 @@ def run_pipeline(
     Returns
     -------
     dict[str, Any]
-        Result payload with ``status``, counts, ``bundle_path``, etc.
+        Result payload with ``status``, counts, ``bundles_published``, etc.
     """
     market = (market or _get_active_market()).upper()
     schedule = schedule or _get_pipeline_schedule(market)
@@ -137,6 +140,7 @@ def run_pipeline(
             "approved_count": 0,
             "rejected_count": 0,
             "bundles_generated": 0,
+            "bundles_published": 0,
             "bundle_path": None,
             "note": msg,
         }
@@ -181,6 +185,7 @@ def run_pipeline(
             "approved_count": 0,
             "rejected_count": 0,
             "bundles_generated": 0,
+            "bundles_published": 0,
             "bundle_path": None,
             "regime": None,
             "trace_id": pipeline_result.trace_id,
@@ -238,21 +243,22 @@ def run_pipeline(
         trace_id=f"pipeline-{market}-{datetime.now(timezone.utc).isoformat()}",
     )
 
-    # 5. Bundle generation
-    bundle_path: str | None = None
+    # 5. Bundle generation → Redis pub/sub
+    bundles_published = 0
     if pipeline_result.approved:
         try:
             bundles = generate_bundles(pipeline_result.approved)
-            bundle_path = write_bundles(bundles)
+            pub_result = publish_bundles_to_redis(bundles, market=market)
+            bundles_published = pub_result.get("published", 0)
         except Exception as exc:
-            logger.warning("Bundle generation failed: %s", exc)
+            logger.warning("Bundle publish failed: %s", exc)
 
     # 6. Readiness report
     redis_client = _redis_client()
     gen = ReadinessReportGenerator(redis_client=redis_client)
     report = gen.generate(
         pipeline_result,
-        bundle_path=bundle_path,
+        bundle_path=None,
         market=market,
     )
 
@@ -262,11 +268,12 @@ def run_pipeline(
         logger.warning("Failed to save readiness audit: %s", exc)
 
     logger.info(
-        "Pipeline complete: %d candidates, %d approved, %d rejected, bundles=%s",
+        "Pipeline complete: %d candidates, %d approved, %d rejected, "
+        "bundles_published=%d",
         report.candidate_count,
         report.approved_count,
         report.rejected_count,
-        bundle_path or "none",
+        bundles_published,
     )
 
     return {
@@ -278,7 +285,8 @@ def run_pipeline(
         "approved_count": report.approved_count,
         "rejected_count": report.rejected_count,
         "bundles_generated": report.bundles_generated,
-        "bundle_path": bundle_path,
+        "bundles_published": bundles_published,
+        "bundle_path": None,
         "regime": report.regime_state.get("regime"),
         "trace_id": report.trace_id,
     }

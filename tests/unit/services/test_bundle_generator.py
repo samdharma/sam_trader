@@ -2,19 +2,24 @@
 
 from __future__ import annotations
 
+import json
 import os
 import tempfile
 from typing import Any
+from unittest.mock import MagicMock, patch
 
 import yaml
 
 from sam_trader.services.bundle_generator import (
+    CHANNEL_BUNDLE_LOAD,
+    CHANNEL_BUNDLE_LOAD_COMPLETE,
     BundleGenerator,
     BundleGeneratorConfig,
     _infer_venue,
     _make_bar_type,
     _price_to_ticks,
     generate_bundles,
+    publish_bundles_to_redis,
     write_bundles,
 )
 from sam_trader.services.gap_scanner import GapCandidate
@@ -344,3 +349,73 @@ class TestBundleGenerator:
             with open(path, "r", encoding="utf-8") as f:
                 content = f.read()
             assert "bundles" in content
+
+
+# ---------------------------------------------------------------------------
+# publish_bundles_to_redis
+# ---------------------------------------------------------------------------
+
+
+class TestPublishBundlesToRedis:
+    def test_no_redis_returns_zero(self) -> None:
+        with patch(
+            "sam_trader.services.quote._redis_client",
+            return_value=None,
+        ):
+            result = publish_bundles_to_redis([], market="US")
+        assert result["published"] == 0
+        assert result["market"] == "US"
+        assert result["errors"] == 0
+
+    def test_publishes_each_bundle(self) -> None:
+        mock_redis = MagicMock()
+        bundles = [
+            {"id": "tsla-orb-20260101-futu", "venue": "FUTU"},
+            {"id": "aapl-orb-20260101-futu", "venue": "FUTU"},
+        ]
+        result = publish_bundles_to_redis(bundles, market="US", redis_client=mock_redis)
+
+        assert result["published"] == 2
+        assert result["errors"] == 0
+        assert mock_redis.publish.call_count == 3  # 2 bundles + 1 complete
+
+        calls = mock_redis.publish.call_args_list
+        assert calls[0][0][0] == CHANNEL_BUNDLE_LOAD
+        assert json.loads(calls[0][0][1]) == bundles[0]
+        assert calls[1][0][0] == CHANNEL_BUNDLE_LOAD
+        assert json.loads(calls[1][0][1]) == bundles[1]
+        assert calls[2][0][0] == CHANNEL_BUNDLE_LOAD_COMPLETE
+        complete = json.loads(calls[2][0][1])
+        assert complete["market"] == "US"
+        assert complete["count"] == 2
+
+    def test_publishes_complete_even_when_zero_bundles(self) -> None:
+        mock_redis = MagicMock()
+        result = publish_bundles_to_redis([], market="HK", redis_client=mock_redis)
+
+        assert result["published"] == 0
+        assert mock_redis.publish.call_count == 1
+        assert mock_redis.publish.call_args[0][0] == CHANNEL_BUNDLE_LOAD_COMPLETE
+
+    def test_continues_on_publish_error(self) -> None:
+        mock_redis = MagicMock()
+        mock_redis.publish.side_effect = [None, RuntimeError("boom"), None]
+        bundles = [
+            {"id": "b1", "venue": "FUTU"},
+            {"id": "b2", "venue": "FUTU"},
+        ]
+        result = publish_bundles_to_redis(bundles, market="US", redis_client=mock_redis)
+
+        assert result["published"] == 1
+        assert result["errors"] == 1
+
+    def test_uses_redis_client_from_env_when_none_passed(self) -> None:
+        mock_redis = MagicMock()
+        with patch(
+            "sam_trader.services.quote._redis_client",
+            return_value=mock_redis,
+        ):
+            result = publish_bundles_to_redis([{"id": "b1"}], market="US")
+
+        assert result["published"] == 1
+        assert mock_redis.publish.call_count == 2

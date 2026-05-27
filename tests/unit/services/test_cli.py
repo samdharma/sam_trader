@@ -415,7 +415,8 @@ class TestPipelineCommand:
             "approved_count": 1,
             "rejected_count": 0,
             "bundles_generated": 1,
-            "bundle_path": "/path/to/bundles.yaml",
+            "bundles_published": 1,
+            "bundle_path": None,
             "regime": "NEUTRAL",
             "trace_id": "test-trace",
         }

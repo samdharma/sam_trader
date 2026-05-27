@@ -43,7 +43,7 @@ from sam_trader.services.backup import backup as run_backup
 from sam_trader.services.backup import restore as run_restore
 from sam_trader.services.bundle_generator import (
     generate_bundles,
-    write_bundles,
+    publish_bundles_to_redis,
 )
 from sam_trader.services.deploy_window import check_window as check_deploy_window
 from sam_trader.services.deploy_window import is_in_window
@@ -1611,7 +1611,6 @@ def readiness_report(
 
     if simulate:
         pipeline_result = _simulate_pipeline_result()
-        bundle_path: str | None = None
     else:
         # Load watchlist
         try:
@@ -1671,12 +1670,10 @@ def readiness_report(
             trace_id=f"readiness-{market}-{datetime.now(timezone.utc).isoformat()}",
         )
 
-        # Bundle generation
+        # Bundle generation → Redis pub/sub
         if pipeline_result.approved:
             bundles = generate_bundles(pipeline_result.approved)
-            bundle_path = write_bundles(bundles)
-        else:
-            bundle_path = None
+            publish_bundles_to_redis(bundles, market=market)
 
     # Generate readiness report
     redis_client = None
@@ -1698,7 +1695,7 @@ def readiness_report(
     )
     report = gen.generate(
         pipeline_result,
-        bundle_path=bundle_path,
+        bundle_path=None,
         market=market,
     )
 

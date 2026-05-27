@@ -7,6 +7,7 @@ Usage
         BundleGeneratorConfig,
         generate_bundles,
         write_bundles,
+        publish_bundles_to_redis,
     )
 
     generator = BundleGenerator(BundleGeneratorConfig())
@@ -15,6 +16,7 @@ Usage
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 from dataclasses import dataclass
@@ -32,6 +34,10 @@ _DEFAULT_STRATEGY_PATH = "sam_trader.strategies.orb:OrbStrategy"
 _DEFAULT_BAR_AGGREGATION = "5-MINUTE-LAST-EXTERNAL"
 _DEFAULT_IB_BAR_AGGREGATION = "5-MINUTE-LAST-INTERNAL"
 _DEFAULT_TICK_SIZE = 0.01
+
+# Redis channel names (mirror those in bundle_controller.py)
+CHANNEL_BUNDLE_LOAD = "sam:bundle:load"
+CHANNEL_BUNDLE_LOAD_COMPLETE = "sam:bundle:load_complete"
 
 
 @dataclass(frozen=True)
@@ -279,6 +285,88 @@ def write_bundles(
 
     logger.info("Wrote %d bundles to %s", len(bundles), path)
     return os.path.abspath(path)
+
+
+def publish_bundles_to_redis(
+    bundles: list[dict[str, Any]],
+    market: str = "",
+    redis_client: Any = None,
+) -> dict[str, Any]:
+    """Publish bundle dicts to Redis ``sam:bundle:load`` channel.
+
+    Each bundle is published as JSON to the load channel. After all bundles
+    are sent, a completion message is published to
+    ``sam:bundle:load_complete`` with ``{"market": ..., "count": ...}``.
+
+    Parameters
+    ----------
+    bundles
+        List of bundle dicts (from :func:`generate_bundles`).
+    market
+        Market label (``"US"``, ``"HK"``, etc.) for the completion message.
+    redis_client
+        Optional Redis client.  If *None*, a client is built from env vars.
+
+    Returns
+    -------
+    dict[str, Any]
+        ``{"published": int, "channel": str, "market": str, "errors": int}``.
+
+    """
+    if redis_client is None:
+        from sam_trader.services.quote import _redis_client
+
+        redis_client = _redis_client()
+
+    if redis_client is None:
+        logger.warning("publish_bundles_to_redis: Redis not available, skipping")
+        return {
+            "published": 0,
+            "channel": CHANNEL_BUNDLE_LOAD,
+            "market": market,
+            "errors": 0,
+        }
+
+    published = 0
+    errors = 0
+
+    try:
+        for bundle in bundles:
+            try:
+                redis_client.publish(CHANNEL_BUNDLE_LOAD, json.dumps(bundle))
+                published += 1
+            except Exception as exc:
+                logger.warning(
+                    "Failed to publish bundle %s: %s",
+                    bundle.get("id", "?"),
+                    exc,
+                )
+                errors += 1
+
+        try:
+            redis_client.publish(
+                CHANNEL_BUNDLE_LOAD_COMPLETE,
+                json.dumps({"market": market, "count": published}),
+            )
+        except Exception as exc:
+            logger.warning("Failed to publish load_complete: %s", exc)
+            errors += 1
+    except Exception as exc:
+        logger.warning("Redis publish failed: %s", exc)
+        errors += 1
+
+    logger.info(
+        "Published %d bundles to Redis channel %s (errors=%d)",
+        published,
+        CHANNEL_BUNDLE_LOAD,
+        errors,
+    )
+    return {
+        "published": published,
+        "channel": CHANNEL_BUNDLE_LOAD,
+        "market": market,
+        "errors": errors,
+    }
 
 
 class BundleGenerator:
