@@ -90,3 +90,21 @@ CREATE TABLE IF NOT EXISTS performance_stats (
 
 CREATE INDEX IF NOT EXISTS idx_perf_stats_date ON performance_stats(date);
 CREATE INDEX IF NOT EXISTS idx_perf_stats_strategy ON performance_stats(strategy_id);
+
+-- ---------------------------------------------------------------------------
+-- End-of-day reports (Phase 6 DM: EndOfDayReporterActor)
+-- Populated daily at eod_report_time by EndOfDayReporterActor.
+-- Consumed by sam report CLI and dashboard.
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS daily_reports (
+    id              SERIAL PRIMARY KEY,
+    market          VARCHAR(10)  NOT NULL,
+    date            DATE         NOT NULL,
+    report_json     JSONB        NOT NULL,
+    created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    UNIQUE (market, date)
+);
+
+CREATE INDEX IF NOT EXISTS idx_daily_reports_date ON daily_reports(date);
+CREATE INDEX IF NOT EXISTS idx_daily_reports_market ON daily_reports(market);

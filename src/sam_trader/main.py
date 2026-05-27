@@ -499,6 +499,48 @@ def build_trading_node() -> TradingNode:
 
     # --- Phase 8 actors ---
 
+    if cfg.actor_eod_reporter_enabled:
+        eod_tz = (
+            cfg.market_config.session_timezone
+            if cfg.market_config is not None
+            else (
+                "Asia/Hong_Kong" if cfg.futu_trd_market == "HK" else "America/New_York"
+            )
+        )
+        eod_cfg = {
+            "market": cfg.market if cfg.market_config is not None else "",
+            "eod_report_time": (
+                cfg.market_config.eod_report_time
+                if cfg.market_config is not None
+                else "16:05"
+            ),
+            "session_timezone": eod_tz,
+            "redis_host": cfg.redis_host,
+            "redis_port": cfg.redis_port,
+            "redis_password": cfg.redis_password,
+            "postgres_host": cfg.postgres_host,
+            "postgres_port": cfg.postgres_port,
+            "postgres_db": cfg.postgres_db,
+            "postgres_user": cfg.postgres_user,
+            "postgres_password": cfg.postgres_password,
+            "market_calendar_enabled": cfg.market_calendar_enabled,
+        }
+        actors.append(
+            ImportableActorConfig(
+                actor_path=("sam_trader.actors.eod_reporter:EndOfDayReporterActor"),
+                config_path=(
+                    "sam_trader.actors.eod_reporter:EndOfDayReporterActorConfig"
+                ),
+                config=eod_cfg,
+            )
+        )
+        logger.info(
+            "EndOfDayReporterActor registered (market=%s, time=%s, tz=%s)",
+            eod_cfg["market"],
+            eod_cfg["eod_report_time"],
+            eod_cfg["session_timezone"],
+        )
+
     if cfg.actor_position_snapshot_enabled:
         actors.append(
             ImportableActorConfig(
