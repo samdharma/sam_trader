@@ -12,6 +12,7 @@ import logging
 import os
 from datetime import datetime, timezone
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from sam_trader.services.bundle_generator import generate_bundles, write_bundles
 from sam_trader.services.gap_scanner import (
@@ -33,14 +34,55 @@ from sam_trader.services.readiness_report import ReadinessReportGenerator
 from sam_trader.services.watchlist import build_watchlist, load_watchlist_config
 
 PIPELINE_SCHEDULE: str = os.getenv("PIPELINE_SCHEDULE", "08:30")
-PIPELINE_MARKET: str = os.getenv("PIPELINE_MARKET", "US")
 
 logger = logging.getLogger("sam_trader.pipeline")
 
 
+def _get_active_market() -> str:
+    """Read active market from ``MARKET`` env var, default to ``US``."""
+    return os.getenv("MARKET", "US").strip().upper() or "US"
+
+
+def _get_pipeline_schedule(market: str) -> str:
+    """Return the pipeline schedule time for *market* (market-local HH:MM).
+
+    Reads ``premarket_pipeline_time`` from ``config/market_config.yaml``.
+    Falls back to ``08:30`` for US and ``07:30`` for HK.
+    """
+    try:
+        from sam_trader.market_config import MarketConfig
+
+        cfg = MarketConfig.get_market(market)
+        return cfg.premarket_pipeline_time
+    except Exception:  # noqa: BLE001
+        return "08:30" if market == "US" else "07:30"
+
+
+def _convert_pipeline_time_to_hkt(market: str, local_time: str) -> str:
+    """Convert a market-local pipeline time to HKT (HH:MM).
+
+    For ``US`` the *local_time* is interpreted as America/New_York and
+    converted to Asia/Hong_Kong using ``zoneinfo``, so DST is handled
+    automatically.
+
+    For ``HK`` the time is already HKT and returned unchanged.
+    """
+    if market != "US":
+        return local_time
+
+    hour, minute = map(int, local_time.split(":"))
+    now = datetime.now(timezone.utc)
+    et_tz = ZoneInfo("America/New_York")
+    hkt_tz = ZoneInfo("Asia/Hong_Kong")
+    et_now = now.astimezone(et_tz)
+    et_dt = et_now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    hkt_dt = et_dt.astimezone(hkt_tz)
+    return f"{hkt_dt.hour:02d}:{hkt_dt.minute:02d}"
+
+
 def run_pipeline(
     market: str | None = None,
-    schedule: str = PIPELINE_SCHEDULE,
+    schedule: str | None = None,
     pass_number: int = 1,
 ) -> dict[str, Any]:
     """Run the full pre-market pipeline.
@@ -48,9 +90,10 @@ def run_pipeline(
     Parameters
     ----------
     market
-        Market to scan (``"US"`` or ``"HK"``).  Defaults to ``PIPELINE_MARKET`` env var.
+        Market to scan (``"US"`` or ``"HK"``).  Defaults to ``MARKET`` env var.
     schedule
-        Schedule label (HH:MM).  Defaults to ``PIPELINE_SCHEDULE`` env var.
+        Schedule label (HH:MM).  Defaults to market config
+        (``premarket_pipeline_time``).
     pass_number
         Scan pass (1=early gap, 2=trended, 3+=final).  Default 1.
 
@@ -59,7 +102,8 @@ def run_pipeline(
     dict[str, Any]
         Result payload with ``status``, counts, ``bundle_path``, etc.
     """
-    market = (market or PIPELINE_MARKET).upper()
+    market = (market or _get_active_market()).upper()
+    schedule = schedule or _get_pipeline_schedule(market)
     logger.info(
         "Pre-market pipeline starting (market=%s, schedule=%s)",
         market,
@@ -248,13 +292,13 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="SAM Trader V3 Pre-Market Pipeline")
     parser.add_argument(
         "--schedule",
-        default=PIPELINE_SCHEDULE,
-        help="Expected schedule time (HH:MM)",
+        default=None,
+        help="Expected schedule time (HH:MM).  Defaults to market config.",
     )
     parser.add_argument(
         "--market",
-        default=PIPELINE_MARKET,
-        help="Market to scan (US or HK)",
+        default=None,
+        help="Market to scan (US or HK).  Defaults to MARKET env var.",
     )
     parser.add_argument(
         "--pass",

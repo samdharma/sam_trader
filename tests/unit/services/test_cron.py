@@ -21,7 +21,7 @@ def test_crontab_has_all_entries(crontab_text: str) -> None:
         ("backup", "sam_trader.services.backup backup", "0 6 * * 1-5"),
         ("log rotation", "sam_trader.services.rotate_logs", "0 3 * * *"),
         ("deploy window", "sam_trader.services.deploy_window", "*/30 4-9 * * *"),
-        ("pipeline", "sam_trader.services.pipeline", "0 8 * * 1-5"),
+        ("pipeline", "sam_trader.services.pipeline", "30 7 * * 1-5"),
         (
             "performance analysis",
             "sam_trader.services.performance_analyzer",

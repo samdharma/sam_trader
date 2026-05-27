@@ -1295,10 +1295,11 @@ def deploy_window_cmd(ctx: click.Context) -> None:
 
 
 @cli.command()
+@click.option("--market", default=None, help="Market to scan (US or HK).")
 @click.pass_context
-def pipeline(ctx: click.Context) -> None:
+def pipeline(ctx: click.Context, market: str | None) -> None:
     """Trigger the pre-market pipeline (gap scan → AI scoring → bundles → report)."""
-    result = run_pipeline()
+    result = run_pipeline(market=market)
     _out(ctx, result)
 
 

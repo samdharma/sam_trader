@@ -175,10 +175,10 @@ watchlist:
     premarket_only: false   # HK has no pre-market session
 ```
 
-Set `PIPELINE_MARKET=HK` and `PIPELINE_SCHEDULE=09:00` (HKT) when scanning the
-HK market. The gap scanner emits per-stage diagnostic counts
-(`quote_collected=N`, `prev_close_success=N`, `raw_gaps=N`, `after_filters=N`)
-for observability.
+Set `MARKET=HK` when scanning the HK market. The pipeline schedule is read
+from `market_config.yaml` (`premarket_pipeline_time`). The gap scanner emits
+per-stage diagnostic counts (`quote_collected=N`, `prev_close_success=N`,
+`raw_gaps=N`, `after_filters=N`) for observability.
 
 ### 3.3 Key Nautilus Types
 
@@ -231,6 +231,7 @@ from sam_trader.services.quote_collector import QuoteCollectionService
 - Pipeline reads `MARKET` env var or `market_config.yaml` to determine active market
 - US pipeline: gap scan at 08:30 ET (converted to HKT dynamically via `zoneinfo` for DST)
 - HK pipeline: gap scan at 07:30 HKT
+- Cron entries call `python -m sam_trader.services.pipeline --market US|HK`
 - Holiday check via `MarketCalendarService` before execution
 - CLI: `sam pipeline --market US` and `sam pipeline --market HK`
 

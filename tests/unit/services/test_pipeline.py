@@ -5,7 +5,12 @@ from __future__ import annotations
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from sam_trader.services.pipeline import run_pipeline
+from sam_trader.services.pipeline import (
+    _convert_pipeline_time_to_hkt,
+    _get_active_market,
+    _get_pipeline_schedule,
+    run_pipeline,
+)
 
 
 class TestRunPipeline:
@@ -320,3 +325,103 @@ class TestRunPipeline:
         assert result["status"] == "success"
         assert result["candidate_count"] == 0
         assert "0 candidates (market closed)" in caplog.text
+
+
+class TestMarketAwareScheduling:
+    def test_get_active_market_reads_market_env(self, monkeypatch: Any) -> None:
+        monkeypatch.setenv("MARKET", "HK")
+        assert _get_active_market() == "HK"
+
+    def test_get_active_market_defaults_to_us(self, monkeypatch: Any) -> None:
+        monkeypatch.delenv("MARKET", raising=False)
+        assert _get_active_market() == "US"
+
+    def test_get_active_market_strips_and_uppercases(self, monkeypatch: Any) -> None:
+        monkeypatch.setenv("MARKET", " hk ")
+        assert _get_active_market() == "HK"
+
+    def test_get_pipeline_schedule_us(self) -> None:
+        schedule = _get_pipeline_schedule("US")
+        assert schedule == "08:30"
+
+    def test_get_pipeline_schedule_hk(self) -> None:
+        schedule = _get_pipeline_schedule("HK")
+        assert schedule == "07:30"
+
+    def test_get_pipeline_schedule_fallback(self) -> None:
+        assert _get_pipeline_schedule("UNKNOWN") == "07:30"
+
+    def test_convert_pipeline_time_to_hkt_hk_unchanged(self) -> None:
+        assert _convert_pipeline_time_to_hkt("HK", "07:30") == "07:30"
+
+    def test_convert_pipeline_time_to_hkt_us_returns_hkt(self) -> None:
+        result = _convert_pipeline_time_to_hkt("US", "08:30")
+        # Should be a valid HH:MM string
+        assert len(result) == 5
+        assert result[2] == ":"
+        hour, minute = map(int, result.split(":"))
+        assert 0 <= hour <= 23
+        assert 0 <= minute <= 59
+        # 08:30 ET should convert to either 20:30 or 21:30 HKT depending on DST
+        assert result in ("20:30", "21:30")
+
+    def test_run_pipeline_uses_market_env_var(self, monkeypatch: Any) -> None:
+        monkeypatch.setenv("MARKET", "HK")
+        monkeypatch.delenv("PIPELINE_MARKET", raising=False)
+
+        with (
+            patch(
+                "sam_trader.services.pipeline.load_watchlist_config",
+                return_value={"HK": MagicMock(min_gap_pct=2.0)},
+            ),
+            patch(
+                "sam_trader.services.pipeline.build_watchlist", return_value={"HK": []}
+            ),
+        ):
+            result = run_pipeline()
+
+        assert result["market"] == "HK"
+
+    def test_run_pipeline_market_param_overrides_env(self, monkeypatch: Any) -> None:
+        monkeypatch.setenv("MARKET", "US")
+
+        with (
+            patch(
+                "sam_trader.services.pipeline.load_watchlist_config",
+                return_value={"HK": MagicMock(min_gap_pct=2.0)},
+            ),
+            patch(
+                "sam_trader.services.pipeline.build_watchlist", return_value={"HK": []}
+            ),
+        ):
+            result = run_pipeline(market="HK")
+
+        assert result["market"] == "HK"
+
+    def test_run_pipeline_computes_schedule_from_market_config(self) -> None:
+        with (
+            patch(
+                "sam_trader.services.pipeline.load_watchlist_config",
+                return_value={"US": MagicMock(min_gap_pct=2.0)},
+            ),
+            patch(
+                "sam_trader.services.pipeline.build_watchlist", return_value={"US": []}
+            ),
+        ):
+            result = run_pipeline(market="US")
+
+        assert result["schedule"] == "08:30"
+
+    def test_run_pipeline_computes_hk_schedule(self) -> None:
+        with (
+            patch(
+                "sam_trader.services.pipeline.load_watchlist_config",
+                return_value={"HK": MagicMock(min_gap_pct=2.0)},
+            ),
+            patch(
+                "sam_trader.services.pipeline.build_watchlist", return_value={"HK": []}
+            ),
+        ):
+            result = run_pipeline(market="HK")
+
+        assert result["schedule"] == "07:30"

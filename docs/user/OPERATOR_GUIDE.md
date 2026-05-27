@@ -169,12 +169,15 @@ watchlist:
     premarket_only: false
 ```
 
-Switch the pipeline to HK by setting the environment variables:
+Switch the pipeline to HK by setting the environment variable:
 ```bash
 # In .env or docker-compose override
-PIPELINE_MARKET=HK
-PIPELINE_SCHEDULE=09:00   # HKT, 30 min before HK market open
+MARKET=HK
 ```
+
+The pipeline schedule is read from `config/market_config.yaml`:
+- US: `premarket_pipeline_time = 08:30` ET (≈ 20:30 HKT summer / 21:30 HKT winter)
+- HK: `premarket_pipeline_time = 07:30` HKT
 
 ---
 
