@@ -1,5 +1,14 @@
 > **Note: see first-entry Iteration 20 for Phase 2 config dataclasses.**
 
+## Iteration 122
+- **Task**: P8-DM: SOD readiness CLI — sam readiness command
+- **Task ID**: sam_trader-9z3.9.30
+- **Status**: COMPLETE
+- **Decisions**: The `src/sam_trader/services/cli.py` implementation was already present from the prior iteration (commit cdd028e, bundled with RestartOrchestrator). This iteration completed the test and documentation gaps: (1) renamed existing `TestReadinessCommand` to `TestReadinessReportCommand` and updated all `main(["readiness"` calls to `main(["readiness-report"` to match the renamed pipeline readiness command, (2) added new `TestReadinessCommand` with 7 tests covering all-pass, some-fail, JSON output, not-found human+JSON, invalid market, and corrupt data scenarios, (3) updated `tests/integration/test_phase9_exit.py` to use `readiness-report`, (4) updated `docs/user/OPERATOR_GUIDE.md` to document both `sam readiness-report` (pre-market pipeline) and `sam readiness --market US|HK` (SOD Redis check). The SOD readiness command reads `sam:readiness:{market}:{date}` from Redis, displays pass/fail table, returns exit code 0 if all PASS, 1 if any FAIL.
+- **Files Changed**: `tests/unit/services/test_cli.py`, `tests/integration/test_phase9_exit.py`, `docs/user/OPERATOR_GUIDE.md`
+- **Validation Result**: PASS (RALPH_GATE_PASSED — 98/98 targeted tests, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for sam_trader-9z3.9.31 (EOD report CLI).
+
 ## Iteration 121
 - **Task**: P8-DM: Restart orchestrator — market-switch docker compose restart
 - **Task ID**: sam_trader-9z3.9.28
