@@ -10,6 +10,7 @@ import re
 import stat
 import sys
 from collections.abc import Callable
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 ENV_PATH = Path(".env")
@@ -46,6 +47,19 @@ def _parse_template(lines: list[str]) -> dict[str, str]:
             key, _, value = line.partition("=")
             result[key.strip()] = value
     return result
+
+
+def _auto_detect_market() -> str:
+    """Detect default MARKET from current HKT time.
+
+    US market window: 16:00–03:59 HKT (crossing midnight).
+    HK market window: 04:00–15:59 HKT.
+    """
+    hkt = timezone(timedelta(hours=8))
+    hour = datetime.now(hkt).hour
+    if hour >= 16 or hour < 4:
+        return "US"
+    return "HK"
 
 
 def _bool(val: str) -> str:
@@ -190,6 +204,19 @@ def run_wizard(
         default=defaults.get("SAM_ENV", "paper"),
         validator=VALIDATORS["SAM_ENV"],
     )
+
+    # ── Market selector ──
+    market_default = defaults.get("MARKET", "auto")
+    market_raw = _prompt(
+        "Default market [auto/US/HK]",
+        default=market_default,
+    )
+    if market_raw == "auto":
+        updates["MARKET"] = _auto_detect_market()
+        print(f"  → Auto-detected HKT time → MARKET={updates['MARKET']}")
+    else:
+        updates["MARKET"] = market_raw
+    updates["FUTU_TRD_MARKET"] = updates["MARKET"]
 
     # ── Futu broker ──
     futu_default = defaults.get("FUTU_ENABLED", "false") == "true"
