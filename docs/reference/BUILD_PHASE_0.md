@@ -94,26 +94,33 @@ docker exec sam-services python -m sam_trader.services.backup backup
 
 ## Dynamic Multi-Market Extensions (Planned)
 
-> **Status:** Planning — 3 tickets  
+> **Status:** In Progress — 1 of 3 tickets completed
 > **Plan:** `docs/user/DYNAMIC_MULTI_MARKET_PLAN.md`
 
 ### Tickets
 
-| Ticket ID | Title | Deps |
-|-----------|-------|------|
-| `sam_trader-9z3.1.25` | Remove Docker profiles — all 6 containers always-on | None |
-| `sam_trader-9z3.1.26` | Entrypoint: unconditional multi-broker wait logic | 9z3.1.25 |
-| `sam_trader-9z3.1.27` | IB Gateway: US-market-only environment label | 9z3.1.25 |
+| Ticket ID | Title | Deps | Status |
+|-----------|-------|------|--------|
+| `sam_trader-9z3.1.25` | Remove Docker profiles — all 6 containers always-on | None | ✅ Complete |
+| `sam_trader-9z3.1.26` | Entrypoint: unconditional multi-broker wait logic | 9z3.1.25 | ✅ Complete |
+| `sam_trader-9z3.1.27` | IB Gateway: US-market-only environment label | 9z3.1.25 | ⬜ Planned |
 
 ### Design Notes
-- `profiles:` blocks removed from sam-futu-opend, sam-ib-gateway, sam-services
+- ~~`profiles:` blocks removed from sam-futu-opend, sam-ib-gateway, sam-services~~ ✅
 - `docker compose up -d` starts all 6 containers (no flags)
-- Entrypoint always waits for Futu OpenD (TCP 11111) and IB Gateway (TCP 4004)
-- 120s timeout per broker; clear error on timeout
+- ~~Entrypoint always waits for Futu OpenD (TCP 11111) and IB Gateway (TCP 4004)~~ ✅
+- ~~120s timeout per broker; clear error on timeout~~ ✅
 - `IB_MARKET=US` env var added to ib-gateway for operator clarity (metadata only)
+
+### Implementation Details (9z3.1.26)
+- Removed `WAIT_FOR_IB_GATEWAY` and `WAIT_FOR_FUTU_OPEND` env-var conditionals
+- Brokers now always waited for unconditionally
+- Introduced `BROKER_WAIT_TIMEOUT` defaulting to 120s (separate from generic `WAIT_TIMEOUT` 60s)
+- Cleaned up `WAIT_FOR_*` references from docker-compose.yml and validate_ib_stack.sh
+- 7 unit tests cover: all-ready, PG timeout, Futu timeout, IB timeout, and 3 env-validation tests
 
 ### Nautilus Types / Patterns Used
 - Docker Compose health checks (L1/L2/L3 — already standardized)
 - TCP socket checks in entrypoint (already built)
 
-*Last updated: 2026-05-27 — Dynamic Multi-Market extensions planned*
+*Last updated: 2026-05-27 — Dynamic Multi-Market: 9z3.1.25 + 9z3.1.26 complete*

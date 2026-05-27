@@ -1,5 +1,14 @@
 > **Note: see first-entry Iteration 20 for Phase 2 config dataclasses.**
 
+## Iteration 108
+- **Task**: P0-DM: Entrypoint — unconditional multi-broker wait logic
+- **Task ID**: sam_trader-9z3.1.26
+- **Status**: COMPLETE
+- **Decisions**: Removed `WAIT_FOR_FUTU_OPEND` and `WAIT_FOR_IB_GATEWAY` env-var conditionals from `docker/entrypoint.sh`. All 4 services (PG, Redis, Futu OpenD, IB Gateway) are now waited for unconditionally. Introduced `BROKER_WAIT_TIMEOUT` defaulting to 120s for broker socket checks, separate from `WAIT_TIMEOUT` (60s) used for PG/Redis. Cleaned up `WAIT_FOR_*` references from `docker/docker-compose.yml` and `scripts/ralph/validate_ib_stack.sh`. Updated tests: merged the old "optional brokers" test into the main readiness test, added dedicated timeout tests for Futu and IB, updated all existing tests to provide mock servers for all 4 services.
+- **Files Changed**: `docker/entrypoint.sh`, `docker/docker-compose.yml`, `scripts/ralph/validate_ib_stack.sh`, `tests/unit/test_entrypoint.py`, `docs/reference/BUILD_PHASE_0.md`
+- **Validation Result**: PASS (RALPH_GATE_PASSED — 7/7 tests, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for sam_trader-9z3.1.27 (IB Gateway: US-market-only environment label).
+
 ## Iteration 107
 - **Task**: P0-DM: Remove Docker profiles — all 6 containers always-on
 - **Task ID**: sam_trader-9z3.1.25

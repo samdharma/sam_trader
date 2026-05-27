@@ -31,7 +31,6 @@ services:
       - REDIS_HOST=${REDIS_HOST:-sam-redis}
       - REDIS_PORT=${REDIS_PORT:-6379}
       - REDIS_PASSWORD=${REDIS_PASSWORD:-}
-      - WAIT_FOR_IB_GATEWAY=${WAIT_FOR_IB_GATEWAY:-1}
       - IB_ENABLED=${IB_ENABLED:-false}
       - IB_TRADING_MODE=${IB_TRADING_MODE:-paper}
       - IB_GATEWAY_HOST=${IB_GATEWAY_HOST:-sam-ib-gateway}
@@ -41,7 +40,6 @@ services:
       - IB_SYMBOLS=${IB_SYMBOLS:-}
       - IB_READ_ONLY_API=${IB_READ_ONLY_API:-false}
       - IB_MARKET_DATA_TYPE=${IB_MARKET_DATA_TYPE:-REALTIME}
-      - WAIT_FOR_FUTU_OPEND=${WAIT_FOR_FUTU_OPEND:-1}
       - FUTU_ENABLED=${FUTU_ENABLED:-false}
       - FUTU_OPEND_HOST=${FUTU_OPEND_HOST:-sam-futu-opend}
       - FUTU_OPEND_PORT=${FUTU_OPEND_PORT:-11111}

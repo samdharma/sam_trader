@@ -41,42 +41,7 @@ def _start_mock_server(port: int, accept_once: bool = True) -> threading.Thread:
 
 class TestEntrypoint:
     def test_entrypoint_exits_zero_when_all_services_ready(self):
-        """Entrypoint should succeed when PostgreSQL + Redis are reachable."""
-        pg_port = _find_free_port()
-        redis_port = _find_free_port()
-
-        _start_mock_server(pg_port)
-        _start_mock_server(redis_port)
-
-        env = {
-            **os.environ,
-            "POSTGRES_HOST": "127.0.0.1",
-            "POSTGRES_PORT": str(pg_port),
-            "REDIS_HOST": "127.0.0.1",
-            "REDIS_PORT": str(redis_port),
-            "WAIT_TIMEOUT": "5",
-            "WAIT_FOR_FUTU_OPEND": "0",
-            "WAIT_FOR_IB_GATEWAY": "0",
-        }
-
-        result = subprocess.run(
-            ["/bin/bash", str(ENTRYPOINT), "true"],
-            capture_output=True,
-            text=True,
-            env=env,
-            cwd=str(PROJECT_ROOT),
-        )
-
-        msg = (
-            f"entrypoint exited {result.returncode}\n"
-            f"stdout: {result.stdout}\nstderr: {result.stderr}"
-        )
-        assert result.returncode == 0, msg
-        assert "PostgreSQL is ready" in result.stdout
-        assert "Redis is ready" in result.stdout
-
-    def test_entrypoint_exits_zero_with_optional_brokers(self):
-        """Entrypoint should succeed when all optional brokers are reachable."""
+        """Entrypoint should succeed when all 4 services are reachable."""
         pg_port = _find_free_port()
         redis_port = _find_free_port()
         futu_port = _find_free_port()
@@ -94,10 +59,9 @@ class TestEntrypoint:
             "REDIS_HOST": "127.0.0.1",
             "REDIS_PORT": str(redis_port),
             "WAIT_TIMEOUT": "5",
-            "WAIT_FOR_FUTU_OPEND": "1",
+            "BROKER_WAIT_TIMEOUT": "5",
             "FUTU_OPEND_HOST": "127.0.0.1",
             "FUTU_OPEND_PORT": str(futu_port),
-            "WAIT_FOR_IB_GATEWAY": "1",
             "IB_GATEWAY_HOST": "127.0.0.1",
             "IB_GATEWAY_PORT": str(ib_port),
         }
@@ -123,7 +87,11 @@ class TestEntrypoint:
     def test_entrypoint_times_out_when_postgres_unavailable(self):
         """Entrypoint should fail when PostgreSQL is unreachable within timeout."""
         redis_port = _find_free_port()
+        futu_port = _find_free_port()
+        ib_port = _find_free_port()
         _start_mock_server(redis_port)
+        _start_mock_server(futu_port)
+        _start_mock_server(ib_port)
 
         env = {
             **os.environ,
@@ -132,8 +100,11 @@ class TestEntrypoint:
             "REDIS_HOST": "127.0.0.1",
             "REDIS_PORT": str(redis_port),
             "WAIT_TIMEOUT": "2",
-            "WAIT_FOR_FUTU_OPEND": "0",
-            "WAIT_FOR_IB_GATEWAY": "0",
+            "BROKER_WAIT_TIMEOUT": "5",
+            "FUTU_OPEND_HOST": "127.0.0.1",
+            "FUTU_OPEND_PORT": str(futu_port),
+            "IB_GATEWAY_HOST": "127.0.0.1",
+            "IB_GATEWAY_PORT": str(ib_port),
         }
 
         result = subprocess.run(
@@ -147,13 +118,14 @@ class TestEntrypoint:
         assert result.returncode != 0
         assert "PostgreSQL not ready" in result.stdout
 
-    def test_entrypoint_fatals_when_futu_enabled_but_no_password(self):
-        """AC: If .env is missing, FUTU_ENABLED=true with no password must fatal."""
+    def test_entrypoint_times_out_when_futu_unavailable(self):
+        """Entrypoint should fail when Futu OpenD times out."""
         pg_port = _find_free_port()
         redis_port = _find_free_port()
-
+        ib_port = _find_free_port()
         _start_mock_server(pg_port)
         _start_mock_server(redis_port)
+        _start_mock_server(ib_port)
 
         env = {
             **os.environ,
@@ -162,8 +134,88 @@ class TestEntrypoint:
             "REDIS_HOST": "127.0.0.1",
             "REDIS_PORT": str(redis_port),
             "WAIT_TIMEOUT": "5",
-            "WAIT_FOR_FUTU_OPEND": "0",
-            "WAIT_FOR_IB_GATEWAY": "0",
+            "BROKER_WAIT_TIMEOUT": "2",
+            "FUTU_OPEND_HOST": "127.0.0.1",
+            "FUTU_OPEND_PORT": str(_find_free_port()),
+            "IB_GATEWAY_HOST": "127.0.0.1",
+            "IB_GATEWAY_PORT": str(ib_port),
+        }
+
+        result = subprocess.run(
+            ["/bin/bash", str(ENTRYPOINT), "true"],
+            capture_output=True,
+            text=True,
+            env=env,
+            cwd=str(PROJECT_ROOT),
+        )
+
+        assert result.returncode != 0, (
+            f"Expected non-zero exit when Futu OpenD is unreachable.\n"
+            f"stdout: {result.stdout}\nstderr: {result.stderr}"
+        )
+        assert "Cannot reach Futu OpenD" in result.stdout
+
+    def test_entrypoint_times_out_when_ib_gateway_unavailable(self):
+        """Entrypoint should fail when IB Gateway times out."""
+        pg_port = _find_free_port()
+        redis_port = _find_free_port()
+        futu_port = _find_free_port()
+        _start_mock_server(pg_port)
+        _start_mock_server(redis_port)
+        _start_mock_server(futu_port)
+
+        env = {
+            **os.environ,
+            "POSTGRES_HOST": "127.0.0.1",
+            "POSTGRES_PORT": str(pg_port),
+            "REDIS_HOST": "127.0.0.1",
+            "REDIS_PORT": str(redis_port),
+            "WAIT_TIMEOUT": "5",
+            "BROKER_WAIT_TIMEOUT": "2",
+            "FUTU_OPEND_HOST": "127.0.0.1",
+            "FUTU_OPEND_PORT": str(futu_port),
+            "IB_GATEWAY_HOST": "127.0.0.1",
+            "IB_GATEWAY_PORT": str(_find_free_port()),
+        }
+
+        result = subprocess.run(
+            ["/bin/bash", str(ENTRYPOINT), "true"],
+            capture_output=True,
+            text=True,
+            env=env,
+            cwd=str(PROJECT_ROOT),
+        )
+
+        assert result.returncode != 0, (
+            f"Expected non-zero exit when IB Gateway is unreachable.\n"
+            f"stdout: {result.stdout}\nstderr: {result.stderr}"
+        )
+        assert "Cannot reach IB Gateway" in result.stdout
+
+    def test_entrypoint_fatals_when_futu_enabled_but_no_password(self):
+        """AC: If .env is missing, FUTU_ENABLED=true with no password must fatal."""
+        pg_port = _find_free_port()
+        redis_port = _find_free_port()
+        futu_port = _find_free_port()
+        ib_port = _find_free_port()
+
+        _start_mock_server(pg_port)
+        _start_mock_server(redis_port)
+        _start_mock_server(futu_port)
+        _start_mock_server(ib_port)
+
+        env = {
+            **os.environ,
+            "POSTGRES_HOST": "127.0.0.1",
+            "POSTGRES_PORT": str(pg_port),
+            "REDIS_HOST": "127.0.0.1",
+            "REDIS_PORT": str(redis_port),
+            "WAIT_TIMEOUT": "5",
+            "BROKER_WAIT_TIMEOUT": "5",
+            "FUTU_OPEND_HOST": "127.0.0.1",
+            "FUTU_OPEND_PORT": str(futu_port),
+            "IB_GATEWAY_HOST": "127.0.0.1",
+            "IB_GATEWAY_PORT": str(ib_port),
             "FUTU_ENABLED": "true",
             # FUTU_ACCOUNT_PWD_MD5 deliberately unset
         }
@@ -187,9 +239,13 @@ class TestEntrypoint:
         """AC: If .env is missing, IB_ENABLED=true with no credentials must fatal."""
         pg_port = _find_free_port()
         redis_port = _find_free_port()
+        futu_port = _find_free_port()
+        ib_port = _find_free_port()
 
         _start_mock_server(pg_port)
         _start_mock_server(redis_port)
+        _start_mock_server(futu_port)
+        _start_mock_server(ib_port)
 
         env = {
             **os.environ,
@@ -198,8 +254,11 @@ class TestEntrypoint:
             "REDIS_HOST": "127.0.0.1",
             "REDIS_PORT": str(redis_port),
             "WAIT_TIMEOUT": "5",
-            "WAIT_FOR_FUTU_OPEND": "0",
-            "WAIT_FOR_IB_GATEWAY": "0",
+            "BROKER_WAIT_TIMEOUT": "5",
+            "FUTU_OPEND_HOST": "127.0.0.1",
+            "FUTU_OPEND_PORT": str(futu_port),
+            "IB_GATEWAY_HOST": "127.0.0.1",
+            "IB_GATEWAY_PORT": str(ib_port),
             "IB_ENABLED": "true",
             # TWS_USERID and TWS_PASSWORD deliberately unset
         }
@@ -223,9 +282,13 @@ class TestEntrypoint:
         """AC: FUTU_ENABLED=true with FUTU_ACCOUNT_PWD_MD5 set should succeed."""
         pg_port = _find_free_port()
         redis_port = _find_free_port()
+        futu_port = _find_free_port()
+        ib_port = _find_free_port()
 
         _start_mock_server(pg_port)
         _start_mock_server(redis_port)
+        _start_mock_server(futu_port)
+        _start_mock_server(ib_port)
 
         env = {
             **os.environ,
@@ -234,8 +297,11 @@ class TestEntrypoint:
             "REDIS_HOST": "127.0.0.1",
             "REDIS_PORT": str(redis_port),
             "WAIT_TIMEOUT": "5",
-            "WAIT_FOR_FUTU_OPEND": "0",
-            "WAIT_FOR_IB_GATEWAY": "0",
+            "BROKER_WAIT_TIMEOUT": "5",
+            "FUTU_OPEND_HOST": "127.0.0.1",
+            "FUTU_OPEND_PORT": str(futu_port),
+            "IB_GATEWAY_HOST": "127.0.0.1",
+            "IB_GATEWAY_PORT": str(ib_port),
             "FUTU_ENABLED": "true",
             "FUTU_ACCOUNT_PWD_MD5": "deadbeef",
         }

@@ -66,7 +66,7 @@ ${COMPOSE} down --remove-orphans 2>/dev/null || true
 
 # ─── Start stack ─────────────────────────────────────────────────────────────
 log_info "Starting stack ..."
-WAIT_FOR_IB_GATEWAY=1 ${COMPOSE} up -d
+${COMPOSE} up -d
 
 # ─── Wait for services to be healthy ─────────────────────────────────────────
 log_info "Waiting for services to become healthy..."
