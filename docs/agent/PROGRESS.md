@@ -1,5 +1,14 @@
 > **Note: see first-entry Iteration 20 for Phase 2 config dataclasses.**
 
+## Iteration 119
+- **Task**: P7-DM: Bundle schema — add market field with backward compat
+- **Task ID**: sam_trader-9z3.8.14
+- **Status**: COMPLETE
+- **Decisions**: Added `market: str = "US"` field to bundle schema in `bundle_loader.py` (extracted from bundle dict, default "US", propagated to strategy config via `config.setdefault`). Added `market` field validation in `bundle_validation.py` (`_validate_bundle_schema`: accepts "US" or "HK" if present, missing is OK). Added `market` field to all 3 strategy config classes (`OrbStrategyConfig`, `MomentumStrategyConfig`, `TemplateStrategyConfig`) with default "US" — required because the backtest gate uses `StrategyFactory.create()` which rejects unknown fields. Updated `bundles.example.yaml` with explicit `market: US`/`market: HK` on applicable bundles. Updated paper trading `config/bundles.yaml` with `market: HK`.
+- **Files Changed**: `src/sam_trader/bundle_loader.py`, `src/sam_trader/bundle_validation.py`, `src/sam_trader/strategies/orb.py`, `src/sam_trader/strategies/momentum.py`, `src/sam_trader/strategies/_template.py`, `config/bundles.example.yaml`, `config/bundles.yaml`, `tests/unit/test_bundle_loader.py`, `tests/unit/test_bundle_validation.py`
+- **Validation Result**: PASS (RALPH_GATE_PASSED — 66/66 targeted tests, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. The `market` field had to be added to strategy config classes (not just loader/validator) because the backtest gate creates strategies from the full config dict and Nautilus msgspec frozen configs reject unknown fields. The `config/bundles.yaml` live config is gitignored but was updated locally.
+
 ## Iteration 118
 - **Task**: P6-DM: EndOfDayReporterActor — EOD aggregated report
 - **Task ID**: sam_trader-9z3.7.19
