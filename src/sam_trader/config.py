@@ -2,8 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from sam_trader.market_config import MarketConfig
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -72,9 +79,27 @@ class SamTraderConfig:
     risk_max_notional_per_order: str
     risk_bypass: bool
 
+    # Market-aware fields (Dynamic Multi-Market) — must come last (have defaults)
+    market: str = ""
+    market_config: MarketConfig | None = None
+    futu_routing_venues: list[str] = field(default_factory=list)
+
     @classmethod
     def from_env(cls) -> SamTraderConfig:
         """Load configuration from environment variables.
+
+        Reads ``MARKET`` env var to load per-market configuration from
+        ``config/market_config.yaml``. When ``MARKET`` is set (e.g., ``US``,
+        ``HK``), derives ``futu_trd_market``, ``ib_enabled``,
+        ``futu_routing_venues``, ``health_monitor_market``, and
+        ``bar_resub_market`` from the market config entry.
+
+        Backward compatibility: when ``MARKET`` is empty or not set,
+        falls back to the existing ``FUTU_TRD_MARKET``, ``IB_ENABLED``,
+        ``HEALTH_MONITOR_MARKET``, and ``BAR_RESUB_MARKET`` env vars.
+
+        If ``MARKET`` is set but ``market_config.yaml`` cannot be loaded,
+        logs a warning and falls back to env vars.
 
         Returns
         -------
@@ -82,6 +107,56 @@ class SamTraderConfig:
             Frozen configuration instance.
 
         """
+        # ── Market-aware config loading ──────────────────────────
+        market = os.environ.get("MARKET", "").strip()
+        market_config: MarketConfig | None = None
+
+        if market:
+            # New path: load from market_config.yaml
+            try:
+                from sam_trader.market_config import MarketConfig
+
+                market_config = MarketConfig.get_market(market)
+                logger.info(
+                    "Loaded market config for %s: timezone=%s ib_enabled=%s",
+                    market,
+                    market_config.session_timezone,
+                    market_config.ib_enabled,
+                )
+            except FileNotFoundError:
+                logger.warning(
+                    "MARKET=%s but market_config.yaml not found — "
+                    "falling back to env vars",
+                    market,
+                )
+            except ValueError as e:
+                logger.warning(
+                    "MARKET=%s but invalid market config: %s — "
+                    "falling back to env vars",
+                    market,
+                    e,
+                )
+
+        if market_config is not None:
+            # Derive fields from market config
+            futu_trd_market_val = market_config.futu_trd_market
+            ib_enabled_val = market_config.ib_enabled
+            futu_routing_venues_val = list(market_config.futu_routing_venues)
+            health_monitor_val = market
+            bar_resub_val = market
+        else:
+            # Backward compat: use existing env vars
+            futu_trd_market_val = os.environ.get("FUTU_TRD_MARKET", "US")
+            ib_enabled_val = os.environ.get("IB_ENABLED", "").lower() in (
+                "1",
+                "true",
+                "yes",
+            )
+            futu_routing_venues_val = []
+            health_monitor_val = os.environ.get("HEALTH_MONITOR_MARKET", "")
+            bar_resub_val = os.environ.get("BAR_RESUB_MARKET", "")
+
+        # ── Remaining env var parsing ────────────────────────────
         raw_symbols = os.environ.get("IB_SYMBOLS", "")
         symbols = [s.strip() for s in raw_symbols.split(",") if s.strip()]
 
@@ -89,7 +164,7 @@ class SamTraderConfig:
             trader_id=os.environ.get("TRADER_ID", "sam_trader"),
             environment=os.environ.get("SAM_ENV", "paper"),
             log_level=os.environ.get("LOG_LEVEL", "INFO"),
-            ib_enabled=os.environ.get("IB_ENABLED", "").lower() in ("1", "true", "yes"),
+            ib_enabled=ib_enabled_val,
             ib_gateway_host=os.environ.get("IB_GATEWAY_HOST", "sam-ib-gateway"),
             ib_gateway_port=int(os.environ.get("IB_GATEWAY_PORT", "4004")),
             ib_client_id=int(os.environ.get("IB_GATEWAY_CLIENT_ID", "11")),
@@ -105,7 +180,7 @@ class SamTraderConfig:
             futu_opend_host=os.environ.get("FUTU_OPEND_HOST", "sam-futu-opend"),
             futu_opend_port=int(os.environ.get("FUTU_OPEND_PORT", "11111")),
             futu_trd_env=os.environ.get("FUTU_TRD_ENV", "SIMULATE"),
-            futu_trd_market=os.environ.get("FUTU_TRD_MARKET", "US"),
+            futu_trd_market=futu_trd_market_val,
             futu_account_id=os.environ.get("FUTU_ACCOUNT_ID", ""),
             futu_unlock_pwd_md5=os.environ.get("FUTU_UNLOCK_PWD_MD5", ""),
             futu_keep_alive_interval_secs=int(
@@ -134,12 +209,15 @@ class SamTraderConfig:
                 else os.environ.get("ACTOR_JOURNAL_ENABLED", "").lower()
                 in ("1", "true", "yes")
             ),
-            health_monitor_market=os.environ.get("HEALTH_MONITOR_MARKET", ""),
-            bar_resub_market=os.environ.get("BAR_RESUB_MARKET", ""),
+            health_monitor_market=health_monitor_val,
+            bar_resub_market=bar_resub_val,
             market_calendar_enabled=os.environ.get(
                 "MARKET_CALENDAR_ENABLED", "true"
             ).lower()
             in ("1", "true", "yes"),
+            market=market,
+            market_config=market_config,
+            futu_routing_venues=futu_routing_venues_val,
             state_save_enabled=os.environ.get("STATE_SAVE_ENABLED", "").lower()
             in ("1", "true", "yes"),
             state_load_enabled=os.environ.get("STATE_LOAD_ENABLED", "").lower()

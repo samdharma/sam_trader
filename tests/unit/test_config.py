@@ -3,10 +3,103 @@
 from __future__ import annotations
 
 from dataclasses import FrozenInstanceError
+from unittest.mock import patch
 
 import pytest
 
 from sam_trader.config import SamTraderConfig
+from sam_trader.market_config import MarketConfig
+
+# ── Helpers ───────────────────────────────────────────────────────
+
+
+def _make_minimal_config(**overrides) -> SamTraderConfig:
+    """Build a minimal SamTraderConfig with sensible defaults for testing."""
+    defaults = dict(
+        trader_id="sam_trader",
+        environment="paper",
+        log_level="INFO",
+        ib_enabled=False,
+        ib_gateway_host="sam-ib-gateway",
+        ib_gateway_port=4004,
+        ib_client_id=11,
+        ib_account_id="",
+        ib_symbols=[],
+        ib_read_only_api=False,
+        ib_market_data_type="REALTIME",
+        futu_enabled=False,
+        futu_opend_host="sam-futu-opend",
+        futu_opend_port=11111,
+        futu_trd_env="SIMULATE",
+        futu_trd_market="US",
+        futu_unlock_pwd_md5="",
+        futu_account_id="",
+        futu_keep_alive_interval_secs=1800,
+        actor_bar_resub_enabled=False,
+        actor_journal_enabled=False,
+        actor_health_enabled=False,
+        actor_rejection_monitor_enabled=False,
+        actor_realized_pnl_enabled=False,
+        actor_position_snapshot_enabled=False,
+        health_monitor_market="",
+        bar_resub_market="",
+        market_calendar_enabled=True,
+        state_save_enabled=False,
+        state_load_enabled=False,
+        state_save_handshake_timeout=30,
+        bundles_path="config/bundles.yaml",
+        postgres_host="sam-postgres",
+        postgres_port=5432,
+        postgres_db="sam_trader",
+        postgres_user="sam",
+        postgres_password="sam_secret",
+        redis_host="sam-redis",
+        redis_port=6379,
+        redis_password="",
+        risk_max_order_submit_rate="100/00:00:01",
+        risk_max_order_modify_rate="100/00:00:01",
+        risk_max_notional_per_order="",
+        risk_bypass=False,
+    )
+    defaults.update(overrides)
+    return SamTraderConfig(**defaults)  # type: ignore[arg-type]
+
+
+def _us_market_config() -> MarketConfig:
+    """Build a MarketConfig matching config/market_config.yaml US entry."""
+    return MarketConfig(
+        futu_trd_market="US",
+        futu_routing_venues=["NASDAQ", "NYSE"],
+        ib_enabled=True,
+        session_timezone="America/New_York",
+        session_open="09:30",
+        session_close="16:00",
+        lunch_start="",
+        lunch_end="",
+        premarket_pipeline_time="08:30",
+        sod_readiness_time="08:00",
+        eod_report_time="16:05",
+    )
+
+
+def _hk_market_config() -> MarketConfig:
+    """Build a MarketConfig matching config/market_config.yaml HK entry."""
+    return MarketConfig(
+        futu_trd_market="HK",
+        futu_routing_venues=["HKEX"],
+        ib_enabled=False,
+        session_timezone="Asia/Hong_Kong",
+        session_open="09:30",
+        session_close="16:00",
+        lunch_start="12:00",
+        lunch_end="13:00",
+        premarket_pipeline_time="07:30",
+        sod_readiness_time="07:00",
+        eod_report_time="16:05",
+    )
+
+
+# ── Existing behaviour (backward compat) ──────────────────────────
 
 
 class TestSamTraderConfig:
@@ -53,6 +146,7 @@ class TestSamTraderConfig:
             "RISK_BYPASS",
             "HEALTH_MONITOR_MARKET",
             "BAR_RESUB_MARKET",
+            "MARKET",
         ):
             monkeypatch.delenv(key, raising=False)
 
@@ -87,6 +181,10 @@ class TestSamTraderConfig:
         assert cfg.health_monitor_market == ""
         assert cfg.bar_resub_market == ""
         assert cfg.market_calendar_enabled is True
+        # Market-aware fields: backward compat (MARKET="") → empty defaults
+        assert cfg.market == ""
+        assert cfg.market_config is None
+        assert cfg.futu_routing_venues == []
         assert cfg.postgres_host == "sam-postgres"
         assert cfg.postgres_port == 5432
         assert cfg.postgres_db == "sam_trader"
@@ -172,6 +270,10 @@ class TestSamTraderConfig:
         assert cfg.state_load_enabled is True
         assert cfg.state_save_handshake_timeout == 60
         assert cfg.bundles_path == "custom/bundles.yaml"
+        # Market-aware fields: backward compat (MARKET not set) → empty
+        assert cfg.market == ""
+        assert cfg.market_config is None
+        assert cfg.futu_routing_venues == []
         assert cfg.postgres_host == "custom-pg"
         assert cfg.postgres_port == 5433
         assert cfg.postgres_db == "test_db"
@@ -190,51 +292,7 @@ class TestSamTraderConfig:
 
     def test_futu_fields_present(self) -> None:
         """Test that all required Futu fields exist on the dataclass."""
-        cfg = SamTraderConfig(
-            trader_id="sam_trader",
-            environment="paper",
-            log_level="INFO",
-            ib_enabled=False,
-            ib_gateway_host="sam-ib-gateway",
-            ib_gateway_port=4004,
-            ib_client_id=11,
-            ib_account_id="",
-            ib_symbols=[],
-            ib_read_only_api=False,
-            ib_market_data_type="REALTIME",
-            futu_enabled=True,
-            futu_opend_host="sam-futu-opend",
-            futu_opend_port=11111,
-            futu_trd_env="SIMULATE",
-            futu_trd_market="US",
-            futu_unlock_pwd_md5="",
-            futu_keep_alive_interval_secs=1800,
-            actor_bar_resub_enabled=False,
-            actor_journal_enabled=False,
-            actor_health_enabled=False,
-            actor_rejection_monitor_enabled=False,
-            actor_realized_pnl_enabled=False,
-            actor_position_snapshot_enabled=False,
-            state_save_enabled=False,
-            state_load_enabled=False,
-            state_save_handshake_timeout=30,
-            bundles_path="config/bundles.yaml",
-            postgres_host="sam-postgres",
-            postgres_port=5432,
-            postgres_db="sam_trader",
-            postgres_user="sam",
-            postgres_password="sam_secret",
-            redis_host="sam-redis",
-            redis_port=6379,
-            redis_password="",
-            risk_max_order_submit_rate="100/00:00:01",
-            risk_max_order_modify_rate="100/00:00:01",
-            risk_max_notional_per_order="",
-            risk_bypass=False,
-            health_monitor_market="",
-            bar_resub_market="",
-            market_calendar_enabled=True,
-        )
+        cfg = _make_minimal_config(futu_enabled=True)
 
         assert cfg.futu_enabled is True
         assert cfg.futu_opend_host == "sam-futu-opend"
@@ -245,51 +303,7 @@ class TestSamTraderConfig:
 
     def test_frozen_dataclass(self) -> None:
         """Test that the dataclass is frozen (immutable)."""
-        cfg = SamTraderConfig(
-            trader_id="sam_trader",
-            environment="paper",
-            log_level="INFO",
-            ib_enabled=False,
-            ib_gateway_host="sam-ib-gateway",
-            ib_gateway_port=4004,
-            ib_client_id=11,
-            ib_account_id="",
-            ib_symbols=[],
-            ib_read_only_api=False,
-            ib_market_data_type="REALTIME",
-            futu_enabled=False,
-            futu_opend_host="sam-futu-opend",
-            futu_opend_port=11111,
-            futu_trd_env="SIMULATE",
-            futu_trd_market="US",
-            futu_unlock_pwd_md5="",
-            futu_keep_alive_interval_secs=1800,
-            actor_bar_resub_enabled=False,
-            actor_journal_enabled=False,
-            actor_health_enabled=False,
-            actor_rejection_monitor_enabled=False,
-            actor_realized_pnl_enabled=False,
-            actor_position_snapshot_enabled=False,
-            state_save_enabled=False,
-            state_load_enabled=False,
-            state_save_handshake_timeout=30,
-            bundles_path="config/bundles.yaml",
-            postgres_host="sam-postgres",
-            postgres_port=5432,
-            postgres_db="sam_trader",
-            postgres_user="sam",
-            postgres_password="sam_secret",
-            redis_host="sam-redis",
-            redis_port=6379,
-            redis_password="",
-            risk_max_order_submit_rate="100/00:00:01",
-            risk_max_order_modify_rate="100/00:00:01",
-            risk_max_notional_per_order="",
-            risk_bypass=False,
-            health_monitor_market="",
-            bar_resub_market="",
-            market_calendar_enabled=True,
-        )
+        cfg = _make_minimal_config()
 
         with pytest.raises(FrozenInstanceError):
             cfg.trader_id = "hacker"  # type: ignore[misc]
@@ -318,3 +332,155 @@ class TestSamTraderConfig:
         monkeypatch.setenv("RISK_BYPASS", "")
         cfg = SamTraderConfig.from_env()
         assert cfg.risk_bypass is False
+
+
+# ── MARKET env var → derived config fields ────────────────────────
+
+
+class TestMarketEnvVarDerivation:
+    """Tests for MARKET env var loading and field derivation."""
+
+    def test_market_us_loads_from_yaml(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """MARKET=US loads MarketConfig and derives futu_trd_market, ib_enabled,
+        futu_routing_venues, and actor timezone fields from market_config.yaml."""
+        monkeypatch.setenv("MARKET", "US")
+
+        cfg = SamTraderConfig.from_env()
+
+        # Derived from US market config
+        assert cfg.futu_trd_market == "US"
+        assert cfg.ib_enabled is True
+        assert cfg.futu_routing_venues == ["NASDAQ", "NYSE"]
+        assert cfg.health_monitor_market == "US"
+        assert cfg.bar_resub_market == "US"
+
+        # Market-aware metadata
+        assert cfg.market == "US"
+        assert cfg.market_config is not None
+        assert cfg.market_config.session_timezone == "America/New_York"
+        assert cfg.market_config.session_open == "09:30"
+        assert cfg.market_config.session_close == "16:00"
+        assert cfg.market_config.lunch_start == ""  # No lunch for US
+        assert cfg.market_config.ib_enabled is True
+
+    def test_market_hk_loads_from_yaml(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """MARKET=HK loads MarketConfig and derives fields for HK market."""
+        monkeypatch.setenv("MARKET", "HK")
+
+        cfg = SamTraderConfig.from_env()
+
+        # Derived from HK market config
+        assert cfg.futu_trd_market == "HK"
+        assert cfg.ib_enabled is False
+        assert cfg.futu_routing_venues == ["HKEX"]
+        assert cfg.health_monitor_market == "HK"
+        assert cfg.bar_resub_market == "HK"
+
+        # Market-aware metadata
+        assert cfg.market == "HK"
+        assert cfg.market_config is not None
+        assert cfg.market_config.session_timezone == "Asia/Hong_Kong"
+        assert cfg.market_config.lunch_start == "12:00"
+        assert cfg.market_config.lunch_end == "13:00"
+        assert cfg.market_config.ib_enabled is False
+
+    def test_market_not_set_backward_compat(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """MARKET not set → backward compat: uses FUTU_TRD_MARKET
+        + IB_ENABLED env vars."""
+        monkeypatch.setenv("FUTU_TRD_MARKET", "HK")
+        monkeypatch.setenv("IB_ENABLED", "true")
+        monkeypatch.setenv("HEALTH_MONITOR_MARKET", "custom")
+        monkeypatch.setenv("BAR_RESUB_MARKET", "custom2")
+
+        cfg = SamTraderConfig.from_env()
+
+        # Uses env vars directly, NOT market config
+        assert cfg.futu_trd_market == "HK"
+        assert cfg.ib_enabled is True
+        assert cfg.futu_routing_venues == []
+        assert cfg.health_monitor_market == "custom"
+        assert cfg.bar_resub_market == "custom2"
+
+        # Market-aware fields are empty
+        assert cfg.market == ""
+        assert cfg.market_config is None
+
+    def test_market_empty_string_backward_compat(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """MARKET="" (explicitly empty) → backward compat path."""
+        monkeypatch.setenv("MARKET", "")
+        monkeypatch.setenv("FUTU_TRD_MARKET", "US")
+        monkeypatch.setenv("IB_ENABLED", "false")
+
+        cfg = SamTraderConfig.from_env()
+
+        assert cfg.futu_trd_market == "US"
+        assert cfg.ib_enabled is False
+        assert cfg.market == ""
+        assert cfg.market_config is None
+
+    def test_market_config_yaml_not_found_fallback(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """MARKET=US but market_config.yaml doesn't exist → falls back to env vars."""
+        monkeypatch.setenv("MARKET", "US")
+        monkeypatch.setenv("FUTU_TRD_MARKET", "HK")
+        monkeypatch.setenv("IB_ENABLED", "true")
+
+        with patch(
+            "sam_trader.market_config.MarketConfig.get_market",
+            side_effect=FileNotFoundError("No such file"),
+        ):
+            cfg = SamTraderConfig.from_env()
+
+        # Falls back to env vars
+        assert cfg.futu_trd_market == "HK"
+        assert cfg.ib_enabled is True
+        assert cfg.futu_routing_venues == []
+        assert cfg.market == "US"  # MARKET is still recorded
+        assert cfg.market_config is None  # But config could not be loaded
+
+    def test_market_invalid_value_fallback(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """MARKET=INVALID → falls back to env vars with warning."""
+        monkeypatch.setenv("MARKET", "INVALID")
+        monkeypatch.setenv("FUTU_TRD_MARKET", "US")
+        monkeypatch.setenv("IB_ENABLED", "false")
+
+        with patch(
+            "sam_trader.market_config.MarketConfig.get_market",
+            side_effect=ValueError("Unknown market 'INVALID'"),
+        ):
+            cfg = SamTraderConfig.from_env()
+
+        # Falls back to env vars
+        assert cfg.futu_trd_market == "US"
+        assert cfg.ib_enabled is False
+        assert cfg.market == "INVALID"
+        assert cfg.market_config is None
+
+    def test_new_fields_have_defaults(self) -> None:
+        """New market-aware fields have sensible defaults for backward compat."""
+        cfg = _make_minimal_config()
+
+        assert cfg.market == ""
+        assert cfg.market_config is None
+        assert cfg.futu_routing_venues == []
+
+    def test_market_config_frozen_with_routing_venues(self) -> None:
+        """MarketConfig with routing_venues can be stored in the dataclass."""
+        mc = _hk_market_config()
+        cfg = _make_minimal_config(
+            market="HK",
+            market_config=mc,
+            futu_routing_venues=["HKEX"],
+        )
+
+        assert cfg.market == "HK"
+        assert cfg.market_config is mc
+        assert cfg.futu_routing_venues == ["HKEX"]
+        assert cfg.market_config.session_timezone == "Asia/Hong_Kong"
