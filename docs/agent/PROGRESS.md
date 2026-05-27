@@ -1,5 +1,14 @@
 > **Note: see first-entry Iteration 20 for Phase 2 config dataclasses.**
 
+## Iteration 112
+- **Task**: P1-DM: main.py — market-aware config propagation
+- **Task ID**: sam_trader-9z3.2.5
+- **Status**: COMPLETE
+- **Decisions**: Replaced 3 hardcoded timezone/broker conditionals in `build_trading_node()` with market-config-driven values: (1) Routing venues: `cfg.market_config.futu_routing_venues` when MARKET is set, with `_routing_venues_for_market()` backward-compat fallback. (2) Health actor timezone: `cfg.market_config.session_timezone` with ternary fallback. (3) Bar resub timezone: same pattern. IB factory registration already gated on `cfg.ib_enabled` which is market-config-derived. Added 8 unit tests covering: HK/US routing venues, HK/US health actor timezone, HK/US bar resub timezone, IB registered for US, IB not registered for HK. All tests clear backward-compat env vars so MARKET is the sole driver.
+- **Files Changed**: `src/sam_trader/main.py`, `tests/unit/test_main.py`
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; 28/28 tests, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: Bundle filtering by `market` field is out of scope — belongs to Phase 7 ticket 9z3.8.14. Ready for next Phase 1 DM ticket or Phase 2 9z3.3.11.
+
 ## Iteration 111
 - **Task**: P1-DM: MARKET env var → derived config fields
 - **Task ID**: sam_trader-9z3.2.4

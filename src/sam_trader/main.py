@@ -166,7 +166,14 @@ def build_trading_node() -> TradingNode:
                 FutuLiveExecClientFactory,
             )
 
-            futu_routing_venues = _routing_venues_for_market(cfg.futu_trd_market)
+            # Use market_config routing venues when available; fallback to
+            # _routing_venues_for_market() for backward compat.
+            if cfg.market_config is not None:
+                futu_routing_venues = frozenset(cfg.market_config.futu_routing_venues)
+            elif cfg.futu_routing_venues:
+                futu_routing_venues = frozenset(cfg.futu_routing_venues)
+            else:
+                futu_routing_venues = _routing_venues_for_market(cfg.futu_trd_market)
             logger.info("Futu routing venues: %s", futu_routing_venues)
 
             data_clients["FUTU"] = FutuDataClientConfig(
@@ -313,9 +320,14 @@ def build_trading_node() -> TradingNode:
         )
 
     if cfg.actor_health_enabled:
-        # Quick-fix: use HK timezone when trading HK market
+        # Use market_config session_timezone when available;
+        # backward-compat ternary fallback when MARKET not set.
         health_tz = (
-            "Asia/Hong_Kong" if cfg.futu_trd_market == "HK" else "America/New_York"
+            cfg.market_config.session_timezone
+            if cfg.market_config is not None
+            else (
+                "Asia/Hong_Kong" if cfg.futu_trd_market == "HK" else "America/New_York"
+            )
         )
         actors.append(
             ImportableActorConfig(
@@ -341,9 +353,14 @@ def build_trading_node() -> TradingNode:
         bar_resub_config = (
             "sam_trader.actors.bar_resubscription:BarResubscriptionActorConfig"
         )
-        # Quick-fix: use HK timezone when trading HK market
+        # Use market_config session_timezone when available;
+        # backward-compat ternary fallback when MARKET not set.
         bar_resub_tz = (
-            "Asia/Hong_Kong" if cfg.futu_trd_market == "HK" else "America/New_York"
+            cfg.market_config.session_timezone
+            if cfg.market_config is not None
+            else (
+                "Asia/Hong_Kong" if cfg.futu_trd_market == "HK" else "America/New_York"
+            )
         )
         actors.append(
             ImportableActorConfig(

@@ -784,3 +784,292 @@ class TestStateLoadGuard:
         assert len(critical_records) == 1
         assert "STATE LOAD ABORTED" in critical_records[0].message
         assert "ZERO execution clients" in critical_records[0].message
+
+
+class TestMarketConfigPropagation:
+    """Tests that MARKET env var drives config propagation in main.py."""
+
+    # ── Routing Venues ────────────────────────────────────────────
+
+    def test_routing_venues_from_market_config_hk(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """MARKET=HK → routing venues come from market_config (HKEX only)."""
+        monkeypatch.setenv("MARKET", "HK")
+        monkeypatch.setenv("FUTU_ENABLED", "true")
+        monkeypatch.setenv("FUTU_OPEND_HOST", "test-futu-host")
+        monkeypatch.setenv("FUTU_OPEND_PORT", "11111")
+        monkeypatch.setenv("FUTU_TRD_ENV", "SIMULATE")
+        monkeypatch.setenv("IB_ENABLED", "false")
+        monkeypatch.setenv("BUNDLES_PATH", "config/nonexistent_bundles.yaml")
+        monkeypatch.setenv("STATE_SAVE_ENABLED", "false")
+        monkeypatch.setenv("STATE_LOAD_ENABLED", "false")
+        # Clear backward-compat env vars so MARKET is the sole driver
+        monkeypatch.delenv("FUTU_TRD_MARKET", raising=False)
+        monkeypatch.delenv("HEALTH_MONITOR_MARKET", raising=False)
+        monkeypatch.delenv("BAR_RESUB_MARKET", raising=False)
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            node = build_trading_node()
+
+            data_cfg = node._config.data_clients["FUTU"]
+            exec_cfg = node._config.exec_clients["FUTU"]
+            assert data_cfg.routing.venues == frozenset({"HKEX"})
+            assert exec_cfg.routing.venues == frozenset({"HKEX"})
+            # Verify trd_market was derived from market config too
+            assert data_cfg.trd_market == "HK"
+        finally:
+            loop.close()
+            asyncio.set_event_loop(None)
+
+    def test_routing_venues_from_market_config_us(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """MARKET=US → routing venues come from market_config (NASDAQ+NYSE)."""
+        monkeypatch.setenv("MARKET", "US")
+        monkeypatch.setenv("FUTU_ENABLED", "true")
+        monkeypatch.setenv("FUTU_OPEND_HOST", "test-futu-host")
+        monkeypatch.setenv("FUTU_OPEND_PORT", "11111")
+        monkeypatch.setenv("FUTU_TRD_ENV", "SIMULATE")
+        monkeypatch.setenv("IB_ENABLED", "false")
+        monkeypatch.setenv("BUNDLES_PATH", "config/nonexistent_bundles.yaml")
+        monkeypatch.setenv("STATE_SAVE_ENABLED", "false")
+        monkeypatch.setenv("STATE_LOAD_ENABLED", "false")
+        monkeypatch.delenv("FUTU_TRD_MARKET", raising=False)
+        monkeypatch.delenv("HEALTH_MONITOR_MARKET", raising=False)
+        monkeypatch.delenv("BAR_RESUB_MARKET", raising=False)
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            node = build_trading_node()
+
+            data_cfg = node._config.data_clients["FUTU"]
+            exec_cfg = node._config.exec_clients["FUTU"]
+            assert data_cfg.routing.venues == frozenset({"NASDAQ", "NYSE"})
+            assert exec_cfg.routing.venues == frozenset({"NASDAQ", "NYSE"})
+            assert data_cfg.trd_market == "US"
+        finally:
+            loop.close()
+            asyncio.set_event_loop(None)
+
+    # ── Health Actor Timezone ─────────────────────────────────────
+
+    def test_health_actor_timezone_from_market_config_hk(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """MARKET=HK → health actor gets Asia/Hong_Kong timezone."""
+        monkeypatch.setenv("MARKET", "HK")
+        monkeypatch.setenv("FUTU_ENABLED", "true")
+        monkeypatch.setenv("FUTU_OPEND_HOST", "test-futu-host")
+        monkeypatch.setenv("FUTU_OPEND_PORT", "11111")
+        monkeypatch.setenv("FUTU_TRD_ENV", "SIMULATE")
+        monkeypatch.setenv("IB_ENABLED", "false")
+        monkeypatch.setenv("BUNDLES_PATH", "config/nonexistent_bundles.yaml")
+        monkeypatch.setenv("STATE_SAVE_ENABLED", "false")
+        monkeypatch.setenv("STATE_LOAD_ENABLED", "false")
+        monkeypatch.setenv("ACTOR_HEALTH_ENABLED", "true")
+        monkeypatch.setenv("ACTOR_BAR_RESUB_ENABLED", "false")
+        monkeypatch.delenv("FUTU_TRD_MARKET", raising=False)
+        monkeypatch.delenv("HEALTH_MONITOR_MARKET", raising=False)
+        monkeypatch.delenv("BAR_RESUB_MARKET", raising=False)
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            node = build_trading_node()
+
+            actors = node._config.actors
+            health_actor = [a for a in actors if "HealthMonitor" in a.actor_path][0]
+            assert health_actor.config["market_timezone"] == "Asia/Hong_Kong"
+            assert health_actor.config["market"] == "HK"
+        finally:
+            loop.close()
+            asyncio.set_event_loop(None)
+
+    def test_health_actor_timezone_from_market_config_us(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """MARKET=US → health actor gets America/New_York timezone."""
+        monkeypatch.setenv("MARKET", "US")
+        monkeypatch.setenv("FUTU_ENABLED", "true")
+        monkeypatch.setenv("FUTU_OPEND_HOST", "test-futu-host")
+        monkeypatch.setenv("FUTU_OPEND_PORT", "11111")
+        monkeypatch.setenv("FUTU_TRD_ENV", "SIMULATE")
+        monkeypatch.setenv("IB_ENABLED", "false")
+        monkeypatch.setenv("BUNDLES_PATH", "config/nonexistent_bundles.yaml")
+        monkeypatch.setenv("STATE_SAVE_ENABLED", "false")
+        monkeypatch.setenv("STATE_LOAD_ENABLED", "false")
+        monkeypatch.setenv("ACTOR_HEALTH_ENABLED", "true")
+        monkeypatch.setenv("ACTOR_BAR_RESUB_ENABLED", "false")
+        monkeypatch.delenv("FUTU_TRD_MARKET", raising=False)
+        monkeypatch.delenv("HEALTH_MONITOR_MARKET", raising=False)
+        monkeypatch.delenv("BAR_RESUB_MARKET", raising=False)
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            node = build_trading_node()
+
+            actors = node._config.actors
+            health_actor = [a for a in actors if "HealthMonitor" in a.actor_path][0]
+            assert health_actor.config["market_timezone"] == "America/New_York"
+            assert health_actor.config["market"] == "US"
+        finally:
+            loop.close()
+            asyncio.set_event_loop(None)
+
+    # ── Bar Resub Timezone ────────────────────────────────────────
+
+    def test_bar_resub_timezone_from_market_config_hk(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """MARKET=HK → bar resub actor gets Asia/Hong_Kong timezone."""
+        monkeypatch.setenv("MARKET", "HK")
+        monkeypatch.setenv("FUTU_ENABLED", "true")
+        monkeypatch.setenv("FUTU_OPEND_HOST", "test-futu-host")
+        monkeypatch.setenv("FUTU_OPEND_PORT", "11111")
+        monkeypatch.setenv("FUTU_TRD_ENV", "SIMULATE")
+        monkeypatch.setenv("IB_ENABLED", "false")
+        monkeypatch.setenv("BUNDLES_PATH", "config/nonexistent_bundles.yaml")
+        monkeypatch.setenv("STATE_SAVE_ENABLED", "false")
+        monkeypatch.setenv("STATE_LOAD_ENABLED", "false")
+        monkeypatch.setenv("ACTOR_HEALTH_ENABLED", "false")
+        monkeypatch.setenv("ACTOR_BAR_RESUB_ENABLED", "true")
+        monkeypatch.delenv("FUTU_TRD_MARKET", raising=False)
+        monkeypatch.delenv("HEALTH_MONITOR_MARKET", raising=False)
+        monkeypatch.delenv("BAR_RESUB_MARKET", raising=False)
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            node = build_trading_node()
+
+            actors = node._config.actors
+            bar_actor = [a for a in actors if "BarResubscription" in a.actor_path][0]
+            assert bar_actor.config["market_open_tz"] == "Asia/Hong_Kong"
+            assert bar_actor.config["market"] == "HK"
+        finally:
+            loop.close()
+            asyncio.set_event_loop(None)
+
+    def test_bar_resub_timezone_from_market_config_us(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """MARKET=US → bar resub actor gets America/New_York timezone."""
+        monkeypatch.setenv("MARKET", "US")
+        monkeypatch.setenv("FUTU_ENABLED", "true")
+        monkeypatch.setenv("FUTU_OPEND_HOST", "test-futu-host")
+        monkeypatch.setenv("FUTU_OPEND_PORT", "11111")
+        monkeypatch.setenv("FUTU_TRD_ENV", "SIMULATE")
+        monkeypatch.setenv("IB_ENABLED", "false")
+        monkeypatch.setenv("BUNDLES_PATH", "config/nonexistent_bundles.yaml")
+        monkeypatch.setenv("STATE_SAVE_ENABLED", "false")
+        monkeypatch.setenv("STATE_LOAD_ENABLED", "false")
+        monkeypatch.setenv("ACTOR_HEALTH_ENABLED", "false")
+        monkeypatch.setenv("ACTOR_BAR_RESUB_ENABLED", "true")
+        monkeypatch.delenv("FUTU_TRD_MARKET", raising=False)
+        monkeypatch.delenv("HEALTH_MONITOR_MARKET", raising=False)
+        monkeypatch.delenv("BAR_RESUB_MARKET", raising=False)
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            node = build_trading_node()
+
+            actors = node._config.actors
+            bar_actor = [a for a in actors if "BarResubscription" in a.actor_path][0]
+            assert bar_actor.config["market_open_tz"] == "America/New_York"
+            assert bar_actor.config["market"] == "US"
+        finally:
+            loop.close()
+            asyncio.set_event_loop(None)
+
+    # ── IB Enablement ─────────────────────────────────────────────
+
+    def test_ib_registered_when_market_us(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """MARKET=US → IB is registered (ib_enabled=true from market config)."""
+        monkeypatch.setenv("MARKET", "US")
+        monkeypatch.setenv("FUTU_ENABLED", "true")
+        monkeypatch.setenv("FUTU_OPEND_HOST", "test-futu-host")
+        monkeypatch.setenv("FUTU_OPEND_PORT", "11111")
+        monkeypatch.setenv("FUTU_TRD_ENV", "SIMULATE")
+        monkeypatch.setenv("IB_GATEWAY_HOST", "test-ib-gateway")
+        monkeypatch.setenv("IB_GATEWAY_PORT", "4001")
+        monkeypatch.setenv("IB_GATEWAY_CLIENT_ID", "42")
+        monkeypatch.setenv("IB_ACCOUNT_ID", "DU12345")
+        monkeypatch.setenv("IB_TRADING_MODE", "paper")
+        monkeypatch.setenv("IB_READ_ONLY_API", "false")
+        monkeypatch.setenv("IB_MARKET_DATA_TYPE", "REALTIME")
+        monkeypatch.setenv("BUNDLES_PATH", "config/nonexistent_bundles.yaml")
+        monkeypatch.setenv("STATE_SAVE_ENABLED", "false")
+        monkeypatch.setenv("STATE_LOAD_ENABLED", "false")
+        monkeypatch.delenv("IB_ENABLED", raising=False)
+        monkeypatch.delenv("FUTU_TRD_MARKET", raising=False)
+        monkeypatch.delenv("HEALTH_MONITOR_MARKET", raising=False)
+        monkeypatch.delenv("BAR_RESUB_MARKET", raising=False)
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            node = build_trading_node()
+
+            assert "IB" in node._config.data_clients
+            assert "IB" in node._config.exec_clients
+            assert "IB" in node._builder._data_factories
+            assert "IB" in node._builder._exec_factories
+        finally:
+            loop.close()
+            asyncio.set_event_loop(None)
+
+    def test_ib_not_registered_when_market_hk(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """MARKET=HK → IB is NOT registered (ib_enabled=false from market config)."""
+        monkeypatch.setenv("MARKET", "HK")
+        monkeypatch.setenv("FUTU_ENABLED", "true")
+        monkeypatch.setenv("FUTU_OPEND_HOST", "test-futu-host")
+        monkeypatch.setenv("FUTU_OPEND_PORT", "11111")
+        monkeypatch.setenv("FUTU_TRD_ENV", "SIMULATE")
+        monkeypatch.setenv("IB_GATEWAY_HOST", "test-ib-gateway")
+        monkeypatch.setenv("IB_GATEWAY_PORT", "4001")
+        monkeypatch.setenv("IB_GATEWAY_CLIENT_ID", "42")
+        monkeypatch.setenv("IB_ACCOUNT_ID", "DU12345")
+        monkeypatch.setenv("IB_TRADING_MODE", "paper")
+        monkeypatch.setenv("IB_READ_ONLY_API", "false")
+        monkeypatch.setenv("IB_MARKET_DATA_TYPE", "REALTIME")
+        monkeypatch.setenv("BUNDLES_PATH", "config/nonexistent_bundles.yaml")
+        monkeypatch.setenv("STATE_SAVE_ENABLED", "false")
+        monkeypatch.setenv("STATE_LOAD_ENABLED", "false")
+        monkeypatch.delenv("IB_ENABLED", raising=False)
+        monkeypatch.delenv("FUTU_TRD_MARKET", raising=False)
+        monkeypatch.delenv("HEALTH_MONITOR_MARKET", raising=False)
+        monkeypatch.delenv("BAR_RESUB_MARKET", raising=False)
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            node = build_trading_node()
+
+            # IB should NOT be registered for HK market
+            assert "IB" not in node._config.data_clients
+            assert "IB" not in node._config.exec_clients
+            assert "IB" not in node._builder._data_factories
+            assert "IB" not in node._builder._exec_factories
+            # Futu should still be registered
+            assert "FUTU" in node._config.data_clients
+        finally:
+            loop.close()
+            asyncio.set_event_loop(None)
