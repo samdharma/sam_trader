@@ -1937,3 +1937,17 @@
 - **Files Changed**: `src/sam_trader/services/pipeline.py`, `src/sam_trader/services/cli.py`, `src/sam_trader/services/crontab`, `tests/unit/services/test_pipeline.py`, `tests/unit/services/test_cron.py`, `.env.example`, `docs/user/OPERATOR_GUIDE.md`, `docs/reference/BUILD_PHASE_9.md`
 - **Validation Result**: PASS (RALPH_GATE_PASSED — 25/25 targeted tests, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ticket closed.
+
+## Iteration 143
+- **Task**: P9-DM: Pipeline → BundleController integration via Redis
+- **Task ID**: sam_trader-9z3.10.35
+- **Status**: COMPLETE
+- **Decisions**: 
+  1. Added `publish_bundles_to_redis()` to `bundle_generator.py` that publishes each bundle dict as JSON to `sam:bundle:load` and a completion message to `sam:bundle:load_complete`.
+  2. `pipeline.py` now calls `publish_bundles_to_redis()` instead of `write_bundles()` for generated bundles.
+  3. `cli.py` `readiness-report` command updated to use Redis publish instead of YAML write.
+  4. `bundles.yaml` remains the static fallback / initial load source per design.
+  5. Return dict from `run_pipeline()` now includes `bundles_published` instead of `bundle_path`.
+- **Files Changed**: `src/sam_trader/services/bundle_generator.py`, `src/sam_trader/services/pipeline.py`, `src/sam_trader/services/cli.py`, `tests/unit/services/test_bundle_generator.py`, `tests/unit/services/test_pipeline.py`, `tests/unit/services/test_cli.py`
+- **Validation Result**: PASS (RALPH_GATE_PASSED — 147/147 targeted tests, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ticket closed and pushed to origin.
