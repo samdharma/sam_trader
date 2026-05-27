@@ -30,6 +30,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import asyncpg
 import click
@@ -62,6 +63,7 @@ from sam_trader.services.pipeline_executor import (
 )
 from sam_trader.services.quote import _redis_client, format_quote, get_quote
 from sam_trader.services.quote_collector import QuoteCollectionService
+from sam_trader.market_config import MarketConfig
 from sam_trader.services.readiness_report import ReadinessReportGenerator
 from sam_trader.services.regime_detection import Regime, RegimePrediction
 from sam_trader.services.rotate_logs import rotate_logs
@@ -1583,20 +1585,20 @@ def gapscan(ctx: click.Context, market: str, pass_number: int) -> None:
         click.echo("\n".join(lines))
 
 
-@cli.command()
+@cli.command("readiness-report")
 @click.option("--market", default="US", help="Market to scan (US or HK).")
 @click.option("--simulate", is_flag=True, help="Use synthetic demo data.")
 @click.option("--webhook-url", default=None, help="Override webhook URL.")
 @click.option("--no-save", is_flag=True, help="Skip audit JSON save.")
 @click.pass_context
-def readiness(
+def readiness_report(
     ctx: click.Context,
     market: str,
     simulate: bool,
     webhook_url: str | None,
     no_save: bool,
 ) -> None:
-    """Generate the daily pre-market readiness report.
+    """Generate the daily pre-market readiness report (pipeline mode).
 
     In normal mode this runs the full pipeline (gap scan → AI scoring →
     sizing → risk checks → heat monitor → bundle generation) and prints a
@@ -1621,7 +1623,7 @@ def readiness(
         if not symbols:
             msg = f"No symbols in watchlist for market={market}"
             if ctx.obj.get("json"):
-                _out(ctx, {"command": "readiness", "market": market, "error": msg})
+                _out(ctx, {"command": "readiness-report", "market": market, "error": msg})
             else:
                 click.echo(msg)
             return
@@ -1713,7 +1715,7 @@ def readiness(
         _out(
             ctx,
             {
-                "command": "readiness",
+                "command": "readiness-report",
                 "market": report.market,
                 "candidate_count": report.candidate_count,
                 "approved_count": report.approved_count,
@@ -1727,6 +1729,108 @@ def readiness(
         )
     else:
         click.echo(gen.format_table(report))
+
+
+@cli.command()
+@click.option("--market", required=True, help="Market to check (US or HK).")
+@click.pass_context
+def readiness(ctx: click.Context, market: str) -> None:
+    """Read SOD readiness report from Redis (published by ReadinessCheckerActor).
+
+    Displays a pass/fail table with per-check status.  Exit code 0 if all
+    checks pass, 1 if any check fails.
+    """
+    market = market.upper()
+    if market not in ("US", "HK"):
+        raise click.ClickException(f"Unknown market: {market}")
+
+    if _redis_cli is None:
+        raise click.ClickException("redis package not available")
+
+    try:
+        r = _redis_cli.Redis(
+            host=REDIS_HOST,
+            port=int(REDIS_PORT),
+            password=REDIS_PASSWORD or None,
+            decode_responses=True,
+            socket_connect_timeout=5,
+        )
+        r.ping()
+    except Exception as exc:
+        raise click.ClickException(f"Redis connection failed: {exc}")
+
+    # Determine today's date in the market's timezone
+    try:
+        mcfg = MarketConfig.get_market(market)
+        tz = ZoneInfo(mcfg.session_timezone)
+    except Exception:
+        tz = ZoneInfo("America/New_York") if market == "US" else ZoneInfo("Asia/Hong_Kong")
+
+    today = datetime.now(tz).date().isoformat()
+    key = f"sam:readiness:{market}:{today}"
+
+    raw = r.get(key)
+    if not raw:
+        msg = f"Readiness check not yet run for {market} on {today}"
+        if ctx.obj.get("json"):
+            _out(
+                ctx,
+                {
+                    "command": "readiness",
+                    "market": market,
+                    "date": today,
+                    "status": "NOT_FOUND",
+                    "message": msg,
+                },
+            )
+        else:
+            click.echo(msg)
+        return
+
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise click.ClickException(f"Corrupt readiness data in Redis: {exc}")
+
+    checks = data.get("checks", [])
+    overall = data.get("overall", "UNKNOWN")
+
+    has_fail = any(c.get("result") == "FAIL" for c in checks)
+    exit_code = 1 if has_fail else 0
+
+    if ctx.obj.get("json"):
+        _out(
+            ctx,
+            {
+                "command": "readiness",
+                "market": market,
+                "date": today,
+                "overall": overall,
+                "checks": checks,
+                "exit_code": exit_code,
+            },
+        )
+    else:
+        lines = [
+            f"SOD Readiness [{market}] {today}",
+            "=" * 50,
+        ]
+        for check in checks:
+            name = check.get("name", "unknown")
+            result = check.get("result", "UNKNOWN")
+            detail = check.get("detail", "")
+            if result == "PASS":
+                marker = "✓"
+            elif result == "FAIL":
+                marker = "✗"
+            else:
+                marker = "→"
+            lines.append(f"  {marker} {name:<25} [{result}] {detail}")
+        lines.append("")
+        lines.append(f"Overall: {overall}")
+        click.echo("\n".join(lines))
+
+    return exit_code  # type: ignore[return-value]
 
 
 def _simulate_pipeline_result() -> PipelineResult:

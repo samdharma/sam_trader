@@ -1,5 +1,14 @@
 > **Note: see first-entry Iteration 20 for Phase 2 config dataclasses.**
 
+## Iteration 121
+- **Task**: P8-DM: Restart orchestrator — market-switch docker compose restart
+- **Task ID**: sam_trader-9z3.9.28
+- **Status**: COMPLETE
+- **Decisions**: Fixed existing RestartOrchestrator to align with acceptance criteria: (1) changed `_recreate_trader()` from `docker compose up -d --force-recreate --no-deps` to `docker compose restart sam-trader` per task spec, (2) added maintenance-window gate (default 04:00-07:00 HKT, configurable via `MAINTENANCE_WINDOW` env var) using existing `is_in_window()` from `deploy_window.py`, (3) added 2 integration tests in `tests/integration/services/test_restart_orchestrator.py` covering full US→HK switch success path and rollback-on-state_loaded-timeout path. Updated all unit tests to patch `is_in_window` and reflect `_restart_trader` rename. Added `os` import and `DEFAULT_MAINTENANCE_WINDOW` constant to `restart_orchestrator.py`.
+- **Files Changed**: `src/sam_trader/services/restart_orchestrator.py`, `tests/unit/services/test_restart_orchestrator.py`, `tests/integration/services/test_restart_orchestrator.py` (new)
+- **Validation Result**: PASS (RALPH_GATE_PASSED — 24/24 targeted tests, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: Code was already partially implemented in prior iteration (commit bdfa766) but had drifted from AC: used force-recreate instead of `docker compose restart`, missing maintenance-window gate, missing integration test. All gaps now closed.
+
 ## Iteration 120
 - **Task**: P7-DM: Strategy — configurable HK lunch pause
 - **Task ID**: sam_trader-9z3.8.13

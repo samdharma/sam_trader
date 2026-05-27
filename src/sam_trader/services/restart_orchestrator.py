@@ -6,7 +6,7 @@ switch flow:
 
 1. Wait for ``sam:state_saved`` confirmation from sam-trader.
 2. Update ``MARKET`` in ``.env``.
-3. Recreate sam-trader container so the new env var is picked up.
+3. Restart sam-trader container via ``docker compose restart``.
 4. Poll ``sam:state_loaded`` Redis key.
 5. On failure → rollback ``MARKET`` and log CRITICAL.
 """
@@ -16,6 +16,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import re
 import subprocess
 import threading
@@ -25,6 +26,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import redis.asyncio as aioredis
+
+from sam_trader.services.deploy_window import is_in_window
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +41,7 @@ STATE_LOADED_KEY = "sam:state_loaded"
 DEFAULT_STATE_SAVE_TIMEOUT = 30
 DEFAULT_STATE_LOADED_TIMEOUT = 60
 DEFAULT_HEALTH_TIMEOUT = 60
+DEFAULT_MAINTENANCE_WINDOW = "04:00-07:00"
 
 ENV_FILE_PATHS = [
     Path("/opt/sam_trader/.env"),  # inside sam-services container
@@ -177,6 +181,18 @@ class RestartOrchestrator:
             await self._publish_failed(redis, f"invalid market: {target_market}")
             return
 
+        # Maintenance-window gate (default 04:00-07:00 HKT)
+        maintenance_window = os.getenv("MAINTENANCE_WINDOW", DEFAULT_MAINTENANCE_WINDOW)
+        if not is_in_window(maintenance_window):
+            logger.error(
+                "RestartOrchestrator: outside maintenance window %s — aborting",
+                maintenance_window,
+            )
+            await self._publish_failed(
+                redis, f"outside maintenance window {maintenance_window}"
+            )
+            return
+
         env_path = _find_env_file()
         if env_path is None:
             logger.error("RestartOrchestrator: .env file not found")
@@ -215,19 +231,19 @@ class RestartOrchestrator:
             return
 
         # ------------------------------------------------------------------
-        # 3. Recreate sam-trader container (restart does not pick up new env)
+        # 3. Restart sam-trader container
         # ------------------------------------------------------------------
-        docker_ok = self._recreate_trader()
+        docker_ok = self._restart_trader()
         if not docker_ok:
             logger.critical(
-                "RestartOrchestrator: docker recreate failed — rolling back MARKET"
+                "RestartOrchestrator: docker restart failed — rolling back MARKET"
             )
             try:
                 _update_market_in_env(env_path, previous_market)
             except Exception as rb_exc:  # noqa: BLE001
                 logger.critical("RestartOrchestrator: rollback also failed: %s", rb_exc)
             await self._publish_failed(
-                redis, "docker recreate failed, MARKET rolled back"
+                redis, "docker restart failed, MARKET rolled back"
             )
             return
 
@@ -244,7 +260,7 @@ class RestartOrchestrator:
             except Exception as rb_exc:  # noqa: BLE001
                 logger.critical("RestartOrchestrator: rollback also failed: %s", rb_exc)
             # Attempt to restart back to previous market
-            self._recreate_trader()
+            self._restart_trader()
             await self._publish_failed(
                 redis, "state_loaded timeout, MARKET rolled back and trader restarted"
             )
@@ -328,11 +344,12 @@ class RestartOrchestrator:
             await asyncio.sleep(0.5)  # type: ignore[name-defined]
         return False
 
-    def _recreate_trader(self) -> bool:
-        """Recreate sam-trader container to pick up new env vars.
+    def _restart_trader(self) -> bool:
+        """Restart sam-trader container via docker compose.
 
-        Uses ``docker compose up -d --force-recreate --no-deps`` because a
-        plain ``restart`` does not re-evaluate environment variables.
+        Docker Compose re-evaluates the compose file (and therefore the
+        ``.env`` file) on restart, so the updated ``MARKET`` value is
+        picked up automatically.
         """
         cfg = self._config
         cmd = [
@@ -340,10 +357,7 @@ class RestartOrchestrator:
             "compose",
             "-f",
             str(COMPOSE_FILE),
-            "up",
-            "-d",
-            "--force-recreate",
-            "--no-deps",
+            "restart",
             cfg.sam_trader_container,
         ]
         logger.info("RestartOrchestrator: running %s", " ".join(cmd))
@@ -355,7 +369,7 @@ class RestartOrchestrator:
         )
         if result.returncode != 0:
             logger.critical(
-                "RestartOrchestrator: docker recreate failed: %s",
+                "RestartOrchestrator: docker restart failed: %s",
                 result.stderr.strip(),
             )
             return False

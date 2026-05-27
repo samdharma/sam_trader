@@ -85,22 +85,42 @@ class TestRestartOrchestrator:
     def test_handle_request_invalid_market(self) -> None:
         orch = RestartOrchestrator()
         mock_r = MagicMock()
-        with patch.object(orch, "_publish_failed") as mock_fail:
-            asyncio.run(orch._handle_request(mock_r, '{"market": "XX"}'))
-            mock_fail.assert_awaited_once()
-            assert "invalid market" in mock_fail.call_args[0][1]
+        with patch(
+            "sam_trader.services.restart_orchestrator.is_in_window",
+            return_value=True,
+        ):
+            with patch.object(orch, "_publish_failed") as mock_fail:
+                asyncio.run(orch._handle_request(mock_r, '{"market": "XX"}'))
+                mock_fail.assert_awaited_once()
+                assert "invalid market" in mock_fail.call_args[0][1]
+
+    def test_handle_request_outside_maintenance_window(self) -> None:
+        orch = RestartOrchestrator()
+        mock_r = MagicMock()
+        with patch(
+            "sam_trader.services.restart_orchestrator.is_in_window",
+            return_value=False,
+        ):
+            with patch.object(orch, "_publish_failed") as mock_fail:
+                asyncio.run(orch._handle_request(mock_r, '{"market": "US"}'))
+                mock_fail.assert_awaited_once()
+                assert "outside maintenance window" in mock_fail.call_args[0][1]
 
     def test_handle_request_missing_env(self) -> None:
         orch = RestartOrchestrator()
         mock_r = MagicMock()
         with patch(
-            "sam_trader.services.restart_orchestrator._find_env_file",
-            return_value=None,
+            "sam_trader.services.restart_orchestrator.is_in_window",
+            return_value=True,
         ):
-            with patch.object(orch, "_publish_failed") as mock_fail:
-                asyncio.run(orch._handle_request(mock_r, '{"market": "US"}'))
-                mock_fail.assert_awaited_once()
-                assert ".env file not found" in mock_fail.call_args[0][1]
+            with patch(
+                "sam_trader.services.restart_orchestrator._find_env_file",
+                return_value=None,
+            ):
+                with patch.object(orch, "_publish_failed") as mock_fail:
+                    asyncio.run(orch._handle_request(mock_r, '{"market": "US"}'))
+                    mock_fail.assert_awaited_once()
+                    assert ".env file not found" in mock_fail.call_args[0][1]
 
     def test_handle_request_state_save_timeout(self, tmp_path: Path) -> None:
         env_file = tmp_path / ".env"
@@ -108,14 +128,21 @@ class TestRestartOrchestrator:
         orch = RestartOrchestrator()
         mock_r = MagicMock()
         with patch(
-            "sam_trader.services.restart_orchestrator._find_env_file",
-            return_value=env_file,
+            "sam_trader.services.restart_orchestrator.is_in_window",
+            return_value=True,
         ):
-            with patch.object(orch, "_wait_for_state_saved", return_value=False):
-                with patch.object(orch, "_publish_failed") as mock_fail:
-                    asyncio.run(orch._handle_request(mock_r, '{"market": "US"}'))
-                    mock_fail.assert_awaited_once()
-                    assert "state-save handshake timed out" in mock_fail.call_args[0][1]
+            with patch(
+                "sam_trader.services.restart_orchestrator._find_env_file",
+                return_value=env_file,
+            ):
+                with patch.object(orch, "_wait_for_state_saved", return_value=False):
+                    with patch.object(orch, "_publish_failed") as mock_fail:
+                        asyncio.run(orch._handle_request(mock_r, '{"market": "US"}'))
+                        mock_fail.assert_awaited_once()
+                        assert (
+                            "state-save handshake timed out"
+                            in mock_fail.call_args[0][1]
+                        )
         assert _read_market_from_env(env_file) == "HK"
 
     def test_handle_request_docker_fail_rolls_back(self, tmp_path: Path) -> None:
@@ -124,15 +151,21 @@ class TestRestartOrchestrator:
         orch = RestartOrchestrator()
         mock_r = MagicMock()
         with patch(
-            "sam_trader.services.restart_orchestrator._find_env_file",
-            return_value=env_file,
+            "sam_trader.services.restart_orchestrator.is_in_window",
+            return_value=True,
         ):
-            with patch.object(orch, "_wait_for_state_saved", return_value=True):
-                with patch.object(orch, "_recreate_trader", return_value=False):
-                    with patch.object(orch, "_publish_failed") as mock_fail:
-                        asyncio.run(orch._handle_request(mock_r, '{"market": "US"}'))
-                        mock_fail.assert_awaited_once()
-                        assert "docker recreate failed" in mock_fail.call_args[0][1]
+            with patch(
+                "sam_trader.services.restart_orchestrator._find_env_file",
+                return_value=env_file,
+            ):
+                with patch.object(orch, "_wait_for_state_saved", return_value=True):
+                    with patch.object(orch, "_restart_trader", return_value=False):
+                        with patch.object(orch, "_publish_failed") as mock_fail:
+                            asyncio.run(
+                                orch._handle_request(mock_r, '{"market": "US"}')
+                            )
+                            mock_fail.assert_awaited_once()
+                            assert "docker restart failed" in mock_fail.call_args[0][1]
         assert _read_market_from_env(env_file) == "HK"
 
     def test_handle_request_state_loaded_timeout_rolls_back(
@@ -143,18 +176,26 @@ class TestRestartOrchestrator:
         orch = RestartOrchestrator()
         mock_r = MagicMock()
         with patch(
-            "sam_trader.services.restart_orchestrator._find_env_file",
-            return_value=env_file,
+            "sam_trader.services.restart_orchestrator.is_in_window",
+            return_value=True,
         ):
-            with patch.object(orch, "_wait_for_state_saved", return_value=True):
-                with patch.object(orch, "_recreate_trader", return_value=True):
-                    with patch.object(orch, "_poll_state_loaded", return_value=False):
-                        with patch.object(orch, "_publish_failed") as mock_fail:
-                            asyncio.run(
-                                orch._handle_request(mock_r, '{"market": "US"}')
-                            )
-                            mock_fail.assert_awaited_once()
-                            assert "state_loaded timeout" in mock_fail.call_args[0][1]
+            with patch(
+                "sam_trader.services.restart_orchestrator._find_env_file",
+                return_value=env_file,
+            ):
+                with patch.object(orch, "_wait_for_state_saved", return_value=True):
+                    with patch.object(orch, "_restart_trader", return_value=True):
+                        with patch.object(
+                            orch, "_poll_state_loaded", return_value=False
+                        ):
+                            with patch.object(orch, "_publish_failed") as mock_fail:
+                                asyncio.run(
+                                    orch._handle_request(mock_r, '{"market": "US"}')
+                                )
+                                mock_fail.assert_awaited_once()
+                                assert (
+                                    "state_loaded timeout" in mock_fail.call_args[0][1]
+                                )
         assert _read_market_from_env(env_file) == "HK"
 
     def test_handle_request_success(self, tmp_path: Path) -> None:
@@ -163,17 +204,25 @@ class TestRestartOrchestrator:
         orch = RestartOrchestrator()
         mock_r = MagicMock()
         with patch(
-            "sam_trader.services.restart_orchestrator._find_env_file",
-            return_value=env_file,
+            "sam_trader.services.restart_orchestrator.is_in_window",
+            return_value=True,
         ):
-            with patch.object(orch, "_wait_for_state_saved", return_value=True):
-                with patch.object(orch, "_recreate_trader", return_value=True):
-                    with patch.object(orch, "_poll_state_loaded", return_value=True):
-                        with patch.object(orch, "_publish_complete") as mock_complete:
-                            asyncio.run(
-                                orch._handle_request(mock_r, '{"market": "US"}')
-                            )
-                            mock_complete.assert_awaited_once_with(mock_r, "US")
+            with patch(
+                "sam_trader.services.restart_orchestrator._find_env_file",
+                return_value=env_file,
+            ):
+                with patch.object(orch, "_wait_for_state_saved", return_value=True):
+                    with patch.object(orch, "_restart_trader", return_value=True):
+                        with patch.object(
+                            orch, "_poll_state_loaded", return_value=True
+                        ):
+                            with patch.object(
+                                orch, "_publish_complete"
+                            ) as mock_complete:
+                                asyncio.run(
+                                    orch._handle_request(mock_r, '{"market": "US"}')
+                                )
+                                mock_complete.assert_awaited_once_with(mock_r, "US")
         assert _read_market_from_env(env_file) == "US"
 
     def test_wait_for_state_saved_confirmed(self) -> None:
@@ -200,7 +249,7 @@ class TestRestartOrchestrator:
         mock_redis.publish.assert_awaited_once_with(RESTART_REQUEST_CHANNEL, "graceful")
 
     def test_wait_for_state_saved_timeout(self) -> None:
-        orch = RestartOrchestrator(config=OrchestratorConfig(state_save_timeout=0.01))
+        orch = RestartOrchestrator(config=OrchestratorConfig(state_save_timeout=0))
         mock_redis = MagicMock()
         mock_pubsub = MagicMock()
         mock_redis.pubsub.return_value = mock_pubsub
@@ -227,7 +276,7 @@ class TestRestartOrchestrator:
         assert result is True
 
     def test_poll_state_loaded_timeout(self) -> None:
-        orch = RestartOrchestrator(config=OrchestratorConfig(state_loaded_timeout=0.01))
+        orch = RestartOrchestrator(config=OrchestratorConfig(state_loaded_timeout=0))
         mock_redis = MagicMock()
         mock_redis.exists = AsyncMock(return_value=0)
 
@@ -235,23 +284,22 @@ class TestRestartOrchestrator:
             result = asyncio.run(orch._poll_state_loaded(mock_redis))
         assert result is False
 
-    def test_recreate_trader_success(self) -> None:
+    def test_restart_trader_success(self) -> None:
         orch = RestartOrchestrator()
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0, stderr="")
-            result = orch._recreate_trader()
+            result = orch._restart_trader()
             assert result is True
             mock_run.assert_called_once()
             cmd = mock_run.call_args[0][0]
-            assert "up" in cmd
-            assert "--force-recreate" in cmd
+            assert "restart" in cmd
             assert "sam-trader" in cmd
 
-    def test_recreate_trader_failure(self) -> None:
+    def test_restart_trader_failure(self) -> None:
         orch = RestartOrchestrator()
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=1, stderr="docker error")
-            result = orch._recreate_trader()
+            result = orch._restart_trader()
             assert result is False
 
     def test_publish_complete(self) -> None:
