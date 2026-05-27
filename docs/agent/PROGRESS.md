@@ -1,5 +1,14 @@
 > **Note: see first-entry Iteration 20 for Phase 2 config dataclasses.**
 
+## Iteration 109
+- **Task**: P0-DM: IB Gateway — US-market-only environment label
+- **Task ID**: sam_trader-9z3.1.27
+- **Status**: COMPLETE
+- **Decisions**: Added `IB_MARKET: US` hardcoded env var to sam-ib-gateway service in docker-compose.yml. Metadata-only label for operator clarity — no functional impact on the gateway.
+- **Files Changed**: `docker/docker-compose.yml`
+- **Validation Result**: PASS (RALPH_GATE_PASSED)
+- **Blockers / Notes**: None. All 3 Dynamic Multi-Market extension tickets now complete.
+
 ## Iteration 108
 - **Task**: P0-DM: Entrypoint — unconditional multi-broker wait logic
 - **Task ID**: sam_trader-9z3.1.26

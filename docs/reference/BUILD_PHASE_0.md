@@ -94,7 +94,7 @@ docker exec sam-services python -m sam_trader.services.backup backup
 
 ## Dynamic Multi-Market Extensions (Planned)
 
-> **Status:** In Progress — 1 of 3 tickets completed
+> **Status:** Complete — 3 of 3 tickets completed
 > **Plan:** `docs/user/DYNAMIC_MULTI_MARKET_PLAN.md`
 
 ### Tickets
@@ -103,7 +103,7 @@ docker exec sam-services python -m sam_trader.services.backup backup
 |-----------|-------|------|--------|
 | `sam_trader-9z3.1.25` | Remove Docker profiles — all 6 containers always-on | None | ✅ Complete |
 | `sam_trader-9z3.1.26` | Entrypoint: unconditional multi-broker wait logic | 9z3.1.25 | ✅ Complete |
-| `sam_trader-9z3.1.27` | IB Gateway: US-market-only environment label | 9z3.1.25 | ⬜ Planned |
+| `sam_trader-9z3.1.27` | IB Gateway: US-market-only environment label | 9z3.1.25 | ✅ Complete |
 
 ### Design Notes
 - ~~`profiles:` blocks removed from sam-futu-opend, sam-ib-gateway, sam-services~~ ✅
@@ -123,4 +123,4 @@ docker exec sam-services python -m sam_trader.services.backup backup
 - Docker Compose health checks (L1/L2/L3 — already standardized)
 - TCP socket checks in entrypoint (already built)
 
-*Last updated: 2026-05-27 — Dynamic Multi-Market: 9z3.1.25 + 9z3.1.26 complete*
+*Last updated: 2026-05-27 — Dynamic Multi-Market: all 3 tickets complete (9z3.1.25, 9z3.1.26, 9z3.1.27)*
