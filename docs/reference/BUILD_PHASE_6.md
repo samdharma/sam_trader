@@ -345,7 +345,7 @@ at init time and reused.
 
 | Ticket ID | Title | Deps |
 |-----------|-------|------|
-| `sam_trader-9z3.7.18` | MarketSchedulerActor: LiveClock alerts for market-switch + maintenance window | 9z3.2.5 |
+| `sam_trader-9z3.7.18` | MarketSchedulerActor | ✅ (2026-05-27) |
 | `sam_trader-9z3.7.17` | ReadinessCheckerActor: SOD operational readiness check | 9z3.2.5 |
 | `sam_trader-9z3.7.19` | EndOfDayReporterActor: EOD aggregated report | 9z3.2.5 |
 | `sam_trader-9z3.7.16` | Actor timezone refactor: existing actors use MarketConfig | 9z3.2.5, 9z3.7.18 |

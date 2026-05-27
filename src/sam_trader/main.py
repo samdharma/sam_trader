@@ -471,6 +471,32 @@ def build_trading_node() -> TradingNode:
             readiness_cfg["session_timezone"],
         )
 
+    if cfg.actor_market_scheduler_enabled:
+        scheduler_cfg = {
+            "market": cfg.market if cfg.market_config is not None else "",
+            "market_calendar_enabled": cfg.market_calendar_enabled,
+            "session_timezone": "Asia/Hong_Kong",
+            "redis_host": cfg.redis_host,
+            "redis_port": cfg.redis_port,
+            "redis_password": cfg.redis_password,
+            "futu_enabled": cfg.futu_enabled,
+            "ib_enabled": cfg.ib_enabled,
+        }
+        actors.append(
+            ImportableActorConfig(
+                actor_path=("sam_trader.actors.market_scheduler:MarketSchedulerActor"),
+                config_path=(
+                    "sam_trader.actors.market_scheduler:MarketSchedulerActorConfig"
+                ),
+                config=scheduler_cfg,
+            )
+        )
+        logger.info(
+            "MarketSchedulerActor registered (market=%s, tz=%s)",
+            scheduler_cfg["market"],
+            scheduler_cfg["session_timezone"],
+        )
+
     # --- Phase 8 actors ---
 
     if cfg.actor_position_snapshot_enabled:

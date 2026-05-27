@@ -1,5 +1,14 @@
 > **Note: see first-entry Iteration 20 for Phase 2 config dataclasses.**
 
+## Iteration 117
+- **Task**: P6-DM: MarketSchedulerActor — LiveClock alerts for market-switch + maintenance window
+- **Task ID**: sam_trader-9z3.7.18
+- **Status**: COMPLETE
+- **Decisions**: Created `MarketSchedulerActor` as a Nautilus Actor using `LiveClock.set_time_alert()` with all times in HKT. Four alerts: HK close (16:00 HKT → US switch), US close (04:00 HKT → HK switch + maintenance window open), and maintenance close (07:00 HKT). Three-stage pre-switch gate: (1) target market trading day via MarketCalendarService, (2) zero open positions via cache.positions(), (3) broker health via cache.account_for_venue(). On gate pass → publishes `sam:market_switch_request` and `sam:maintenance_window` to Redis. Cython Cache.positions() and account_for_venue() are read-only — cannot be patched in tests; verified via real stub cache (empty positions = pass, empty accounts = fail). Actor does NOT call trader.save() — state saving handled by restart orchestrator. Wired behind `ACTOR_MARKET_SCHEDULER_ENABLED` env var with `actor_market_scheduler_enabled` field in `SamTraderConfig`. All alert times fixed in HKT (session_timezone="Asia/Hong_Kong") per DYNAMIC_MULTI_MARKET_PLAN.md spec.
+- **Files Changed**: `src/sam_trader/actors/market_scheduler.py` (new), `tests/unit/actors/test_market_scheduler.py` (new), `src/sam_trader/config.py`, `src/sam_trader/main.py`, `src/sam_trader/actors/__init__.py`, `tests/unit/test_main.py`
+- **Validation Result**: PASS (RALPH_GATE_PASSED — 74/74 targeted tests: 32 actor tests + 42 main tests, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Cython Cache read-only attributes prevented mocking positions/broker checks; used stub cache natural behavior instead.
+
 ## Iteration 116
 - **Task**: P6-DM: ReadinessCheckerActor — SOD operational readiness check
 - **Task ID**: sam_trader-9z3.7.17

@@ -1390,3 +1390,214 @@ bundles:
         finally:
             loop.close()
             asyncio.set_event_loop(None)
+
+
+class TestMarketSchedulerActorWiring:
+    """Tests for MarketSchedulerActor config wiring in build_trading_node."""
+
+    def test_market_scheduler_registered_with_market(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """MARKET=HK → MarketSchedulerActor registered with HK market."""
+        monkeypatch.setenv("MARKET", "HK")
+        monkeypatch.setenv("FUTU_ENABLED", "true")
+        monkeypatch.setenv("FUTU_OPEND_HOST", "test-futu-host")
+        monkeypatch.setenv("FUTU_OPEND_PORT", "11111")
+        monkeypatch.setenv("FUTU_TRD_ENV", "SIMULATE")
+        monkeypatch.setenv("IB_ENABLED", "false")
+        monkeypatch.setenv("BUNDLES_PATH", "config/nonexistent_bundles.yaml")
+        monkeypatch.setenv("STATE_SAVE_ENABLED", "false")
+        monkeypatch.setenv("STATE_LOAD_ENABLED", "false")
+        monkeypatch.setenv("ACTOR_MARKET_SCHEDULER_ENABLED", "true")
+        monkeypatch.delenv("FUTU_TRD_MARKET", raising=False)
+        monkeypatch.delenv("HEALTH_MONITOR_MARKET", raising=False)
+        monkeypatch.delenv("BAR_RESUB_MARKET", raising=False)
+        monkeypatch.setenv("ACTOR_HEALTH_ENABLED", "false")
+        monkeypatch.setenv("ACTOR_BAR_RESUB_ENABLED", "false")
+        monkeypatch.setenv("ACTOR_REJECTION_MONITOR_ENABLED", "false")
+        monkeypatch.setenv("ACTOR_REALIZED_PNL_ENABLED", "false")
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            node = build_trading_node()
+
+            actors = node._config.actors
+            ms_actor = [a for a in actors if "MarketScheduler" in a.actor_path][0]
+            assert ms_actor.config["market"] == "HK"
+            assert ms_actor.config["session_timezone"] == "Asia/Hong_Kong"
+            assert ms_actor.config["futu_enabled"] is True
+            assert ms_actor.config["ib_enabled"] is False
+            assert ms_actor.config["market_calendar_enabled"] is True
+        finally:
+            loop.close()
+            asyncio.set_event_loop(None)
+
+    def test_market_scheduler_registered_with_market_us(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """MARKET=US → MarketSchedulerActor registered with US market."""
+        monkeypatch.setenv("MARKET", "US")
+        monkeypatch.setenv("FUTU_ENABLED", "true")
+        monkeypatch.setenv("FUTU_OPEND_HOST", "test-futu-host")
+        monkeypatch.setenv("FUTU_OPEND_PORT", "11111")
+        monkeypatch.setenv("FUTU_TRD_ENV", "SIMULATE")
+        monkeypatch.setenv("IB_ENABLED", "false")
+        monkeypatch.setenv("BUNDLES_PATH", "config/nonexistent_bundles.yaml")
+        monkeypatch.setenv("STATE_SAVE_ENABLED", "false")
+        monkeypatch.setenv("STATE_LOAD_ENABLED", "false")
+        monkeypatch.setenv("ACTOR_MARKET_SCHEDULER_ENABLED", "true")
+        monkeypatch.delenv("FUTU_TRD_MARKET", raising=False)
+        monkeypatch.delenv("HEALTH_MONITOR_MARKET", raising=False)
+        monkeypatch.delenv("BAR_RESUB_MARKET", raising=False)
+        monkeypatch.setenv("ACTOR_HEALTH_ENABLED", "false")
+        monkeypatch.setenv("ACTOR_BAR_RESUB_ENABLED", "false")
+        monkeypatch.setenv("ACTOR_REJECTION_MONITOR_ENABLED", "false")
+        monkeypatch.setenv("ACTOR_REALIZED_PNL_ENABLED", "false")
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            node = build_trading_node()
+
+            actors = node._config.actors
+            ms_actor = [a for a in actors if "MarketScheduler" in a.actor_path][0]
+            assert ms_actor.config["market"] == "US"
+            assert ms_actor.config["ib_enabled"] is True
+        finally:
+            loop.close()
+            asyncio.set_event_loop(None)
+
+    def test_market_scheduler_disabled_by_default(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """MarketSchedulerActor is NOT in actors list when env var unset."""
+        monkeypatch.setenv("IB_ENABLED", "false")
+        monkeypatch.setenv("FUTU_ENABLED", "false")
+        monkeypatch.setenv("BUNDLES_PATH", "config/nonexistent_bundles.yaml")
+        monkeypatch.setenv("STATE_SAVE_ENABLED", "false")
+        monkeypatch.setenv("STATE_LOAD_ENABLED", "false")
+        monkeypatch.setenv("ACTOR_HEALTH_ENABLED", "false")
+        monkeypatch.setenv("ACTOR_BAR_RESUB_ENABLED", "false")
+        monkeypatch.setenv("ACTOR_REJECTION_MONITOR_ENABLED", "false")
+        monkeypatch.setenv("ACTOR_REALIZED_PNL_ENABLED", "false")
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            node = build_trading_node()
+
+            actors = node._config.actors
+            ms_actors = [a for a in actors if "MarketScheduler" in a.actor_path]
+            assert len(ms_actors) == 0
+        finally:
+            loop.close()
+            asyncio.set_event_loop(None)
+
+    def test_market_scheduler_explicitly_disabled(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """MarketSchedulerActor NOT registered when env var is false."""
+        monkeypatch.setenv("MARKET", "US")
+        monkeypatch.setenv("FUTU_ENABLED", "true")
+        monkeypatch.setenv("FUTU_OPEND_HOST", "test-futu-host")
+        monkeypatch.setenv("FUTU_OPEND_PORT", "11111")
+        monkeypatch.setenv("FUTU_TRD_ENV", "SIMULATE")
+        monkeypatch.setenv("IB_ENABLED", "false")
+        monkeypatch.setenv("BUNDLES_PATH", "config/nonexistent_bundles.yaml")
+        monkeypatch.setenv("STATE_SAVE_ENABLED", "false")
+        monkeypatch.setenv("STATE_LOAD_ENABLED", "false")
+        monkeypatch.setenv("ACTOR_MARKET_SCHEDULER_ENABLED", "false")
+        monkeypatch.delenv("FUTU_TRD_MARKET", raising=False)
+        monkeypatch.setenv("ACTOR_HEALTH_ENABLED", "false")
+        monkeypatch.setenv("ACTOR_BAR_RESUB_ENABLED", "false")
+        monkeypatch.setenv("ACTOR_REJECTION_MONITOR_ENABLED", "false")
+        monkeypatch.setenv("ACTOR_REALIZED_PNL_ENABLED", "false")
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            node = build_trading_node()
+
+            actors = node._config.actors
+            ms_actors = [a for a in actors if "MarketScheduler" in a.actor_path]
+            assert len(ms_actors) == 0
+        finally:
+            loop.close()
+            asyncio.set_event_loop(None)
+
+    def test_market_scheduler_backward_compat_no_market(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Without MARKET: market="" and session_timezone=Asia/Hong_Kong."""
+        monkeypatch.setenv("FUTU_ENABLED", "true")
+        monkeypatch.setenv("FUTU_OPEND_HOST", "test-futu-host")
+        monkeypatch.setenv("FUTU_OPEND_PORT", "11111")
+        monkeypatch.setenv("FUTU_TRD_ENV", "SIMULATE")
+        monkeypatch.setenv("FUTU_TRD_MARKET", "US")
+        monkeypatch.setenv("IB_ENABLED", "false")
+        monkeypatch.setenv("BUNDLES_PATH", "config/nonexistent_bundles.yaml")
+        monkeypatch.setenv("STATE_SAVE_ENABLED", "false")
+        monkeypatch.setenv("STATE_LOAD_ENABLED", "false")
+        monkeypatch.setenv("ACTOR_MARKET_SCHEDULER_ENABLED", "true")
+        monkeypatch.delenv("MARKET", raising=False)
+        monkeypatch.setenv("ACTOR_HEALTH_ENABLED", "false")
+        monkeypatch.setenv("ACTOR_BAR_RESUB_ENABLED", "false")
+        monkeypatch.setenv("ACTOR_REJECTION_MONITOR_ENABLED", "false")
+        monkeypatch.setenv("ACTOR_REALIZED_PNL_ENABLED", "false")
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            node = build_trading_node()
+
+            actors = node._config.actors
+            ms_actor = [a for a in actors if "MarketScheduler" in a.actor_path][0]
+            assert ms_actor.config["market"] == ""
+            assert ms_actor.config["session_timezone"] == "Asia/Hong_Kong"
+        finally:
+            loop.close()
+            asyncio.set_event_loop(None)
+
+    def test_market_scheduler_redis_config(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Redis config from env vars is propagated to actor."""
+        monkeypatch.setenv("MARKET", "US")
+        monkeypatch.setenv("FUTU_ENABLED", "true")
+        monkeypatch.setenv("FUTU_OPEND_HOST", "test-futu-host")
+        monkeypatch.setenv("FUTU_OPEND_PORT", "11111")
+        monkeypatch.setenv("FUTU_TRD_ENV", "SIMULATE")
+        monkeypatch.setenv("IB_ENABLED", "false")
+        monkeypatch.setenv("BUNDLES_PATH", "config/nonexistent_bundles.yaml")
+        monkeypatch.setenv("STATE_SAVE_ENABLED", "false")
+        monkeypatch.setenv("STATE_LOAD_ENABLED", "false")
+        monkeypatch.setenv("ACTOR_MARKET_SCHEDULER_ENABLED", "true")
+        monkeypatch.setenv("REDIS_HOST", "test-redis-host")
+        monkeypatch.setenv("REDIS_PORT", "6380")
+        monkeypatch.setenv("REDIS_PASSWORD", "test-redis-pass")
+        monkeypatch.delenv("FUTU_TRD_MARKET", raising=False)
+        monkeypatch.setenv("ACTOR_HEALTH_ENABLED", "false")
+        monkeypatch.setenv("ACTOR_BAR_RESUB_ENABLED", "false")
+        monkeypatch.setenv("ACTOR_REJECTION_MONITOR_ENABLED", "false")
+        monkeypatch.setenv("ACTOR_REALIZED_PNL_ENABLED", "false")
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            node = build_trading_node()
+
+            actors = node._config.actors
+            ms_actor = [a for a in actors if "MarketScheduler" in a.actor_path][0]
+            assert ms_actor.config["redis_host"] == "test-redis-host"
+            assert ms_actor.config["redis_port"] == 6380
+            assert ms_actor.config["redis_password"] == "test-redis-pass"
+        finally:
+            loop.close()
+            asyncio.set_event_loop(None)

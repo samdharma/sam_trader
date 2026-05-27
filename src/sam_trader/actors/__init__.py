@@ -8,6 +8,10 @@ from sam_trader.actors.health_monitor import (
     HealthMonitorActor,
     HealthMonitorActorConfig,
 )
+from sam_trader.actors.market_scheduler import (
+    MarketSchedulerActor,
+    MarketSchedulerActorConfig,
+)
 from sam_trader.actors.position_snapshot import (
     PositionSnapshotActor,
     PositionSnapshotActorConfig,
@@ -28,6 +32,8 @@ __all__ = [
     "BarResubscriptionActorConfig",
     "HealthMonitorActor",
     "HealthMonitorActorConfig",
+    "MarketSchedulerActor",
+    "MarketSchedulerActorConfig",
     "PositionSnapshotActor",
     "PositionSnapshotActorConfig",
     "RealizedPnLTrackerActor",
