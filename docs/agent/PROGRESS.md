@@ -1951,3 +1951,20 @@
 - **Files Changed**: `src/sam_trader/services/bundle_generator.py`, `src/sam_trader/services/pipeline.py`, `src/sam_trader/services/cli.py`, `tests/unit/services/test_bundle_generator.py`, `tests/unit/services/test_pipeline.py`, `tests/unit/services/test_cli.py`
 - **Validation Result**: PASS (RALPH_GATE_PASSED — 147/147 targeted tests, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ticket closed and pushed to origin.
+
+## Iteration 144
+- **Task**: P9-DM: Dual-broker gap scanner — Futu primary + IB cross-validation
+- **Task ID**: sam_trader-9z3.10.37
+- **Status**: COMPLETE
+- **Decisions**:
+  1. Created `DualBrokerGapScanner` in `src/sam_trader/services/dual_broker_scanner.py` wrapping two `QuoteCollectionService` instances.
+  2. US market: runs Futu + IB in parallel via `asyncio.gather()`, cross-validates mid-price discrepancies > `cross_validation_threshold_pct` (default 1.0%).
+  3. HK market: Futu only (`secondary_broker=None`); IB service is not created.
+  4. Config-driven via `config/gap_scanner.yaml` with per-market `primary_broker`, `secondary_broker`, and scanner parameters.
+  5. Added `load_gap_scanner_config()` and `get_gap_scanner_config(market)` for YAML loading with sensible defaults per market.
+  6. Results include `cross_validated` flag and `cross_validation_note` per candidate (reusing `PreMarketGapScanner.cross_validate()`).
+  7. Pass-1 candidate caching preserved so Pass-2 trend detection works across dual-broker scans.
+  8. Secondary broker failures are logged but do not abort the scan; primary broker failures raise `RuntimeError`.
+- **Files Changed**: `src/sam_trader/services/dual_broker_scanner.py`, `config/gap_scanner.yaml`, `tests/unit/services/test_dual_broker_scanner.py`
+- **Validation Result**: PASS (RALPH_GATE_PASSED — 19/19 targeted tests, black/isort/flake8/mypy all green; 688/688 unit services tests pass)
+- **Blockers / Notes**: None. Ticket closed and pushed to origin.
