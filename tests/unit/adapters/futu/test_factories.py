@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -223,3 +224,97 @@ class TestSharedContext:
         assert data_client._quote_ctx is shared_quote_ctx
         # Exec factory also creates an instrument provider with the same quote context
         assert exec_client._trade_ctx is mock_trade_ctx
+
+
+class TestExecClientFactoryAccountId:
+    """Tests for account_id construction via FUTU_ACCOUNT_ID env var."""
+
+    def test_uses_futu_account_id_env_when_set(self, exec_config, factory_deps):
+        """Factory should use FUTU_ACCOUNT_ID env var for account_id when set."""
+        mock_quote_ctx = MagicMock()
+        mock_trade_ctx = MagicMock()
+
+        with (
+            patch.dict(os.environ, {"FUTU_ACCOUNT_ID": "234387941"}),
+            patch(
+                "sam_trader.adapters.futu.factories.get_cached_futu_quote_context",
+                return_value=mock_quote_ctx,
+            ),
+            patch(
+                "sam_trader.adapters.futu.factories.get_cached_futu_trade_context",
+                return_value=mock_trade_ctx,
+            ),
+        ):
+            client = FutuLiveExecClientFactory.create(
+                name=factory_deps["name"],
+                config=exec_config,
+                msgbus=factory_deps["msgbus"],
+                cache=factory_deps["cache"],
+                clock=factory_deps["clock"],
+                loop=factory_deps["loop"],
+            )
+
+        assert client._account_id == AccountId("FUTU-234387941")
+
+    def test_falls_back_to_client_id_when_env_not_set(self, exec_config, factory_deps):
+        """Factory should fall back to config.client_id when FUTU_ACCOUNT_ID unset."""
+        mock_quote_ctx = MagicMock()
+        mock_trade_ctx = MagicMock()
+
+        with (
+            patch.dict(os.environ, {"FUTU_ACCOUNT_ID": ""}),
+            patch(
+                "sam_trader.adapters.futu.factories.get_cached_futu_quote_context",
+                return_value=mock_quote_ctx,
+            ),
+            patch(
+                "sam_trader.adapters.futu.factories.get_cached_futu_trade_context",
+                return_value=mock_trade_ctx,
+            ),
+        ):
+            client = FutuLiveExecClientFactory.create(
+                name=factory_deps["name"],
+                config=exec_config,
+                msgbus=factory_deps["msgbus"],
+                cache=factory_deps["cache"],
+                clock=factory_deps["clock"],
+                loop=factory_deps["loop"],
+            )
+
+        assert client._account_id == AccountId("FUTU-1")
+
+    def test_uses_env_when_config_client_id_different(self, exec_config, factory_deps):
+        """FUTU_ACCOUNT_ID env var takes precedence over config.client_id."""
+        mock_quote_ctx = MagicMock()
+        mock_trade_ctx = MagicMock()
+
+        exec_config_hk = FutuExecClientConfig(
+            host="test-host",
+            port=11111,
+            trd_env="SIMULATE",
+            trd_market="HK",
+            client_id=7,
+        )
+
+        with (
+            patch.dict(os.environ, {"FUTU_ACCOUNT_ID": "234387941"}),
+            patch(
+                "sam_trader.adapters.futu.factories.get_cached_futu_quote_context",
+                return_value=mock_quote_ctx,
+            ),
+            patch(
+                "sam_trader.adapters.futu.factories.get_cached_futu_trade_context",
+                return_value=mock_trade_ctx,
+            ),
+        ):
+            client = FutuLiveExecClientFactory.create(
+                name=factory_deps["name"],
+                config=exec_config_hk,
+                msgbus=factory_deps["msgbus"],
+                cache=factory_deps["cache"],
+                clock=factory_deps["clock"],
+                loop=factory_deps["loop"],
+            )
+
+        # Should use env var, not config.client_id=7
+        assert client._account_id == AccountId("FUTU-234387941")

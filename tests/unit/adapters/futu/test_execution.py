@@ -510,6 +510,67 @@ class TestAccountDiscovery:
         resolved = client._resolve_account_id(aapl)
         assert resolved == AccountId("FUTU-001")
 
+    def test_register_aliases_updates_client_id_default(self, event_loop, make_client):
+        """Account discovery should override client_id-based default (FUTU-1).
+
+        Reproduces the zero-padding bug: the old code compared against
+        AccountId("FUTU-001") which never matched AccountId("FUTU-1"),
+        so discovered accounts were silently ignored.
+        """
+        client = make_client()
+        assert client._account_id == AccountId("FUTU-1")
+        assert client._initial_account_id == AccountId("FUTU-1")
+
+        accounts = [
+            {"acc_id": 234387941, "trdMarket": 1},  # HK
+        ]
+        client._register_venue_account_aliases(accounts)
+
+        # Should have updated from FUTU-1 (client_id default) to discovered account
+        assert client._account_id == AccountId("FUTU-234387941")
+
+    def test_register_aliases_preserves_env_var_account(
+        self, event_loop, mock_trade_ctx
+    ):
+        """Account discovery should update even when account_id was set via env.
+
+        When FUTU_ACCOUNT_ID is set from env, the factory provides the real
+        account ID. Discovery should still register venue aliases and
+        potentially update if the discovered ID differs.
+        """
+        cfg = FutuExecClientConfig(
+            host="test-host",
+            port=11111,
+            trd_env="SIMULATE",
+            trd_market="HK",
+            client_id=1,
+        )
+        clock = LiveClock()
+        msgbus = TestComponentStubs.msgbus()
+        cache = TestComponentStubs.cache()
+        provider = MagicMock(spec=InstrumentProvider)
+        client = FutuLiveExecutionClient(
+            loop=event_loop,
+            client=mock_trade_ctx,
+            msgbus=msgbus,
+            cache=cache,
+            clock=clock,
+            instrument_provider=provider,
+            config=cfg,
+            account_id=AccountId("FUTU-234387941"),
+        )
+
+        assert client._account_id == AccountId("FUTU-234387941")
+        assert client._initial_account_id == AccountId("FUTU-234387941")
+
+        accounts = [
+            {"acc_id": 234387941, "trdMarket": 1},  # HK
+        ]
+        client._register_venue_account_aliases(accounts)
+
+        # Discovery matches the factory-provided ID — still updates (idempotent)
+        assert client._account_id == AccountId("FUTU-234387941")
+
 
 # ---------------------------------------------------------------------------
 # Position reconciliation

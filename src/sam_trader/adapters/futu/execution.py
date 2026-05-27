@@ -138,6 +138,8 @@ class FutuLiveExecutionClient(LiveExecutionClient):
 
         # Default account ID (updated after account discovery)
         self._account_id: AccountId = account_id
+        # Snapshot of factory-provided account ID for discovery comparison
+        self._initial_account_id: AccountId = account_id
 
     # -----------------------------------------------------------------------
     # Connection lifecycle
@@ -241,8 +243,13 @@ class FutuLiveExecutionClient(LiveExecutionClient):
                 )
 
             # Use the first discovered account as the default
-            if self._account_id == AccountId("FUTU-001"):
+            # Compare against the factory-provided account ID (handles both
+            # client_id-based defaults like FUTU-1 and env-var overrides)
+            if self._account_id == self._initial_account_id:
                 self._account_id = acc_id
+                self._log.info(
+                    f"Account discovery: updated default account to {acc_id}",
+                )
 
     def _resolve_account_id(self, instrument_id: InstrumentId) -> AccountId:
         """Resolve the account ID for an instrument based on venue aliases."""

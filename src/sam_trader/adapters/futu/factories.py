@@ -7,6 +7,7 @@ Provides shared client caching — one ``OpenQuoteContext`` and one
 from __future__ import annotations
 
 import asyncio
+import os
 from typing import Any
 
 from nautilus_trader.cache.cache import Cache
@@ -179,7 +180,11 @@ class FutuLiveExecClientFactory(LiveExecClientFactory):
             quote_context=quote_ctx,
             config=InstrumentProviderConfig(load_ids=load_ids),
         )
-        account_id = AccountId(f"FUTU-{config.client_id}")
+        _futu_account = os.environ.get("FUTU_ACCOUNT_ID", "").strip()
+        if _futu_account:
+            account_id = AccountId(f"FUTU-{_futu_account}")
+        else:
+            account_id = AccountId(f"FUTU-{config.client_id}")
         # Use a synthetic venue per market so Nautilus can register multiple
         # Futu exec clients simultaneously without venue collision.
         venue = (

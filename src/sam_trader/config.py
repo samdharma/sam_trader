@@ -32,6 +32,7 @@ class SamTraderConfig:
     futu_trd_env: str
     futu_trd_market: str
     futu_unlock_pwd_md5: str
+    futu_account_id: str
     futu_keep_alive_interval_secs: int
 
     # Actors
@@ -105,6 +106,7 @@ class SamTraderConfig:
             futu_opend_port=int(os.environ.get("FUTU_OPEND_PORT", "11111")),
             futu_trd_env=os.environ.get("FUTU_TRD_ENV", "SIMULATE"),
             futu_trd_market=os.environ.get("FUTU_TRD_MARKET", "US"),
+            futu_account_id=os.environ.get("FUTU_ACCOUNT_ID", ""),
             futu_unlock_pwd_md5=os.environ.get("FUTU_UNLOCK_PWD_MD5", ""),
             futu_keep_alive_interval_secs=int(
                 os.environ.get("FUTU_KEEP_ALIVE_INTERVAL_SECS", "1800")
