@@ -1,5 +1,14 @@
 > **Note: see first-entry Iteration 20 for Phase 2 config dataclasses.**
 
+## Iteration 123
+- **Task**: P11-DM: deploy.sh — always-on brokers, MARKET env var, updated wizard
+- **Task ID**: sam_trader-9z3.12.8
+- **Status**: COMPLETE
+- **Decisions**: deploy.sh already met all acceptance criteria (169 lines, all 6 containers with `docker compose up -d`, no `--with-*` flags, sequential health-gated start, `--stop` cleans up). Wizard now prompts for `MARKET` (auto/US/HK, default "auto") after TRADER_ID/SAM_ENV, before broker prompts. Auto-detect uses HKT time heuristic: 16:00-03:59 HKT → US, else HK. FUTU_TRD_MARKET written for backward compat. 10 new tests: 6 for `_auto_detect_market()` (boundary coverage), 4 for wizard flow (auto-detect dispatch, explicit US, explicit HK, template default).
+- **Files Changed**: `scripts/wizard.py`, `tests/unit/test_wizard.py`
+- **Validation Result**: PASS (RALPH_GATE_PASSED — 87/87 targeted tests: 35 wizard + 52 integration, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for sam_trader-9z3.12.9 (EXIT: full daily cycle E2E simulation).
+
 ## Iteration 122
 - **Task**: P8-DM: SOD readiness CLI — sam readiness command
 - **Task ID**: sam_trader-9z3.9.30
