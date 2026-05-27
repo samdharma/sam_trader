@@ -420,14 +420,14 @@ data_clients["FUTU"] = FutuDataClientConfig(
 
 ## Dynamic Multi-Market Extensions (Planned)
 
-> **Status:** Planning — 1 ticket  
+> **Status:** ✅ Complete — 1 ticket  
 > **Plan:** `docs/user/DYNAMIC_MULTI_MARKET_PLAN.md`
 
 ### Tickets
 
 | Ticket ID | Title | Deps |
 |-----------|-------|------|
-| `sam_trader-9z3.3.11` | Futu: verify per-market connection context coexistence | 9z3.2.5 |
+| `sam_trader-9z3.3.11` | Futu: verify per-market connection context coexistence | 9z3.2.5 | ✅ Closed |
 
 ### Design Notes
 - Verification ticket. Connection caching already keys trade contexts by `trd_market` (see `connection.py` `get_cached_futu_trade_context` which uses `(host, port, trade_env, market_str)` cache key)

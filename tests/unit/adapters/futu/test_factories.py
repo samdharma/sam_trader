@@ -318,3 +318,181 @@ class TestExecClientFactoryAccountId:
 
         # Should use env var, not config.client_id=7
         assert client._account_id == AccountId("FUTU-234387941")
+
+
+class TestPerMarketFactoryCoexistence:
+    """Verify factories correctly isolate US and HK configs for multi-market support."""
+
+    @pytest.fixture
+    def event_loop(self):
+        loop = asyncio.new_event_loop()
+        yield loop
+        loop.close()
+
+    @pytest.fixture
+    def factory_deps(self, event_loop):
+        return {
+            "loop": event_loop,
+            "name": "FUTU-1",
+            "msgbus": TestComponentStubs.msgbus(),
+            "cache": TestComponentStubs.cache(),
+            "clock": LiveClock(),
+        }
+
+    def test_exec_factory_passes_trd_market_hk_to_trade_context(
+        self, factory_deps
+    ) -> None:
+        """Exec factory with trd_market='HK' passes 'HK' to trade context getter."""
+        mock_quote_ctx = MagicMock()
+        mock_trade_ctx = MagicMock()
+
+        hk_config = FutuExecClientConfig(
+            host="test-host",
+            port=11111,
+            trd_env="SIMULATE",
+            trd_market="HK",
+            client_id=1,
+        )
+
+        with (
+            patch(
+                "sam_trader.adapters.futu.factories.get_cached_futu_quote_context",
+                return_value=mock_quote_ctx,
+            ) as mock_get_quote,
+            patch(
+                "sam_trader.adapters.futu.factories.get_cached_futu_trade_context",
+                return_value=mock_trade_ctx,
+            ) as mock_get_trade,
+        ):
+            FutuLiveExecClientFactory.create(
+                name=factory_deps["name"],
+                config=hk_config,
+                msgbus=factory_deps["msgbus"],
+                cache=factory_deps["cache"],
+                clock=factory_deps["clock"],
+                loop=factory_deps["loop"],
+            )
+
+        # Quote context getter does NOT receive market (shared across markets)
+        mock_get_quote.assert_called_once_with(
+            host="test-host",
+            port=11111,
+            trade_env="SIMULATE",
+        )
+        # Trade context getter DOES receive market for per-market isolation
+        mock_get_trade.assert_called_once_with(
+            host="test-host",
+            port=11111,
+            trade_env="SIMULATE",
+            trd_market="HK",
+        )
+
+    def test_exec_factory_hk_gets_synthetic_venue(self, factory_deps) -> None:
+        """HK market exec client gets FUTU_HK venue (not FUTU).
+
+        This allows Nautilus to register multiple Futu exec clients
+        simultaneously without venue collision.
+        """
+        from nautilus_trader.model.identifiers import Venue
+
+        mock_quote_ctx = MagicMock()
+        mock_trade_ctx = MagicMock()
+
+        hk_config = FutuExecClientConfig(
+            host="test-host",
+            port=11111,
+            trd_env="SIMULATE",
+            trd_market="HK",
+            client_id=1,
+        )
+
+        with (
+            patch(
+                "sam_trader.adapters.futu.factories.get_cached_futu_quote_context",
+                return_value=mock_quote_ctx,
+            ),
+            patch(
+                "sam_trader.adapters.futu.factories.get_cached_futu_trade_context",
+                return_value=mock_trade_ctx,
+            ),
+        ):
+            client = FutuLiveExecClientFactory.create(
+                name=factory_deps["name"],
+                config=hk_config,
+                msgbus=factory_deps["msgbus"],
+                cache=factory_deps["cache"],
+                clock=factory_deps["clock"],
+                loop=factory_deps["loop"],
+            )
+
+        assert client.venue == Venue("FUTU_HK")
+
+    def test_exec_factory_us_gets_futu_venue(self, factory_deps) -> None:
+        """US market exec client gets FUTU venue (backward-compatible default)."""
+        from nautilus_trader.model.identifiers import Venue
+
+        mock_quote_ctx = MagicMock()
+        mock_trade_ctx = MagicMock()
+
+        us_config = FutuExecClientConfig(
+            host="test-host",
+            port=11111,
+            trd_env="SIMULATE",
+            trd_market="US",
+            client_id=1,
+        )
+
+        with (
+            patch(
+                "sam_trader.adapters.futu.factories.get_cached_futu_quote_context",
+                return_value=mock_quote_ctx,
+            ),
+            patch(
+                "sam_trader.adapters.futu.factories.get_cached_futu_trade_context",
+                return_value=mock_trade_ctx,
+            ),
+        ):
+            client = FutuLiveExecClientFactory.create(
+                name=factory_deps["name"],
+                config=us_config,
+                msgbus=factory_deps["msgbus"],
+                cache=factory_deps["cache"],
+                clock=factory_deps["clock"],
+                loop=factory_deps["loop"],
+            )
+
+        assert client.venue == Venue("FUTU")
+
+    def test_data_factory_does_not_pass_market_to_quote_context(
+        self, factory_deps
+    ) -> None:
+        """Data factory never passes market to quote context — quote is shared."""
+        mock_quote_ctx = MagicMock()
+
+        hk_data_config = FutuDataClientConfig(
+            host="test-host",
+            port=11111,
+            trd_env="SIMULATE",
+            trd_market="HK",
+            client_id=1,
+        )
+
+        with patch(
+            "sam_trader.adapters.futu.factories.get_cached_futu_quote_context",
+            return_value=mock_quote_ctx,
+        ) as mock_get_quote:
+            FutuLiveDataClientFactory.create(
+                name=factory_deps["name"],
+                config=hk_data_config,
+                msgbus=factory_deps["msgbus"],
+                cache=factory_deps["cache"],
+                clock=factory_deps["clock"],
+                loop=factory_deps["loop"],
+            )
+
+        # Quote context getter does NOT include market parameter
+        mock_get_quote.assert_called_once_with(
+            host="test-host",
+            port=11111,
+            trade_env="SIMULATE",
+        )

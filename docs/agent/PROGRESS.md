@@ -1,5 +1,14 @@
 > **Note: see first-entry Iteration 20 for Phase 2 config dataclasses.**
 
+## Iteration 113
+- **Task**: P2-DM: Futu — verify per-market connection context coexistence
+- **Task ID**: sam_trader-9z3.3.11
+- **Status**: COMPLETE
+- **Decisions**: Verified that existing connection caching correctly isolates US and HK trade contexts by `(host, port, trade_env, market_str)` key while sharing a single quote context keyed by `(host, port, trade_env)` (correct — OpenD serves all markets from one connection). No code changes needed — infrastructure already supports multi-market coexistence. Added 21 tests: 7 unit tests in `test_connection.py` (US/HK trade context isolation, quote context sharing, market-string normalization, cache invalidation isolation, full coexistence state), 5 factory unit tests in `test_factories.py` (HK venue synthetic name, market param pass-through, quote context market-agnostic), 9 integration tests in `test_per_market_coexistence.py` (connection cache key isolation + factory market-aware context construction). All tests mock Futu SDK — no live OpenD required.
+- **Files Changed**: `tests/unit/adapters/futu/test_connection.py`, `tests/unit/adapters/futu/test_factories.py`, `tests/integration/adapters/futu/test_per_market_coexistence.py` (new)
+- **Validation Result**: PASS (RALPH_GATE_PASSED — 53/53 targeted tests, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Phase 2 DM extension complete. Ready for next task.
+
 ## Iteration 112
 - **Task**: P1-DM: main.py — market-aware config propagation
 - **Task ID**: sam_trader-9z3.2.5

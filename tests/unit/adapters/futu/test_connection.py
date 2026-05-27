@@ -491,3 +491,151 @@ class TestMultipleEnvironments:
         assert q_real is mock_q_real
         assert t_sim is mock_t_sim
         assert t_real is mock_t_real
+
+
+class TestPerMarketCoexistence:
+    """Verify US and HK trade contexts are isolated by cache key.
+
+    Quote contexts are shared (keyed by host/port/env only).
+    Trade contexts are market-isolated (keyed by host/port/env/market).
+    """
+
+    @patch("sam_trader.adapters.futu.connection.OpenQuoteContext")
+    @patch("sam_trader.adapters.futu.connection.OpenSecTradeContext")
+    def test_us_and_hk_trade_contexts_distinct(
+        self, mock_trade_cls: MagicMock, mock_quote_cls: MagicMock
+    ) -> None:
+        """US and HK trade contexts are different objects with different cache keys."""
+        mock_t_us = MagicMock()
+        mock_t_us.status = ContextStatus.READY
+        mock_t_hk = MagicMock()
+        mock_t_hk.status = ContextStatus.READY
+        mock_q = MagicMock()
+        mock_q.status = ContextStatus.READY
+
+        mock_quote_cls.return_value = mock_q
+        mock_trade_cls.side_effect = [mock_t_us, mock_t_hk]
+
+        t_us = get_cached_futu_trade_context("h1", 11111, "SIMULATE", trd_market="US")
+        t_hk = get_cached_futu_trade_context("h1", 11111, "SIMULATE", trd_market="HK")
+
+        assert t_us is not t_hk
+        assert t_us is mock_t_us
+        assert t_hk is mock_t_hk
+        # Verify distinct cache keys
+        assert ("h1", 11111, "SIMULATE", "US") in _TRADE_CACHE
+        assert ("h1", 11111, "SIMULATE", "HK") in _TRADE_CACHE
+        assert t_us is _TRADE_CACHE[("h1", 11111, "SIMULATE", "US")]
+        assert t_hk is _TRADE_CACHE[("h1", 11111, "SIMULATE", "HK")]
+
+    @patch("sam_trader.adapters.futu.connection.OpenSecTradeContext")
+    def test_same_market_trade_context_cached(self, mock_trade_cls: MagicMock) -> None:
+        """Same market returns the cached context (not a new one)."""
+        mock_t = MagicMock()
+        mock_t.status = ContextStatus.READY
+        mock_trade_cls.return_value = mock_t
+
+        t1 = get_cached_futu_trade_context("h1", 11111, "SIMULATE", trd_market="HK")
+        t2 = get_cached_futu_trade_context("h1", 11111, "SIMULATE", trd_market="HK")
+
+        assert t1 is t2
+        # Only one constructor call (second was cache hit)
+        assert mock_trade_cls.call_count == 1
+
+    @patch("sam_trader.adapters.futu.connection.OpenQuoteContext")
+    def test_quote_context_shared_across_markets(self, mock_cls: MagicMock) -> None:
+        """Quote context is NOT market-keyed — shared across US and HK.
+
+        The cache key is (host, port, trade_env). Different markets share
+        the same quote context because OpenD serves all markets from one
+        connection.
+        """
+        mock_q = MagicMock()
+        mock_q.status = ContextStatus.READY
+        mock_cls.return_value = mock_q
+
+        q1 = get_cached_futu_quote_context("h1", 11111, "SIMULATE")
+        q2 = get_cached_futu_quote_context("h1", 11111, "SIMULATE")
+
+        assert q1 is q2
+        assert mock_cls.call_count == 1
+        # Quote cache key does NOT include market
+        assert ("h1", 11111, "SIMULATE") in _QUOTE_CACHE
+        assert len(_QUOTE_CACHE) == 1
+
+    @patch("sam_trader.adapters.futu.connection.OpenSecTradeContext")
+    def test_us_invalidation_does_not_affect_hk(
+        self, mock_trade_cls: MagicMock
+    ) -> None:
+        """Invalidating US trade context leaves HK context intact."""
+        mock_t_us = MagicMock()
+        mock_t_us.status = ContextStatus.READY
+        mock_t_hk = MagicMock()
+        mock_t_hk.status = ContextStatus.READY
+        mock_trade_cls.side_effect = [mock_t_us, mock_t_hk]
+
+        get_cached_futu_trade_context("h1", 11111, "SIMULATE", trd_market="US")
+        get_cached_futu_trade_context("h1", 11111, "SIMULATE", trd_market="HK")
+
+        # Simulate US context disconnecting
+        mock_t_us.status = ContextStatus.CLOSED
+
+        # HK context should still be cached and ready
+        ctx_hk = get_cached_futu_trade_context("h1", 11111, "SIMULATE", trd_market="HK")
+        assert ctx_hk is mock_t_hk
+        assert ("h1", 11111, "SIMULATE", "HK") in _TRADE_CACHE
+
+        # US context should be recreated (CLOSED → new)
+        mock_t_us2 = MagicMock()
+        mock_t_us2.status = ContextStatus.READY
+        mock_trade_cls.side_effect = [mock_t_us2]  # next call for US recreate
+
+        ctx_us = get_cached_futu_trade_context("h1", 11111, "SIMULATE", trd_market="US")
+        assert ctx_us is not mock_t_us  # old was invalidated
+        assert ctx_us is mock_t_us2
+        mock_t_us.close.assert_called_once()
+
+    @patch("sam_trader.adapters.futu.connection.OpenSecTradeContext")
+    def test_market_string_normalization(self, mock_trade_cls: MagicMock) -> None:
+        """Market string is normalized to uppercase for cache key.
+
+        'us' and 'US' should resolve to the same cache entry.
+        """
+        mock_t = MagicMock()
+        mock_t.status = ContextStatus.READY
+        mock_trade_cls.return_value = mock_t
+
+        t1 = get_cached_futu_trade_context("h1", 11111, "SIMULATE", trd_market="us")
+        t2 = get_cached_futu_trade_context("h1", 11111, "SIMULATE", trd_market="US")
+
+        assert t1 is t2
+        assert mock_trade_cls.call_count == 1
+        assert ("h1", 11111, "SIMULATE", "US") in _TRADE_CACHE
+
+    @patch("sam_trader.adapters.futu.connection.OpenQuoteContext")
+    @patch("sam_trader.adapters.futu.connection.OpenSecTradeContext")
+    def test_quote_unchanged_when_switching_market_trade_contexts(
+        self, mock_trade_cls: MagicMock, mock_quote_cls: MagicMock
+    ) -> None:
+        """Switching between US and HK trade contexts does not affect
+        the shared quote context."""
+        mock_q = MagicMock()
+        mock_q.status = ContextStatus.READY
+        mock_quote_cls.return_value = mock_q
+
+        mock_t_us = MagicMock()
+        mock_t_us.status = ContextStatus.READY
+        mock_t_hk = MagicMock()
+        mock_t_hk.status = ContextStatus.READY
+        mock_trade_cls.side_effect = [mock_t_us, mock_t_hk]
+
+        q = get_cached_futu_quote_context("h1", 11111, "SIMULATE")
+        get_cached_futu_trade_context("h1", 11111, "SIMULATE", trd_market="US")
+        get_cached_futu_trade_context("h1", 11111, "SIMULATE", trd_market="HK")
+
+        # Quote context should still be the same object
+        q2 = get_cached_futu_quote_context("h1", 11111, "SIMULATE")
+        assert q is q2
+        # Quote cache has one entry, trade cache has two
+        assert len(_QUOTE_CACHE) == 1
+        assert len(_TRADE_CACHE) == 2
