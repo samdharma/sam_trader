@@ -1921,3 +1921,19 @@
 - **Files Changed**: `src/sam_trader/services/cli.py`, `tests/unit/services/test_cli.py`
 - **Validation Result**: PASS (RALPH_GATE_PASSED — 95/95 targeted tests, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ticket ready to close.
+
+## Iteration 142
+- **Task**: P9-DM: Market-aware pipeline scheduling
+- **Task ID**: sam_trader-9z3.10.36
+- **Status**: COMPLETE
+- **Decisions**:
+  1. Removed `PIPELINE_MARKET` env var from `pipeline.py`. Pipeline now reads active market from `MARKET` env var via `_get_active_market()`.
+  2. Added `_get_pipeline_schedule(market)` that reads `premarket_pipeline_time` from `config/market_config.yaml`. US = 08:30 ET, HK = 07:30 HKT.
+  3. Added `_convert_pipeline_time_to_hkt(market, local_time)` using `zoneinfo` for DST-aware ET→HKT conversion. Summer = 20:30 HKT, Winter = 21:30 HKT.
+  4. Updated `run_pipeline()` default `schedule` parameter from `PIPELINE_SCHEDULE` env var to `None`, so market config is used when not explicitly overridden.
+  5. Updated crontab: HK pipeline at 07:30 HKT; US entries updated with DST-aware comments (summer times primary, manual winter adjustment noted).
+  6. Updated `sam pipeline` CLI in `cli.py` to accept `--market` option.
+  7. Updated `.env.example`, `OPERATOR_GUIDE.md`, and `BUILD_PHASE_9.md` to remove `PIPELINE_MARKET` references.
+- **Files Changed**: `src/sam_trader/services/pipeline.py`, `src/sam_trader/services/cli.py`, `src/sam_trader/services/crontab`, `tests/unit/services/test_pipeline.py`, `tests/unit/services/test_cron.py`, `.env.example`, `docs/user/OPERATOR_GUIDE.md`, `docs/reference/BUILD_PHASE_9.md`
+- **Validation Result**: PASS (RALPH_GATE_PASSED — 25/25 targeted tests, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ticket closed.
