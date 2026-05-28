@@ -1,5 +1,14 @@
 > **Note: see first-entry Iteration 20 for Phase 2 config dataclasses.**
 
+## Iteration 125
+- **Task**: 12.1.1: BarDownloader — Futu historical bars → Parquet catalog + sam download-bars CLI
+- **Task ID**: sam_trader-9z3.13.1.1
+- **Status**: COMPLETE
+- **Decisions**: Implementation was already complete from prior work session. Verified all acceptance criteria: (1) BarDownloader.download() connects to Futu OpenD via `request_history_kline`, parses bars via `parse_futu_bars()`, and writes to `ParquetDataCatalog`. (2) All 5 bar types supported: 1-MINUTE, 5-MINUTE, 15-MINUTE, 1-HOUR, DAY. (3) Rate limit respected with 2.0s sleep between requests (30 req/min). (4) Incremental updates via `_get_effective_start()` querying `catalog.query_last_timestamp()`. (5) `sam download-bars` CLI with `--instrument`, `--bar-type`, `--lookback` flags via Click. (6) Defaults to all FUTU instruments from `config/bundles.yaml` when no `--instrument` specified.
+- **Files Changed**: `src/sam_trader/services/bar_downloader.py` (already existed), `src/sam_trader/services/cli.py` (download-bars command already existed), `tests/unit/services/test_bar_downloader.py` (already existed), `tests/unit/services/test_cli.py` (download-bars tests already existed)
+- **Validation Result**: PASS (ralph_validate.sh --tier=targeted; RALPH_GATE_PASSED — 17/17 targeted tests: 12 bar downloader + 5 CLI download-bars, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for sam_trader-9z3.13.1.2 (Backtest engine wrapper).
+
 ## Iteration 124
 - **Task**: P11-DM: [EXIT] E2E — full daily cycle simulation
 - **Task ID**: sam_trader-9z3.12.9
