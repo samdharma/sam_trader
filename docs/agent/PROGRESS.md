@@ -1,5 +1,14 @@
 > **Note: see first-entry Iteration 20 for Phase 2 config dataclasses.**
 
+## Iteration 127
+- **Task**: Market-aware state isolation: prevent cross-market state corruption when switching between HK/US sessions
+- **Task ID**: sam_trader-jy2
+- **Status**: COMPLETE
+- **Decisions**: Two-layer defense: (1) bundle_loader.py sets strategy_id to `{market}-{bundle_id}` in config, making Nautilus Redis state keys market-specific (e.g., US-orb_rdw_1m-000 vs HK-orb_07666_1m-000). (2) OrbStrategy and MomentumStrategy on_load() validates saved _config_instrument_id against config.instrument_id — discards stale state on mismatch. Backward compat preserved: old state without the key loads normally. Both strategies include _config_instrument_id in on_save() state. Uses f-string logging (not C-style %s) to avoid Cython Logger.warning() TypeError.
+- **Files Changed**: src/sam_trader/bundle_loader.py, src/sam_trader/strategies/orb.py, src/sam_trader/strategies/momentum.py, tests/unit/strategies/test_orb.py, tests/unit/strategies/test_momentum.py, tests/unit/test_bundle_loader.py
+- **Validation Result**: PASS (RALPH_GATE_PASSED — 145/145 targeted tests: 70 orb + 34 momentum + 44 bundle_loader, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: Pre-existing integration test segfaults (Nautilus Cython 3.14 compat, not caused by this change). Integration test for multi-market state isolation (AC #4 start HK→stop→switch→restart) requires Docker stack which is not available in sandbox — operator E2E gate.
+
 ## Iteration 126
 - **Task**: ORB Strategy: enforce max_trades_per_day and trade_cooldown from risk config
 - **Task ID**: sam_trader-g0k
