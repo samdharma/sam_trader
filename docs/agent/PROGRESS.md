@@ -1,5 +1,14 @@
 > **Note: see first-entry Iteration 20 for Phase 2 config dataclasses.**
 
+## Iteration 126
+- **Task**: ORB Strategy: enforce max_trades_per_day and trade_cooldown from risk config
+- **Task ID**: sam_trader-g0k
+- **Status**: COMPLETE
+- **Decisions**: (1) Bundle validation now warns when enabled (production) bundles have `max_trades_per_day <= 0` or `trade_cooldown_seconds <= 0` in their risk config — prevents the 118K order-list firehose bug from iteration 104 where the limits existed in code but weren't enforced in config. Warnings don't block validation pass. Disabled bundles are not warned. (2) `_trades_today` counter moved from submission-time (`_enter_long`/`_enter_short`/`_submit_stop_market_entry`) to acceptance-time via new `on_order_accepted()` hook. Uses `_pending_entry_order_ids: set[ClientOrderId]` to track which orders are entry orders — only those client_order_ids trigger the counter. SL/TP legs of bracket orders are filtered out (they have different client_order_ids not in the set). This ensures rejected or abandoned orders don't count toward the daily limit. (3) `on_reset()` clears `_pending_entry_order_ids`. The set is intentionally not persisted in `on_save`/`on_load` — if strategy restarts between submission and acceptance, those orders don't count (conservative: prevents over-counting across restarts).
+- **Files Changed**: `src/sam_trader/strategies/orb.py`, `src/sam_trader/bundle_validation.py`, `tests/unit/strategies/test_orb.py`, `tests/unit/test_bundle_validation.py`
+- **Validation Result**: PASS (RALPH_GATE_PASSED — 117/117 targeted tests: 65 ORB + 52 bundle validation, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. The `OrderAccepted` Cython class does not expose `order_side` (unlike `OrderFilled`), so client_order_id-based tracking is the correct approach. The `_pending_entry_order_ids` set is self-cleaning (each entry removes its own ID on acceptance).
+
 ## Iteration 125
 - **Task**: 12.1.1: BarDownloader — Futu historical bars → Parquet catalog + sam download-bars CLI
 - **Task ID**: sam_trader-9z3.13.1.1
