@@ -1995,3 +1995,12 @@
 - **Files Changed**: `src/sam_trader/services/crontab`, `src/sam_trader/services/pipeline.py`, `tests/unit/test_crontab.py`, `tests/unit/services/test_cron.py`, `tests/unit/services/test_pipeline.py`
 - **Validation Result**: PASS (RALPH_GATE_PASSED — 35/35 targeted tests, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ready for next task.
+
+## Iteration 125
+- **Task**: 12.3.7: Dashboard Tier 1 batch A — equity curve, drawdown, KPI cards, positions
+- **Task ID**: sam_trader-9z3.13.3.7
+- **Status**: COMPLETE
+- **Decisions**: Created `dashboard_analytics.py` as a pure computation module to keep `dashboard.py` from growing too large. Equity curve and drawdown use inline SVG (no external CDN deps, self-contained HTML). KPIs computed from daily P&L with delta vs prior period. Positions table enhanced with mark price (derived from avg_px + unrealized_pnl/qty) and P&L %. Redis `sam:pnl:*` keys preferred for daily P&L; fills table used as fallback. Three new API endpoints: `/api/equity-curve`, `/api/drawdown`, `/api/performance`.
+- **Files Changed**: `src/sam_trader/services/dashboard_analytics.py` (new), `src/sam_trader/services/dashboard.py`, `tests/unit/services/test_dashboard_analytics.py` (new), `tests/unit/services/test_dashboard.py`
+- **Validation Result**: PASS (RALPH_GATE_PASSED — 174 targeted tests, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for 12.3.8 (Dashboard Tier 1 batch B — fills, strategy P&L, drawdown recovery, fees, health).
