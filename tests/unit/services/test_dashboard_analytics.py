@@ -251,3 +251,174 @@ class TestRenderDrawdownSvg:
         ]
         svg = render_drawdown_svg(points)
         assert "fill-opacity" in svg
+
+
+class TestComputeMonthlyReturns:
+    """Tests for monthly returns aggregation."""
+
+    def test_empty_input(self) -> None:
+        """Empty daily P&L returns empty list."""
+        from sam_trader.services.dashboard_analytics import compute_monthly_returns
+
+        assert compute_monthly_returns([]) == []
+
+    def test_single_month(self) -> None:
+        """Two days in the same month aggregate to one row."""
+        from sam_trader.services.dashboard_analytics import compute_monthly_returns
+
+        result = compute_monthly_returns(
+            [
+                {"date": "2026-05-01", "pnl": 100.0},
+                {"date": "2026-05-02", "pnl": 50.0},
+            ]
+        )
+        assert len(result) == 1
+        assert result[0]["year"] == 2026
+        assert result[0]["month"] == 5
+        assert result[0]["pnl"] == 150.0
+
+    def test_multiple_months(self) -> None:
+        """Days across months produce separate rows."""
+        from sam_trader.services.dashboard_analytics import compute_monthly_returns
+
+        result = compute_monthly_returns(
+            [
+                {"date": "2026-05-15", "pnl": 100.0},
+                {"date": "2026-06-10", "pnl": -30.0},
+                {"date": "2026-06-20", "pnl": 50.0},
+            ]
+        )
+        assert len(result) == 2
+        assert result[0]["month"] == 5
+        assert result[0]["pnl"] == 100.0
+        assert result[1]["month"] == 6
+        assert result[1]["pnl"] == 20.0
+
+    def test_return_pct_against_start_equity(self) -> None:
+        """Return % is computed against equity at month start."""
+        from sam_trader.services.dashboard_analytics import compute_monthly_returns
+
+        result = compute_monthly_returns(
+            [
+                {"date": "2026-05-01", "pnl": 100.0},
+                {"date": "2026-05-02", "pnl": 50.0},
+                {"date": "2026-06-01", "pnl": 30.0},
+            ]
+        )
+        # May starts at equity 0, so denom = max(|0|, 1) = 1
+        assert result[0]["return_pct"] == 15000.0  # (150/1)*100
+        # June starts at equity 150, so return_pct = (30/150)*100 = 20
+        assert result[1]["return_pct"] == 20.0
+
+
+class TestComputeAnnualReturns:
+    """Tests for annual returns aggregation."""
+
+    def test_empty_input(self) -> None:
+        """Empty daily P&L returns empty list."""
+        from sam_trader.services.dashboard_analytics import compute_annual_returns
+
+        assert compute_annual_returns([]) == []
+
+    def test_single_year(self) -> None:
+        """Days in the same year aggregate to one row."""
+        from sam_trader.services.dashboard_analytics import compute_annual_returns
+
+        result = compute_annual_returns(
+            [
+                {"date": "2026-05-01", "pnl": 100.0},
+                {"date": "2026-06-01", "pnl": 50.0},
+            ]
+        )
+        assert len(result) == 1
+        assert result[0]["year"] == 2026
+        assert result[0]["pnl"] == 150.0
+
+    def test_multiple_years(self) -> None:
+        """Days across years produce separate rows."""
+        from sam_trader.services.dashboard_analytics import compute_annual_returns
+
+        result = compute_annual_returns(
+            [
+                {"date": "2025-12-31", "pnl": 100.0},
+                {"date": "2026-01-01", "pnl": 50.0},
+            ]
+        )
+        assert len(result) == 2
+        assert result[0]["year"] == 2025
+        assert result[0]["pnl"] == 100.0
+        assert result[1]["year"] == 2026
+        assert result[1]["pnl"] == 50.0
+
+
+class TestComputeRollingSharpe:
+    """Tests for rolling Sharpe computation."""
+
+    def test_empty_input(self) -> None:
+        """Empty daily P&L returns empty list."""
+        from sam_trader.services.dashboard_analytics import compute_rolling_sharpe
+
+        assert compute_rolling_sharpe([]) == []
+
+    def test_insufficient_data(self) -> None:
+        """Fewer than window days returns empty list."""
+        from sam_trader.services.dashboard_analytics import compute_rolling_sharpe
+
+        result = compute_rolling_sharpe(
+            [{"date": "2026-05-01", "pnl": 10.0}],
+            window=20,
+        )
+        assert result == []
+
+    def test_window_produces_points(self) -> None:
+        """Exactly window days produces one point."""
+        from sam_trader.services.dashboard_analytics import compute_rolling_sharpe
+
+        rows = [{"date": f"2026-05-{i:02d}", "pnl": 10.0} for i in range(1, 21)]
+        result = compute_rolling_sharpe(rows, window=20)
+        assert len(result) == 1
+        assert result[0]["date"] == "2026-05-20"
+        # All returns identical → Sharpe = 0
+        assert result[0]["sharpe"] == 0.0
+
+    def test_more_than_window(self) -> None:
+        """More than window days produces len-window+1 points."""
+        from sam_trader.services.dashboard_analytics import compute_rolling_sharpe
+
+        rows = [{"date": f"2026-05-{i:02d}", "pnl": float(i)} for i in range(1, 26)]
+        result = compute_rolling_sharpe(rows, window=20)
+        assert len(result) == 6
+        assert result[0]["date"] == "2026-05-20"
+        assert result[-1]["date"] == "2026-05-25"
+
+
+class TestComputeRollingBeta:
+    """Tests for rolling Beta computation."""
+
+    def test_empty_input(self) -> None:
+        """Empty daily P&L returns empty list."""
+        from sam_trader.services.dashboard_analytics import compute_rolling_beta
+
+        assert compute_rolling_beta([]) == []
+
+    def test_no_benchmark(self) -> None:
+        """Missing benchmark yields beta 0.0 for all dates."""
+        from sam_trader.services.dashboard_analytics import compute_rolling_beta
+
+        rows = [{"date": f"2026-05-{i:02d}", "pnl": float(i)} for i in range(1, 26)]
+        result = compute_rolling_beta(rows, benchmark_pnl=None, window=20)
+        assert len(result) == 6
+        assert all(p["beta"] == 0.0 for p in result)
+
+    def test_with_benchmark(self) -> None:
+        """Benchmark present produces non-zero beta values."""
+        from sam_trader.services.dashboard_analytics import compute_rolling_beta
+
+        rows = [{"date": f"2026-05-{i:02d}", "pnl": float(i)} for i in range(1, 26)]
+        bench = [
+            {"date": f"2026-05-{i:02d}", "pnl": float(i * 2)} for i in range(1, 26)
+        ]
+        result = compute_rolling_beta(rows, benchmark_pnl=bench, window=20)
+        assert len(result) == 6
+        # Strategy = 0.5 * benchmark → beta ≈ 0.5
+        assert all(abs(p["beta"] - 0.5) < 0.01 for p in result)

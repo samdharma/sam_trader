@@ -2004,3 +2004,12 @@
 - **Files Changed**: `src/sam_trader/services/dashboard_analytics.py` (new), `src/sam_trader/services/dashboard.py`, `tests/unit/services/test_dashboard_analytics.py` (new), `tests/unit/services/test_dashboard.py`
 - **Validation Result**: PASS (RALPH_GATE_PASSED — 174 targeted tests, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ready for 12.3.8 (Dashboard Tier 1 batch B — fills, strategy P&L, drawdown recovery, fees, health).
+
+## Iteration 125
+- **Task**: 12.3.9: Dashboard Tier 2 batch A — monthly returns, annual returns, rolling Sharpe/Beta
+- **Task ID**: sam_trader-9z3.13.3.9
+- **Status**: COMPLETE
+- **Decisions**: Added four pure-function analytics to `dashboard_analytics.py`: `compute_monthly_returns`, `compute_annual_returns`, `compute_rolling_sharpe`, `compute_rolling_beta`. Monthly/annual returns compute return_pct against equity at period start. Rolling Sharpe uses existing `_sharpe` over a sliding window. Rolling Beta uses sample covariance/variance against a benchmark instrument (default SPY.NASDAQ) queried from fills; returns 0.0 when benchmark is absent. Added async benchmark query `_query_benchmark_daily_pnl_from_fills_async` to `dashboard.py`. Wired four new API endpoints into `DashboardHandler.do_GET`: `/api/monthly-returns`, `/api/annual-returns`, `/api/rolling-sharpe?window=20`, `/api/rolling-beta?window=20&benchmark=SPY.NASDAQ`. Added 15 new unit tests (9 analytics + 6 API endpoint tests). All 81 targeted tests pass; black/isort/flake8/mypy green.
+- **Files Changed**: `src/sam_trader/services/dashboard_analytics.py`, `src/sam_trader/services/dashboard.py`, `tests/unit/services/test_dashboard_analytics.py`, `tests/unit/services/test_dashboard.py`
+- **Validation Result**: PASS (RALPH_GATE_PASSED — 81/81 tests, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for next Tier 2 batch (asset allocation, trade distribution, exposure) or indicator work.

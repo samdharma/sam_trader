@@ -155,6 +155,199 @@ def compute_drawdown(equity_curve: list[EquityPoint]) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# Monthly / Annual returns
+# ---------------------------------------------------------------------------
+
+
+def compute_monthly_returns(
+    daily_pnl: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Aggregate daily P&L into calendar-month returns.
+
+    Returns rows with ``year``, ``month``, ``pnl``, ``return_pct``.
+    Return percentage is computed against the equity at the start of
+    the month (cumulative P&L up to that point).  The very first month
+    uses ``max(|start_equity|, 1)`` as denominator to avoid division by
+    zero when the curve begins at zero.
+    """
+    if not daily_pnl:
+        return []
+
+    sorted_rows = sorted(daily_pnl, key=lambda r: r.get("date", ""))
+    equity = 0.0
+    month_pnls: dict[tuple[int, int], float] = {}
+    month_start_equity: dict[tuple[int, int], float] = {}
+    current_month: tuple[int, int] | None = None
+
+    for row in sorted_rows:
+        date_str = str(row.get("date", ""))
+        if len(date_str) < 7:
+            continue
+        try:
+            year = int(date_str[:4])
+            month = int(date_str[5:7])
+        except ValueError:
+            continue
+        ym = (year, month)
+        pnl = float(row.get("pnl", 0.0))
+
+        if ym != current_month:
+            month_start_equity[ym] = equity
+            current_month = ym
+
+        month_pnls[ym] = month_pnls.get(ym, 0.0) + pnl
+        equity += pnl
+
+    results: list[dict[str, Any]] = []
+    for ym in sorted(month_pnls):
+        pnl = month_pnls[ym]
+        start_eq = month_start_equity.get(ym, 0.0)
+        denom = max(abs(start_eq), 1.0) if start_eq == 0.0 else abs(start_eq)
+        ret_pct = (pnl / denom) * 100.0
+        results.append(
+            {
+                "year": ym[0],
+                "month": ym[1],
+                "pnl": round(pnl, 2),
+                "return_pct": round(ret_pct, 2),
+            }
+        )
+    return results
+
+
+def compute_annual_returns(
+    daily_pnl: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Aggregate daily P&L into calendar-year returns.
+
+    Returns rows with ``year``, ``pnl``, ``return_pct``.
+    """
+    if not daily_pnl:
+        return []
+
+    sorted_rows = sorted(daily_pnl, key=lambda r: r.get("date", ""))
+    equity = 0.0
+    year_pnls: dict[int, float] = {}
+    year_start_equity: dict[int, float] = {}
+    current_year: int | None = None
+
+    for row in sorted_rows:
+        date_str = str(row.get("date", ""))
+        if len(date_str) < 4:
+            continue
+        try:
+            year = int(date_str[:4])
+        except ValueError:
+            continue
+        pnl = float(row.get("pnl", 0.0))
+
+        if year != current_year:
+            year_start_equity[year] = equity
+            current_year = year
+
+        year_pnls[year] = year_pnls.get(year, 0.0) + pnl
+        equity += pnl
+
+    results: list[dict[str, Any]] = []
+    for y in sorted(year_pnls):
+        pnl = year_pnls[y]
+        start_eq = year_start_equity.get(y, 0.0)
+        denom = max(abs(start_eq), 1.0) if start_eq == 0.0 else abs(start_eq)
+        ret_pct = (pnl / denom) * 100.0
+        results.append(
+            {
+                "year": y,
+                "pnl": round(pnl, 2),
+                "return_pct": round(ret_pct, 2),
+            }
+        )
+    return results
+
+
+# ---------------------------------------------------------------------------
+# Rolling Sharpe / Beta
+# ---------------------------------------------------------------------------
+
+
+def compute_rolling_sharpe(
+    daily_pnl: list[dict[str, Any]], window: int = 20
+) -> list[dict[str, Any]]:
+    """Compute a *window*-day rolling Sharpe ratio from daily P&L.
+
+    Returns rows with ``date`` and ``sharpe``.  The first ``window-1``
+    rows are omitted because the window is not yet full.
+    """
+    if not daily_pnl or window < 2:
+        return []
+
+    sorted_rows = sorted(daily_pnl, key=lambda r: r.get("date", ""))
+    pnls = [float(r.get("pnl", 0.0)) for r in sorted_rows]
+    dates = [str(r.get("date", "")) for r in sorted_rows]
+
+    results: list[dict[str, Any]] = []
+    for i in range(window - 1, len(pnls)):
+        window_pnls = pnls[i - window + 1 : i + 1]
+        sharpe = _sharpe(window_pnls)
+        results.append({"date": dates[i], "sharpe": round(sharpe, 2)})
+    return results
+
+
+def compute_rolling_beta(
+    daily_pnl: list[dict[str, Any]],
+    benchmark_pnl: list[dict[str, Any]] | None = None,
+    window: int = 20,
+) -> list[dict[str, Any]]:
+    """Compute a *window*-day rolling Beta against a benchmark.
+
+    Beta = Cov(strategy, benchmark) / Var(benchmark).
+
+    If *benchmark_pnl* is ``None`` or empty, beta is reported as
+    ``0.0`` for every date (the API remains functional).
+    """
+    if not daily_pnl or window < 2:
+        return []
+
+    sorted_rows = sorted(daily_pnl, key=lambda r: r.get("date", ""))
+    strat_pnls = [float(r.get("pnl", 0.0)) for r in sorted_rows]
+    dates = [str(r.get("date", "")) for r in sorted_rows]
+
+    # Build benchmark lookup by date
+    bench_map: dict[str, float] = {}
+    if benchmark_pnl:
+        for r in benchmark_pnl:
+            d = str(r.get("date", ""))
+            if d:
+                bench_map[d] = float(r.get("pnl", 0.0))
+
+    results: list[dict[str, Any]] = []
+    for i in range(window - 1, len(strat_pnls)):
+        date_window = dates[i - window + 1 : i + 1]
+        strat_window = strat_pnls[i - window + 1 : i + 1]
+        bench_window = [bench_map.get(d, 0.0) for d in date_window]
+
+        beta = _beta(strat_window, bench_window)
+        results.append({"date": dates[i], "beta": round(beta, 2)})
+    return results
+
+
+def _beta(series_a: list[float], series_b: list[float]) -> float:
+    """Sample beta of *series_a* vs *series_b*."""
+    n = len(series_a)
+    if n < 2 or len(series_b) != n:
+        return 0.0
+
+    mean_a = sum(series_a) / n
+    mean_b = sum(series_b) / n
+
+    cov = sum((a - mean_a) * (b - mean_b) for a, b in zip(series_a, series_b)) / (n - 1)
+    var_b = sum((b - mean_b) ** 2 for b in series_b) / (n - 1)
+
+    if var_b == 0.0:
+        return 0.0
+    return cov / var_b
+
+
+# ---------------------------------------------------------------------------
 # KPIs
 # ---------------------------------------------------------------------------
 

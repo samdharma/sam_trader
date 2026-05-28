@@ -1096,6 +1096,135 @@ class TestNewApiEndpoints:
         assert data["net_pnl"] == 120.0
 
 
+class TestTier2ApiEndpoints:
+    """Tests for Tier 2 analytics API endpoints."""
+
+    def test_get_api_monthly_returns(self) -> None:
+        """GET /api/monthly-returns returns aggregated monthly data."""
+        from sam_trader.services.dashboard import _get_monthly_returns_data
+
+        async def _fake(*args: object, **kwargs: object) -> list[dict[str, Any]]:
+            return [
+                {"date": "2026-05-01", "pnl": 100.0},
+                {"date": "2026-05-02", "pnl": 50.0},
+                {"date": "2026-06-01", "pnl": -30.0},
+            ]
+
+        with patch(
+            "sam_trader.services.dashboard._query_daily_pnl_from_fills_async",
+            _fake,
+        ):
+            data = _get_monthly_returns_data(DashboardConfig(), days=365)
+
+        assert len(data) == 2
+        assert data[0]["year"] == 2026
+        assert data[0]["month"] == 5
+        assert data[0]["pnl"] == 150.0
+        assert data[1]["month"] == 6
+        assert data[1]["pnl"] == -30.0
+
+    def test_get_api_annual_returns(self) -> None:
+        """GET /api/annual-returns returns aggregated yearly data."""
+        from sam_trader.services.dashboard import _get_annual_returns_data
+
+        async def _fake(*args: object, **kwargs: object) -> list[dict[str, Any]]:
+            return [
+                {"date": "2025-12-31", "pnl": 200.0},
+                {"date": "2026-01-01", "pnl": 100.0},
+                {"date": "2026-05-02", "pnl": 50.0},
+            ]
+
+        with patch(
+            "sam_trader.services.dashboard._query_daily_pnl_from_fills_async",
+            _fake,
+        ):
+            data = _get_annual_returns_data(DashboardConfig(), days=730)
+
+        assert len(data) == 2
+        assert data[0]["year"] == 2025
+        assert data[0]["pnl"] == 200.0
+        assert data[1]["year"] == 2026
+        assert data[1]["pnl"] == 150.0
+
+    def test_get_api_rolling_sharpe(self) -> None:
+        """GET /api/rolling-sharpe returns rolling Sharpe points."""
+        from sam_trader.services.dashboard import _get_rolling_sharpe_data
+
+        rows = [{"date": f"2026-05-{i:02d}", "pnl": float(i)} for i in range(1, 26)]
+
+        async def _fake(*args: object, **kwargs: object) -> list[dict[str, Any]]:
+            return rows
+
+        with patch(
+            "sam_trader.services.dashboard._query_daily_pnl_from_fills_async",
+            _fake,
+        ):
+            data = _get_rolling_sharpe_data(DashboardConfig(), days=90, window=20)
+
+        assert len(data) == 6
+        assert data[0]["date"] == "2026-05-20"
+        assert "sharpe" in data[0]
+
+    def test_get_api_rolling_beta_no_benchmark(self) -> None:
+        """GET /api/rolling-beta returns beta 0 when benchmark has no fills."""
+        from sam_trader.services.dashboard import _get_rolling_beta_data
+
+        rows = [{"date": f"2026-05-{i:02d}", "pnl": float(i)} for i in range(1, 26)]
+
+        async def _fake_pnl(*args: object, **kwargs: object) -> list[dict[str, Any]]:
+            return rows
+
+        async def _fake_bench(*args: object, **kwargs: object) -> list[dict[str, Any]]:
+            return []
+
+        with patch(
+            "sam_trader.services.dashboard._query_daily_pnl_from_fills_async",
+            _fake_pnl,
+        ):
+            with patch(
+                "sam_trader.services.dashboard"
+                "._query_benchmark_daily_pnl_from_fills_async",
+                _fake_bench,
+            ):
+                data = _get_rolling_beta_data(
+                    DashboardConfig(), days=90, window=20, benchmark="SPY.NASDAQ"
+                )
+
+        assert len(data) == 6
+        assert all(p["beta"] == 0.0 for p in data)
+
+    def test_get_api_rolling_beta_with_benchmark(self) -> None:
+        """GET /api/rolling-beta computes beta when benchmark fills exist."""
+        from sam_trader.services.dashboard import _get_rolling_beta_data
+
+        rows = [{"date": f"2026-05-{i:02d}", "pnl": float(i)} for i in range(1, 26)]
+        bench = [
+            {"date": f"2026-05-{i:02d}", "pnl": float(i * 2)} for i in range(1, 26)
+        ]
+
+        async def _fake_pnl(*args: object, **kwargs: object) -> list[dict[str, Any]]:
+            return rows
+
+        async def _fake_bench(*args: object, **kwargs: object) -> list[dict[str, Any]]:
+            return bench
+
+        with patch(
+            "sam_trader.services.dashboard._query_daily_pnl_from_fills_async",
+            _fake_pnl,
+        ):
+            with patch(
+                "sam_trader.services.dashboard"
+                "._query_benchmark_daily_pnl_from_fills_async",
+                _fake_bench,
+            ):
+                data = _get_rolling_beta_data(
+                    DashboardConfig(), days=90, window=20, benchmark="SPY.NASDAQ"
+                )
+
+        assert len(data) == 6
+        assert all(abs(p["beta"] - 0.5) < 0.01 for p in data)
+
+
 class TestHtmlTier1Sections:
     """Tests for new Tier 1 HTML sections."""
 

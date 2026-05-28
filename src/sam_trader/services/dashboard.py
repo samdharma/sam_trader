@@ -18,9 +18,13 @@ from urllib.parse import parse_qs, urlparse
 
 from sam_trader.services.dashboard_analytics import (
     EquityPoint,
+    compute_annual_returns,
     compute_drawdown,
     compute_equity_curve,
     compute_kpis,
+    compute_monthly_returns,
+    compute_rolling_beta,
+    compute_rolling_sharpe,
     render_drawdown_svg,
     render_equity_curve_svg,
 )
@@ -592,6 +596,47 @@ async def _query_daily_pnl_from_fills_async(
         await conn.close()
 
 
+async def _query_benchmark_daily_pnl_from_fills_async(
+    config: DashboardConfig,
+    benchmark_instrument: str,
+    days: int = 30,
+) -> list[dict[str, Any]]:
+    """Aggregate daily P&L for a single benchmark instrument from fills."""
+    import asyncpg
+
+    conn = await asyncpg.connect(
+        host=config.pg_host,
+        port=config.pg_port,
+        database=config.pg_db,
+        user=config.pg_user,
+        password=config.pg_password,
+        timeout=10,
+    )
+    try:
+        rows = await conn.fetch(
+            """
+            SELECT
+                DATE(ts_event) AS date,
+                SUM(
+                    CASE WHEN side = 'SELL'
+                        THEN qty * price
+                        ELSE -qty * price
+                    END
+                ) - SUM(COALESCE(commission, 0)) AS pnl
+            FROM fills
+            WHERE ts_event >= CURRENT_DATE - INTERVAL '%s days'
+              AND instrument_id = $1
+            GROUP BY DATE(ts_event)
+            ORDER BY date
+            """,
+            days,
+            benchmark_instrument,
+        )
+        return [dict(r) for r in rows]
+    finally:
+        await conn.close()
+
+
 def _query_daily_pnl_from_redis(
     config: DashboardConfig, days: int = 30
 ) -> list[dict[str, Any]]:
@@ -700,6 +745,60 @@ def _get_performance_data(config: DashboardConfig, days: int = 30) -> dict[str, 
         "expectancy": kpis.expectancy,
         "expectancy_delta": kpis.expectancy_delta,
     }
+
+
+def _get_monthly_returns_data(
+    config: DashboardConfig, days: int = 365
+) -> list[dict[str, Any]]:
+    """Return monthly returns from fills."""
+    try:
+        daily = _run_async(_query_daily_pnl_from_fills_async(config, days))
+        return compute_monthly_returns(daily)
+    except Exception as exc:
+        logger.warning("monthly returns query failed: %s", exc)
+        return []
+
+
+def _get_annual_returns_data(
+    config: DashboardConfig, days: int = 730
+) -> list[dict[str, Any]]:
+    """Return annual returns from fills."""
+    try:
+        daily = _run_async(_query_daily_pnl_from_fills_async(config, days))
+        return compute_annual_returns(daily)
+    except Exception as exc:
+        logger.warning("annual returns query failed: %s", exc)
+        return []
+
+
+def _get_rolling_sharpe_data(
+    config: DashboardConfig, days: int = 90, window: int = 20
+) -> list[dict[str, Any]]:
+    """Return rolling Sharpe from fills."""
+    try:
+        daily = _run_async(_query_daily_pnl_from_fills_async(config, days))
+        return compute_rolling_sharpe(daily, window=window)
+    except Exception as exc:
+        logger.warning("rolling sharpe query failed: %s", exc)
+        return []
+
+
+def _get_rolling_beta_data(
+    config: DashboardConfig,
+    days: int = 90,
+    window: int = 20,
+    benchmark: str = "SPY.NASDAQ",
+) -> list[dict[str, Any]]:
+    """Return rolling Beta from fills against a benchmark instrument."""
+    try:
+        daily = _run_async(_query_daily_pnl_from_fills_async(config, days))
+        bench = _run_async(
+            _query_benchmark_daily_pnl_from_fills_async(config, benchmark, days)
+        )
+        return compute_rolling_beta(daily, benchmark_pnl=bench, window=window)
+    except Exception as exc:
+        logger.warning("rolling beta query failed: %s", exc)
+        return []
 
 
 def query_fills(config: DashboardConfig | None = None) -> list[dict[str, Any]]:
@@ -1268,6 +1367,51 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self._send_json(200, data)
         elif path == "/api/performance":
             data = _get_performance_data(cfg)
+            self._send_json(200, data)
+        elif path == "/api/monthly-returns":
+            parsed = urlparse(path)
+            params = parse_qs(parsed.query)
+            try:
+                days = int(params.get("days", ["365"])[0])
+            except ValueError:
+                days = 365
+            data = {"months": _get_monthly_returns_data(cfg, days)}
+            self._send_json(200, data)
+        elif path == "/api/annual-returns":
+            parsed = urlparse(path)
+            params = parse_qs(parsed.query)
+            try:
+                days = int(params.get("days", ["730"])[0])
+            except ValueError:
+                days = 730
+            data = {"years": _get_annual_returns_data(cfg, days)}
+            self._send_json(200, data)
+        elif path.startswith("/api/rolling-sharpe"):
+            parsed = urlparse(path)
+            params = parse_qs(parsed.query)
+            try:
+                window = int(params.get("window", ["20"])[0])
+            except ValueError:
+                window = 20
+            try:
+                days = int(params.get("days", ["90"])[0])
+            except ValueError:
+                days = 90
+            data = {"points": _get_rolling_sharpe_data(cfg, days, window)}
+            self._send_json(200, data)
+        elif path.startswith("/api/rolling-beta"):
+            parsed = urlparse(path)
+            params = parse_qs(parsed.query)
+            try:
+                window = int(params.get("window", ["20"])[0])
+            except ValueError:
+                window = 20
+            try:
+                days = int(params.get("days", ["90"])[0])
+            except ValueError:
+                days = 90
+            benchmark = params.get("benchmark", ["SPY.NASDAQ"])[0]
+            data = {"points": _get_rolling_beta_data(cfg, days, window, benchmark)}
             self._send_json(200, data)
         else:
             # Serve dashboard HTML for any other path
