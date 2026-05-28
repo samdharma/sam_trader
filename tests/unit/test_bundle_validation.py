@@ -534,3 +534,151 @@ bundles:
         assert any(
             "Each bundle must be a mapping" in e for e in result.bundles[0].errors
         )
+
+
+# ---------------------------------------------------------------------------
+# Risk config validation warnings (AC #1)
+# ---------------------------------------------------------------------------
+
+
+class TestRiskConfigWarnings:
+    """Verify that production bundles warn on unset/zero risk limits."""
+
+    def test_enabled_bundle_no_risk_warns_both(self, tmp_path: pathlib.Path) -> None:
+        """Enabled bundle without risk section warns on both fields."""
+        yaml_content = """
+bundles:
+  - id: "no-risk"
+    enabled: true
+    venue: FUTU
+    strategy:
+      path: sam_trader.strategies.orb:OrbStrategy
+      config:
+        instrument_id: "AAPL.NASDAQ"
+        bar_type: "AAPL.NASDAQ-5-MINUTE-LAST-EXTERNAL"
+"""
+        path = tmp_path / "bundles.yaml"
+        path.write_text(yaml_content)
+
+        result = validate_bundles(str(path), backtest_gate=False)
+        warnings = result.bundles[0].warnings
+        assert any("max_trades_per_day" in w for w in warnings)
+        assert any("trade_cooldown_seconds" in w for w in warnings)
+
+    def test_enabled_bundle_zero_limits_warns(self, tmp_path: pathlib.Path) -> None:
+        """Enabled bundle with risk set to 0 warns."""
+        yaml_content = """
+bundles:
+  - id: "zero-risk"
+    enabled: true
+    venue: FUTU
+    strategy:
+      path: sam_trader.strategies.orb:OrbStrategy
+      config:
+        instrument_id: "AAPL.NASDAQ"
+        bar_type: "AAPL.NASDAQ-5-MINUTE-LAST-EXTERNAL"
+    risk:
+      max_trades_per_day: 0
+      trade_cooldown_seconds: 0
+"""
+        path = tmp_path / "bundles.yaml"
+        path.write_text(yaml_content)
+
+        result = validate_bundles(str(path), backtest_gate=False)
+        warnings = result.bundles[0].warnings
+        assert any("max_trades_per_day" in w for w in warnings)
+        assert any("trade_cooldown_seconds" in w for w in warnings)
+
+    def test_enabled_bundle_negative_limits_warns(self, tmp_path: pathlib.Path) -> None:
+        """Enabled bundle with negative risk values warns."""
+        yaml_content = """
+bundles:
+  - id: "neg-risk"
+    enabled: true
+    venue: FUTU
+    strategy:
+      path: sam_trader.strategies.orb:OrbStrategy
+      config:
+        instrument_id: "AAPL.NASDAQ"
+        bar_type: "AAPL.NASDAQ-5-MINUTE-LAST-EXTERNAL"
+    risk:
+      max_trades_per_day: -1
+      trade_cooldown_seconds: -1
+"""
+        path = tmp_path / "bundles.yaml"
+        path.write_text(yaml_content)
+
+        result = validate_bundles(str(path), backtest_gate=False)
+        warnings = result.bundles[0].warnings
+        assert any("max_trades_per_day" in w for w in warnings)
+        assert any("trade_cooldown_seconds" in w for w in warnings)
+
+    def test_disabled_bundle_no_risk_no_warn(self, tmp_path: pathlib.Path) -> None:
+        """Disabled bundles should not generate risk warnings."""
+        yaml_content = """
+bundles:
+  - id: "disabled-no-risk"
+    enabled: false
+    venue: FUTU
+    strategy:
+      path: sam_trader.strategies.orb:OrbStrategy
+      config:
+        instrument_id: "AAPL.NASDAQ"
+        bar_type: "AAPL.NASDAQ-5-MINUTE-LAST-EXTERNAL"
+"""
+        path = tmp_path / "bundles.yaml"
+        path.write_text(yaml_content)
+
+        result = validate_bundles(str(path), backtest_gate=False)
+        warnings = result.bundles[0].warnings
+        assert not any("max_trades_per_day" in w for w in warnings)
+        assert not any("trade_cooldown_seconds" in w for w in warnings)
+
+    def test_enabled_bundle_with_valid_limits_no_warn(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """Enabled bundle with positive risk limits passes without warning."""
+        yaml_content = """
+bundles:
+  - id: "valid-risk"
+    enabled: true
+    venue: FUTU
+    strategy:
+      path: sam_trader.strategies.orb:OrbStrategy
+      config:
+        instrument_id: "AAPL.NASDAQ"
+        bar_type: "AAPL.NASDAQ-5-MINUTE-LAST-EXTERNAL"
+    risk:
+      max_trades_per_day: 5
+      trade_cooldown_seconds: 300
+"""
+        path = tmp_path / "bundles.yaml"
+        path.write_text(yaml_content)
+
+        result = validate_bundles(str(path), backtest_gate=False)
+        warnings = result.bundles[0].warnings
+        assert not any("max_trades_per_day" in w for w in warnings)
+        assert not any("trade_cooldown_seconds" in w for w in warnings)
+        assert result.bundles[0].passed is True
+
+    def test_warnings_do_not_block_validation(self, tmp_path: pathlib.Path) -> None:
+        """Risk warnings should NOT cause validation failure — they are warnings."""
+        yaml_content = """
+bundles:
+  - id: "warn-but-ok"
+    enabled: true
+    venue: FUTU
+    strategy:
+      path: sam_trader.strategies.orb:OrbStrategy
+      config:
+        instrument_id: "AAPL.NASDAQ"
+        bar_type: "AAPL.NASDAQ-5-MINUTE-LAST-EXTERNAL"
+    risk:
+      max_trades_per_day: 0
+"""
+        path = tmp_path / "bundles.yaml"
+        path.write_text(yaml_content)
+
+        result = validate_bundles(str(path), backtest_gate=False)
+        assert result.bundles[0].passed is True
+        assert any("max_trades_per_day" in w for w in result.bundles[0].warnings)

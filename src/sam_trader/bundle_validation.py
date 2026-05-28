@@ -451,6 +451,25 @@ def validate_bundles(
         schema_errors, schema_warnings = _validate_bundle_schema(bundle)
         all_errors = list(schema_errors)
 
+        # Risk config validation for production (enabled) bundles
+        if enabled:
+            risk = bundle.get("risk", {})
+            if isinstance(risk, dict):
+                mtpd = risk.get("max_trades_per_day")
+                if mtpd is None or (isinstance(mtpd, (int, float)) and mtpd <= 0):
+                    schema_warnings.append(
+                        "risk.max_trades_per_day is 0 or unset — "
+                        "production bundles should set a positive limit "
+                        "to prevent unlimited order submissions"
+                    )
+                tcs = risk.get("trade_cooldown_seconds")
+                if tcs is None or (isinstance(tcs, (int, float)) and tcs <= 0):
+                    schema_warnings.append(
+                        "risk.trade_cooldown_seconds is 0 or unset — "
+                        "production bundles should set a positive cooldown "
+                        "to prevent rapid-fire order submissions"
+                    )
+
         if enabled and not schema_errors:
             strategy_path = bundle.get("strategy", {}).get("path", "")
             if strategy_path:

@@ -9,11 +9,12 @@ from unittest.mock import MagicMock, patch
 
 from nautilus_trader.model.data import Bar, BarType
 from nautilus_trader.model.enums import OrderSide, OrderType
-from nautilus_trader.model.events import OrderFilled
+from nautilus_trader.model.events import OrderAccepted, OrderFilled
 from nautilus_trader.model.identifiers import (
     ClientOrderId,
     InstrumentId,
     StrategyId,
+    TraderId,
     VenueOrderId,
 )
 from nautilus_trader.model.objects import Currency, Price, Quantity
@@ -585,6 +586,27 @@ class TestRiskLimits:
 # ---------------------------------------------------------------------------
 
 
+def _make_order_accepted(
+    client_order_id: ClientOrderId,
+    instrument_id: str = "AAPL.NASDAQ",
+) -> OrderAccepted:
+    from nautilus_trader.core.uuid import UUID4
+    from nautilus_trader.model.identifiers import AccountId
+
+    return OrderAccepted(
+        trader_id=TraderId("SAM-001"),
+        strategy_id=StrategyId("ORB-001"),
+        instrument_id=InstrumentId.from_str(instrument_id),
+        client_order_id=client_order_id,
+        venue_order_id=VenueOrderId("V-001"),
+        account_id=AccountId("FUTU-001"),
+        event_id=UUID4(),
+        reconciliation=False,
+        ts_event=1_700_000_000_000_000_000,
+        ts_init=1_700_000_000_000_000_001,
+    )
+
+
 class TestMaxTradesPerDay:
     def test_limit_blocks_entry_after_reached(self) -> None:
         """Strategy stops entering after max_trades_per_day reached."""
@@ -604,14 +626,24 @@ class TestMaxTradesPerDay:
         strategy.on_bar(_make_bar("100.00", "101.00", "99.00", "100.00"))
         strategy.on_bar(_make_bar("100.50", "102.00", "100.00", "101.00"))
 
-        # Trade 1: breakout enters
+        # Trade 1: breakout submits
         strategy.on_bar(_make_bar("102.50", "103.00", "102.00", "102.80"))
         assert strategy.submit_order_list.call_count == 1
+        # Accept entry order
+        bracket1 = strategy.submit_order_list.call_args.args[0]
+        strategy.on_order_accepted(
+            _make_order_accepted(client_order_id=bracket1.orders[0].client_order_id)
+        )
         assert strategy._trades_today == 1
 
-        # Trade 2: next breakout enters
+        # Trade 2: next breakout submits
         strategy.on_bar(_make_bar("102.50", "103.00", "102.00", "102.80"))
         assert strategy.submit_order_list.call_count == 2
+        # Accept entry order
+        bracket2 = strategy.submit_order_list.call_args.args[0]
+        strategy.on_order_accepted(
+            _make_order_accepted(client_order_id=bracket2.orders[0].client_order_id)
+        )
         assert strategy._trades_today == 2
 
         # Trade 3: should be blocked (limit reached)
@@ -719,6 +751,176 @@ class TestTradeCooldown:
         )
         strategy.on_bar(_make_bar("103.00", "104.00", "102.50", "103.50"))
         assert strategy.submit_order_list.call_count == 2
+
+
+# ---------------------------------------------------------------------------
+# Acceptance-based trade counting
+# ---------------------------------------------------------------------------
+
+
+class TestOrderAcceptanceTracking:
+    """Verify ``_trades_today`` only counts ACCEPTED orders (not submitted ones)."""
+
+    def test_trades_today_zero_after_submission_only(self) -> None:
+        """Counter stays at 0 after submission — only acceptance increments."""
+        strategy = OrbStrategy(
+            _make_config(
+                max_trades_per_day=2, confirmation_bars=1, first_candle_minutes=10
+            )
+        )
+        _register_strategy(strategy)
+        _mock_instrument(strategy)
+        strategy.on_start()
+        strategy.submit_order_list = MagicMock()  # type: ignore[method-assign]
+
+        strategy.on_bar(_make_bar("100.00", "101.00", "99.00", "100.00"))
+        strategy.on_bar(_make_bar("100.50", "102.00", "100.00", "101.00"))
+        strategy.on_bar(_make_bar("102.50", "103.00", "102.00", "102.80"))
+
+        # Order was submitted but NOT yet accepted
+        assert strategy._trades_today == 0
+        assert len(strategy._pending_entry_order_ids) == 1
+
+    def test_trades_today_increments_on_acceptance(self) -> None:
+        """Counter increments ONLY when on_order_accepted fires for the entry."""
+        strategy = OrbStrategy(
+            _make_config(
+                max_trades_per_day=2, confirmation_bars=1, first_candle_minutes=10
+            )
+        )
+        _register_strategy(strategy)
+        _mock_instrument(strategy)
+        strategy.on_start()
+        strategy.submit_order_list = MagicMock()  # type: ignore[method-assign]
+
+        strategy.on_bar(_make_bar("100.00", "101.00", "99.00", "100.00"))
+        strategy.on_bar(_make_bar("100.50", "102.00", "100.00", "101.00"))
+        strategy.on_bar(_make_bar("102.50", "103.00", "102.00", "102.80"))
+
+        assert strategy._trades_today == 0
+
+        # Simulate acceptance of the entry order
+        bracket = strategy.submit_order_list.call_args.args[0]
+        entry_cid = bracket.orders[0].client_order_id
+        accepted = _make_order_accepted(client_order_id=entry_cid)
+        strategy.on_order_accepted(accepted)
+
+        assert strategy._trades_today == 1
+        assert len(strategy._pending_entry_order_ids) == 0
+
+    def test_rejected_order_does_not_count(self) -> None:
+        """No acceptance event → counter stays at 0 (rejected/broken order)."""
+        strategy = OrbStrategy(
+            _make_config(
+                max_trades_per_day=1, confirmation_bars=1, first_candle_minutes=10
+            )
+        )
+        _register_strategy(strategy)
+        _mock_instrument(strategy)
+        strategy.on_start()
+        strategy.submit_order_list = MagicMock()  # type: ignore[method-assign]
+
+        # First attempt: submit but never accept (simulates rejection)
+        strategy.on_bar(_make_bar("100.00", "101.00", "99.00", "100.00"))
+        strategy.on_bar(_make_bar("100.50", "102.00", "100.00", "101.00"))
+        strategy.on_bar(_make_bar("102.50", "103.00", "102.00", "102.80"))
+        assert strategy.submit_order_list.call_count == 1
+        assert strategy._trades_today == 0  # not accepted yet
+
+        # Clear pending IDs to simulate order that was submitted but never accepted
+        strategy._pending_entry_order_ids.clear()
+
+        # Second breakout — should enter because _trades_today is still 0
+        strategy.on_bar(_make_bar("102.50", "103.00", "102.00", "102.80"))
+        assert strategy.submit_order_list.call_count == 2
+
+    def test_max_trades_per_day_blocks_after_acceptance_limit(self) -> None:
+        """After N acceptances, no more entries until reset."""
+        strategy = OrbStrategy(
+            _make_config(
+                max_trades_per_day=2, confirmation_bars=1, first_candle_minutes=10
+            )
+        )
+        _register_strategy(strategy)
+        _mock_instrument(strategy)
+        strategy.on_start()
+        strategy.submit_order_list = MagicMock()  # type: ignore[method-assign]
+
+        strategy.on_bar(_make_bar("100.00", "101.00", "99.00", "100.00"))
+        strategy.on_bar(_make_bar("100.50", "102.00", "100.00", "101.00"))
+
+        # Trade 1: breakout → submit → accept
+        strategy.on_bar(_make_bar("102.50", "103.00", "102.00", "102.80"))
+        bracket1 = strategy.submit_order_list.call_args.args[0]
+        cid1 = bracket1.orders[0].client_order_id
+        strategy.on_order_accepted(_make_order_accepted(client_order_id=cid1))
+        assert strategy._trades_today == 1
+
+        # Trade 2: breakout → submit → accept
+        strategy.on_bar(_make_bar("102.50", "103.00", "102.00", "102.80"))
+        bracket2 = strategy.submit_order_list.call_args.args[0]
+        cid2 = bracket2.orders[0].client_order_id
+        strategy.on_order_accepted(_make_order_accepted(client_order_id=cid2))
+        assert strategy._trades_today == 2
+        assert strategy.submit_order_list.call_count == 2
+
+        # Trade 3: blocked because limit reached
+        strategy.on_bar(_make_bar("103.00", "104.00", "102.50", "103.50"))
+        assert strategy.submit_order_list.call_count == 2
+
+    def test_listen_to_non_entry_acceptance_does_not_count(self) -> None:
+        """Acceptance of SL/TP orders should not increment _trades_today."""
+        strategy = OrbStrategy(
+            _make_config(
+                max_trades_per_day=2, confirmation_bars=1, first_candle_minutes=10
+            )
+        )
+        _register_strategy(strategy)
+        _mock_instrument(strategy)
+        strategy.on_start()
+        strategy.submit_order_list = MagicMock()  # type: ignore[method-assign]
+
+        strategy.on_bar(_make_bar("100.00", "101.00", "99.00", "100.00"))
+        strategy.on_bar(_make_bar("100.50", "102.00", "100.00", "101.00"))
+        strategy.on_bar(_make_bar("102.50", "103.00", "102.00", "102.80"))
+
+        bracket = strategy.submit_order_list.call_args.args[0]
+        entry_cid = bracket.orders[0].client_order_id
+        sl_cid = bracket.orders[1].client_order_id
+        tp_cid = bracket.orders[2].client_order_id
+
+        # SL acceptance should NOT count
+        strategy.on_order_accepted(_make_order_accepted(client_order_id=sl_cid))
+        assert strategy._trades_today == 0
+
+        # TP acceptance should NOT count
+        strategy.on_order_accepted(_make_order_accepted(client_order_id=tp_cid))
+        assert strategy._trades_today == 0
+
+        # Entry acceptance SHOULD count
+        strategy.on_order_accepted(_make_order_accepted(client_order_id=entry_cid))
+        assert strategy._trades_today == 1
+
+    def test_pending_entry_ids_cleared_on_reset(self) -> None:
+        """``on_reset()`` clears the pending-entry tracking set."""
+        strategy = OrbStrategy(
+            _make_config(
+                max_trades_per_day=2, confirmation_bars=1, first_candle_minutes=10
+            )
+        )
+        _register_strategy(strategy)
+        _mock_instrument(strategy)
+        strategy.on_start()
+        strategy.submit_order_list = MagicMock()  # type: ignore[method-assign]
+
+        strategy.on_bar(_make_bar("100.00", "101.00", "99.00", "100.00"))
+        strategy.on_bar(_make_bar("100.50", "102.00", "100.00", "101.00"))
+        strategy.on_bar(_make_bar("102.50", "103.00", "102.00", "102.80"))
+        assert len(strategy._pending_entry_order_ids) == 1
+
+        strategy.on_reset()
+        assert len(strategy._pending_entry_order_ids) == 0
+        assert strategy._trades_today == 0
 
 
 # ---------------------------------------------------------------------------

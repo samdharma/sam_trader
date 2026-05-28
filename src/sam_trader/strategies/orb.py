@@ -9,8 +9,8 @@ from zoneinfo import ZoneInfo
 
 from nautilus_trader.model.data import Bar, BarType
 from nautilus_trader.model.enums import OrderSide, OrderType, TimeInForce
-from nautilus_trader.model.events import OrderFilled
-from nautilus_trader.model.identifiers import InstrumentId
+from nautilus_trader.model.events import OrderAccepted, OrderFilled
+from nautilus_trader.model.identifiers import ClientOrderId, InstrumentId
 from nautilus_trader.model.instruments import Instrument
 from nautilus_trader.trading.strategy import Strategy, StrategyConfig
 
@@ -177,6 +177,9 @@ class OrbStrategy(Strategy):
 
         # Rate-limiting: cooldown between trades
         self._last_flat_time_ns: int = 0
+
+        # Entry-order tracking for acceptance-based trade counting
+        self._pending_entry_order_ids: set[ClientOrderId] = set()
 
         # Cached ATR
         self._cached_atr: float | None = None
@@ -611,7 +614,7 @@ class OrbStrategy(Strategy):
 
         order_list = self.order_factory.bracket(**bracket_kwargs)
         self.submit_order_list(order_list)
-        self._trades_today += 1
+        self._pending_entry_order_ids.add(order_list.orders[0].client_order_id)
 
     def _enter_short(self, bar: Bar) -> None:
         """Enter a short position with a bracket order."""
@@ -660,7 +663,7 @@ class OrbStrategy(Strategy):
 
         order_list = self.order_factory.bracket(**bracket_kwargs)
         self.submit_order_list(order_list)
-        self._trades_today += 1
+        self._pending_entry_order_ids.add(order_list.orders[0].client_order_id)
 
     def _submit_stop_market_entry(
         self,
@@ -680,7 +683,7 @@ class OrbStrategy(Strategy):
         )
         self.submit_order(entry_order)
         self._entry_order = entry_order
-        self._trades_today += 1
+        self._pending_entry_order_ids.add(entry_order.client_order_id)
 
     def _submit_protective_orders(self, order_side: OrderSide) -> None:
         """Submit SL and TP orders after a STOP_MARKET entry fill."""
@@ -722,8 +725,25 @@ class OrbStrategy(Strategy):
         self.submit_order(tp_order)
 
     # ------------------------------------------------------------------
-    # Fill handling
+    # Order event handling
     # ------------------------------------------------------------------
+
+    def on_order_accepted(self, event: OrderAccepted) -> None:
+        """Count accepted entry orders toward the daily trade limit.
+
+        Only entry orders (not stop-loss / take-profit legs of bracket
+        orders) are counted.  An order is recognised as an entry order
+        when its ``client_order_id`` was recorded at submission time.
+
+        """
+        if event.client_order_id in self._pending_entry_order_ids:
+            self._pending_entry_order_ids.discard(event.client_order_id)
+            self._trades_today += 1
+            self.log.info(
+                f"Entry order accepted ({event.client_order_id}). "
+                f"Trades today: {self._trades_today}/"
+                f"{self.config.max_trades_per_day or '∞'}"
+            )
 
     def on_order_filled(self, event: OrderFilled) -> None:
         """Update position tracking and handle STOP_MARKET protective orders."""
@@ -805,6 +825,7 @@ class OrbStrategy(Strategy):
         self._cached_atr = None
         self._entry_order = None
         self._last_flat_time_ns = 0
+        self._pending_entry_order_ids = set()
 
     def on_save(self) -> dict[str, bytes]:
         """Actions to be performed when the strategy is saved."""
