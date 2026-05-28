@@ -41,6 +41,11 @@ from sam_trader.market_config import MarketConfig
 from sam_trader.services.backup import BackupError
 from sam_trader.services.backup import backup as run_backup
 from sam_trader.services.backup import restore as run_restore
+from sam_trader.services.bar_downloader import (
+    BarDownloader,
+    BarDownloaderError,
+    get_instruments_from_bundles,
+)
 from sam_trader.services.bundle_generator import (
     generate_bundles,
     publish_bundles_to_redis,
@@ -2937,6 +2942,107 @@ def switch_market(ctx: click.Context, market: str, timeout: int) -> None:
     _out(ctx, result)
     if result["status"] != "completed":
         raise click.ClickException(result["detail"])
+
+
+@cli.command("download-bars")
+@click.option(
+    "--instrument",
+    default=None,
+    help=(
+        "Specific instrument ID (e.g., TSLA.NASDAQ). "
+        "If omitted, uses all FUTU instruments from bundles.yaml."
+    ),
+)
+@click.option(
+    "--bar-type",
+    "bar_type_spec",
+    default="5-MINUTE",
+    help="Bar type: 1-MINUTE, 5-MINUTE, 15-MINUTE, 1-HOUR, DAY.",
+)
+@click.option(
+    "--lookback",
+    default=365,
+    type=int,
+    help="Number of calendar days to look back (default 365).",
+)
+@click.option(
+    "--catalog",
+    "catalog_path",
+    default="data/catalog",
+    help="Path to Parquet catalog directory.",
+)
+@click.pass_context
+def download_bars(
+    ctx: click.Context,
+    instrument: str | None,
+    bar_type_spec: str,
+    lookback: int,
+    catalog_path: str,
+) -> None:
+    """Download historical bars from Futu OpenD to Parquet catalog.
+
+    Defaults to all enabled FUTU instruments from config/bundles.yaml when
+    --instrument is not specified.
+    """
+    if instrument:
+        instrument_ids = [instrument]
+    else:
+        instrument_ids = get_instruments_from_bundles(DEFAULT_BUNDLES_PATH)
+        if not instrument_ids:
+            raise click.ClickException(
+                "No enabled FUTU instruments found in bundles.yaml. "
+                "Use --instrument to specify one explicitly."
+            )
+
+    downloader = BarDownloader(
+        catalog_path=catalog_path,
+    )
+
+    try:
+        result = asyncio.run(
+            downloader.download(
+                instrument_ids=instrument_ids,
+                bar_type_spec=bar_type_spec,
+                lookback_days=lookback,
+            )
+        )
+    except BarDownloaderError as exc:
+        raise click.ClickException(str(exc))
+
+    summary: dict[str, Any] = {
+        "command": "download-bars",
+        "bar_type": bar_type_spec,
+        "lookback_days": lookback,
+        "instruments": instrument_ids,
+        "total_bars_downloaded": result.total_bars_downloaded,
+        "total_bars_written": result.total_bars_written,
+        "failed": result.instruments_failed,
+    }
+
+    if ctx.obj.get("json"):
+        _out(ctx, summary)
+    else:
+        lines = [
+            f"Download Bars: {bar_type_spec} (lookback={lookback}d)",
+            "=" * 50,
+        ]
+        for r in result.results:
+            if r.error:
+                lines.append(f"{r.instrument_id:<20} [FAIL] {r.error}")
+            else:
+                lines.append(
+                    f"{r.instrument_id:<20} [OK] downloaded={r.bars_downloaded} "
+                    f"({r.start_date} → {r.end_date})"
+                )
+        if result.instruments_failed:
+            lines.append("")
+            lines.append(f"Failed: {', '.join(result.instruments_failed)}")
+        click.echo("\n".join(lines))
+
+    if result.instruments_failed:
+        raise click.ClickException(
+            f"Download failed for {len(result.instruments_failed)} instrument(s)"
+        )
 
 
 def main(argv: list[str] | None = None) -> int:

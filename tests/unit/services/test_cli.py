@@ -2260,6 +2260,159 @@ class TestReportCommand:
         assert "TSLA.NASDAQ" in captured.out
 
 
+class TestDownloadBarsCommand:
+    @patch("sam_trader.services.cli.BarDownloader")
+    def test_download_bars_single_instrument(self, mock_cls: Any, capsys: Any) -> None:
+        mock_downloader = MagicMock()
+        mock_result = MagicMock()
+        mock_result.total_bars_downloaded = 100
+        mock_result.total_bars_written = 100
+        mock_result.instruments_failed = []
+        mock_result.results = [
+            MagicMock(
+                instrument_id="TSLA.NASDAQ",
+                bars_downloaded=100,
+                bars_written=100,
+                start_date="2024-01-01",
+                end_date="2024-01-31",
+                error=None,
+            )
+        ]
+
+        async def _mock_download(*args: Any, **kwargs: Any) -> Any:
+            return mock_result
+
+        mock_downloader.download = _mock_download
+        mock_cls.return_value = mock_downloader
+
+        rc = main(
+            [
+                "download-bars",
+                "--instrument",
+                "TSLA.NASDAQ",
+                "--bar-type",
+                "5-MINUTE",
+                "--lookback",
+                "30",
+            ]
+        )
+        captured = capsys.readouterr()
+        assert rc == 0
+        assert "TSLA.NASDAQ" in captured.out
+        assert "OK" in captured.out
+        mock_cls.assert_called_once_with(catalog_path="data/catalog")
+
+    @patch("sam_trader.services.cli.BarDownloader")
+    @patch("sam_trader.services.cli.get_instruments_from_bundles")
+    def test_download_bars_from_bundles(
+        self, mock_get_inst: Any, mock_cls: Any, capsys: Any
+    ) -> None:
+        mock_get_inst.return_value = ["TSLA.NASDAQ", "AAPL.NASDAQ"]
+        mock_downloader = MagicMock()
+        mock_result = MagicMock()
+        mock_result.total_bars_downloaded = 200
+        mock_result.total_bars_written = 200
+        mock_result.instruments_failed = []
+        mock_result.results = [
+            MagicMock(
+                instrument_id="TSLA.NASDAQ",
+                bars_downloaded=100,
+                bars_written=100,
+                start_date="2024-01-01",
+                end_date="2024-01-31",
+                error=None,
+            ),
+            MagicMock(
+                instrument_id="AAPL.NASDAQ",
+                bars_downloaded=100,
+                bars_written=100,
+                start_date="2024-01-01",
+                end_date="2024-01-31",
+                error=None,
+            ),
+        ]
+
+        async def _mock_download(*args: Any, **kwargs: Any) -> Any:
+            return mock_result
+
+        mock_downloader.download = _mock_download
+        mock_cls.return_value = mock_downloader
+
+        rc = main(["download-bars", "--bar-type", "DAY", "--lookback", "180"])
+        captured = capsys.readouterr()
+        assert rc == 0
+        assert "TSLA.NASDAQ" in captured.out
+        assert "AAPL.NASDAQ" in captured.out
+        mock_get_inst.assert_called_once()
+
+    @patch("sam_trader.services.cli.BarDownloader")
+    def test_download_bars_invalid_bar_type(self, mock_cls: Any, capsys: Any) -> None:
+        mock_downloader = MagicMock()
+
+        async def _mock_download(*args: Any, **kwargs: Any) -> Any:
+            raise Exception("Unsupported bar_type_spec")
+
+        mock_downloader.download = _mock_download
+        mock_cls.return_value = mock_downloader
+
+        rc = main(
+            [
+                "download-bars",
+                "--instrument",
+                "TSLA.NASDAQ",
+                "--bar-type",
+                "TICK",
+            ]
+        )
+        captured = capsys.readouterr()
+        assert rc == 1
+        assert "ERROR" in captured.err or "ERROR" in captured.out
+
+    @patch("sam_trader.services.cli.BarDownloader")
+    def test_download_bars_json_output(self, mock_cls: Any, capsys: Any) -> None:
+        mock_downloader = MagicMock()
+        mock_result = MagicMock()
+        mock_result.total_bars_downloaded = 50
+        mock_result.total_bars_written = 50
+        mock_result.instruments_failed = []
+        mock_result.results = [
+            MagicMock(
+                instrument_id="TSLA.NASDAQ",
+                bars_downloaded=50,
+                bars_written=50,
+                start_date="2024-01-01",
+                end_date="2024-01-31",
+                error=None,
+            )
+        ]
+
+        async def _mock_download(*args: Any, **kwargs: Any) -> Any:
+            return mock_result
+
+        mock_downloader.download = _mock_download
+        mock_cls.return_value = mock_downloader
+
+        rc = main(["--json", "download-bars", "--instrument", "TSLA.NASDAQ"])
+        captured = capsys.readouterr()
+        assert rc == 0
+        data = json.loads(captured.out)
+        assert data["command"] == "download-bars"
+        assert data["total_bars_written"] == 50
+
+    @patch("sam_trader.services.cli.get_instruments_from_bundles")
+    def test_download_bars_no_instruments_no_bundles(
+        self, mock_get_inst: Any, capsys: Any
+    ) -> None:
+        mock_get_inst.return_value = []
+        rc = main(["download-bars"])
+        captured = capsys.readouterr()
+        assert rc == 1
+        assert (
+            "No enabled FUTU instruments" in captured.out
+            or "No enabled FUTU instruments" in captured.err
+        )
+
+
 class TestJsonGlobalFlag:
     @patch("sam_trader.services.cli._run")
     def test_json_flag_on_status(self, mock_run: Any, capsys: Any) -> None:

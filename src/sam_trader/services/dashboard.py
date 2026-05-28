@@ -16,6 +16,14 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Any, Awaitable, TypeVar
 from urllib.parse import parse_qs, urlparse
 
+from sam_trader.services.dashboard_analytics import (
+    EquityPoint,
+    compute_drawdown,
+    compute_equity_curve,
+    compute_kpis,
+    render_drawdown_svg,
+    render_equity_curve_svg,
+)
 from sam_trader.services.db_schema import validate_schema
 from sam_trader.services.market_calendar import MarketCalendarService
 from sam_trader.services.restart_orchestrator import RestartOrchestrator
@@ -51,6 +59,15 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
 .schedule-indicator { font-size:.9rem; margin-bottom:.25rem; }
 .schedule-indicator.open { color:var(--green); }
 .schedule-countdown { color:var(--muted); font-size:.85rem; }
+.kpi-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr));
+  gap:.75rem; margin-bottom:1rem; }
+.kpi-card { border:1px solid var(--border); border-radius:6px; padding:.75rem;
+  text-align:center; }
+.kpi-label { color:var(--muted); font-size:.75rem; text-transform:uppercase;
+  margin-bottom:.25rem; }
+.kpi-value { font-size:1.25rem; font-weight:700; }
+.kpi-delta { font-size:.8rem; margin-top:.25rem; }
+.chart-container { margin-top:.5rem; overflow-x:auto; }
 * { box-sizing:border-box; }
 body {
   margin:0; padding:1rem;
@@ -106,6 +123,51 @@ tr:hover { background:#161b22; }
 <h1>🚀 SAM Trader Dashboard</h1>
 
 {{schedule_banner}}
+
+<div class="card">
+<h2>PERFORMANCE KPIs</h2>
+<div class="kpi-grid">
+  <div class="kpi-card">
+    <div class="kpi-label">Net P&L</div>
+    <div class="kpi-value {{kpi_net_pnl_class}}">{{kpi_net_pnl}}</div>
+    <div class="kpi-delta {{kpi_net_pnl_delta_class}}">{{kpi_net_pnl_delta}}</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">Win Rate</div>
+    <div class="kpi-value">{{kpi_win_rate}}</div>
+    <div class="kpi-delta {{kpi_win_rate_delta_class}}">{{kpi_win_rate_delta}}</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">Sharpe 20d</div>
+    <div class="kpi-value">{{kpi_sharpe}}</div>
+    <div class="kpi-delta {{kpi_sharpe_delta_class}}">{{kpi_sharpe_delta}}</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">Max DD</div>
+    <div class="kpi-value negative">{{kpi_max_dd}}</div>
+    <div class="kpi-delta {{kpi_max_dd_delta_class}}">{{kpi_max_dd_delta}}</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">Expectancy</div>
+    <div class="kpi-value {{kpi_expectancy_class}}">{{kpi_expectancy}}</div>
+    <div class="kpi-delta {{kpi_expectancy_delta_class}}">{{kpi_expectancy_delta}}</div>
+  </div>
+</div>
+</div>
+
+<div class="card">
+<h2>EQUITY CURVE</h2>
+<div class="chart-container">
+{{equity_curve_svg}}
+</div>
+</div>
+
+<div class="card">
+<h2>DRAWDOWN</h2>
+<div class="chart-container">
+{{drawdown_svg}}
+</div>
+</div>
 
 <div class="card">
 <h2>SYSTEM HEALTH</h2>
@@ -179,8 +241,8 @@ tr:hover { background:#161b22; }
 <table>
 <thead>
   <tr>
-    <th>Symbol</th><th>Venue</th><th>Net Qty</th>
-    <th>Avg Px</th><th>Unrealized P&L</th><th>Strategy</th>
+    <th>Symbol</th><th>Venue</th><th>Qty</th>
+    <th>Avg Px</th><th>Mark</th><th>Unrealized P&L</th><th>P&L %</th>
   </tr>
 </thead>
 <tbody>
@@ -489,6 +551,157 @@ async def _query_positions_async(config: DashboardConfig) -> list[dict[str, Any]
         await conn.close()
 
 
+async def _query_daily_pnl_from_fills_async(
+    config: DashboardConfig, days: int = 30
+) -> list[dict[str, Any]]:
+    """Aggregate daily cash-flow P&L from the fills table.
+
+    Uses signed notional minus commission as a proxy for realized P&L.
+    BUY fills = negative cash flow, SELL fills = positive cash flow.
+    """
+    import asyncpg
+
+    conn = await asyncpg.connect(
+        host=config.pg_host,
+        port=config.pg_port,
+        database=config.pg_db,
+        user=config.pg_user,
+        password=config.pg_password,
+        timeout=10,
+    )
+    try:
+        rows = await conn.fetch(
+            """
+            SELECT
+                DATE(ts_event) AS date,
+                SUM(
+                    CASE WHEN side = 'SELL'
+                        THEN qty * price
+                        ELSE -qty * price
+                    END
+                ) - SUM(COALESCE(commission, 0)) AS pnl
+            FROM fills
+            WHERE ts_event >= CURRENT_DATE - INTERVAL '%s days'
+            GROUP BY DATE(ts_event)
+            ORDER BY date
+            """,
+            days,
+        )
+        return [dict(r) for r in rows]
+    finally:
+        await conn.close()
+
+
+def _query_daily_pnl_from_redis(
+    config: DashboardConfig, days: int = 30
+) -> list[dict[str, Any]]:
+    """Read per-strategy daily P&L from Redis and aggregate by date.
+
+    Keys are ``sam:pnl:{strategy_id}:{YYYY-MM-DD}``.
+    Returns rows with ``date`` and ``pnl``.
+    """
+    try:
+        client = _redis_client(config)
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).strftime(
+            "%Y-%m-%d"
+        )
+        daily: dict[str, float] = {}
+        for key in client.scan_iter(match="sam:pnl:*"):
+            key_str = key if isinstance(key, str) else key.decode()
+            parts = key_str.split(":")
+            if len(parts) < 4:
+                continue
+            date_str = parts[3]
+            if date_str < cutoff:
+                continue
+            val = client.get(key)
+            if val is None:
+                continue
+            try:
+                pnl = float(val if isinstance(val, str) else val.decode())
+            except ValueError:
+                continue
+            daily[date_str] = daily.get(date_str, 0.0) + pnl
+
+        return [{"date": d, "pnl": round(v, 2)} for d, v in sorted(daily.items())]
+    except Exception as exc:
+        logger.debug("redis daily pnl query failed: %s", exc)
+        return []
+
+
+def _get_equity_curve_data(
+    config: DashboardConfig, days: int = 30
+) -> list[dict[str, Any]]:
+    """Return equity curve points (date, equity, pnl).
+
+    Prefers Redis ``sam:pnl:*`` keys; falls back to fills table.
+    """
+    redis_pnl = _query_daily_pnl_from_redis(config, days)
+    if redis_pnl:
+        curve = compute_equity_curve(redis_pnl)
+    else:
+        try:
+            fills_pnl = _run_async(_query_daily_pnl_from_fills_async(config, days))
+            curve = compute_equity_curve(fills_pnl)
+        except Exception as exc:
+            logger.warning("equity curve query failed: %s", exc)
+            curve = []
+    return [
+        {"date": p.date, "equity": round(p.equity, 2), "pnl": round(p.pnl, 2)}
+        for p in curve
+    ]
+
+
+def _get_drawdown_data(config: DashboardConfig, days: int = 30) -> dict[str, Any]:
+    """Return drawdown stats and events."""
+    equity_data = _get_equity_curve_data(config, days)
+    from sam_trader.services.dashboard_analytics import EquityPoint
+
+    points = [
+        EquityPoint(date=d["date"], equity=d["equity"], pnl=d["pnl"])
+        for d in equity_data
+    ]
+    dd = compute_drawdown(points)
+    return {
+        "current_dd_pct": dd["current_dd_pct"],
+        "max_dd_pct": dd["max_dd_pct"],
+        "events": [
+            {
+                "start_date": e.start_date,
+                "trough_date": e.trough_date,
+                "end_date": e.end_date,
+                "depth_pct": e.depth_pct,
+                "recovery_days": e.recovery_days,
+            }
+            for e in dd["events"]
+        ],
+    }
+
+
+def _get_performance_data(config: DashboardConfig, days: int = 30) -> dict[str, Any]:
+    """Return 5 KPIs with deltas."""
+    equity_data = _get_equity_curve_data(config, days)
+    from sam_trader.services.dashboard_analytics import EquityPoint
+
+    points = [
+        EquityPoint(date=d["date"], equity=d["equity"], pnl=d["pnl"])
+        for d in equity_data
+    ]
+    kpis = compute_kpis(points, lookback_days=days)
+    return {
+        "net_pnl": kpis.net_pnl,
+        "net_pnl_delta": kpis.net_pnl_delta,
+        "win_rate": kpis.win_rate,
+        "win_rate_delta": kpis.win_rate_delta,
+        "sharpe_20d": kpis.sharpe_20d,
+        "sharpe_20d_delta": kpis.sharpe_20d_delta,
+        "max_drawdown_pct": kpis.max_drawdown_pct,
+        "max_drawdown_delta": kpis.max_drawdown_delta,
+        "expectancy": kpis.expectancy,
+        "expectancy_delta": kpis.expectancy_delta,
+    }
+
+
 def query_fills(config: DashboardConfig | None = None) -> list[dict[str, Any]]:
     """Synchronous wrapper for fills query."""
     cfg = config or DashboardConfig()
@@ -737,6 +950,9 @@ def get_dashboard_data(config: DashboardConfig | None = None) -> dict[str, Any]:
         "positions": query_positions(cfg),
         "pnl": query_pnl_from_redis(cfg),
         "schedule": get_market_schedule_info(cfg),
+        "equity_curve": _get_equity_curve_data(cfg),
+        "drawdown": _get_drawdown_data(cfg),
+        "performance": _get_performance_data(cfg),
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
@@ -867,14 +1083,23 @@ def _render_html(data: dict[str, Any]) -> str:
         upnl = p.get("unrealized_pnl")
         upnl_str = _fmt_num(upnl)
         upnl_cls = _pnl_class(float(upnl) if upnl is not None else 0.0)
+        qty = float(p.get("net_qty") or 0)
+        avg_px = float(p.get("avg_px") or 0)
+        if qty != 0 and avg_px != 0:
+            mark_price = avg_px + (float(upnl or 0) / qty)
+            pnl_pct = (float(upnl or 0) / (abs(qty) * avg_px)) * 100
+        else:
+            mark_price = 0.0
+            pnl_pct = 0.0
         positions_rows.append(
             f"<tr>"
             f"<td>{p.get('symbol', '')}</td>"
             f"<td>{p.get('venue', '')}</td>"
             f"<td>{_fmt_num(p.get('net_qty'))}</td>"
             f"<td>{_fmt_num(p.get('avg_px'))}</td>"
+            f"<td>{_fmt_num(str(mark_price))}</td>"
             f"<td class='{upnl_cls}'>{upnl_str}</td>"
-            f"<td>{p.get('strategy', '')}</td>"
+            f"<td class='{upnl_cls}'>{pnl_pct:+.2f}%</td>"
             f"</tr>"
         )
 
@@ -894,6 +1119,34 @@ def _render_html(data: dict[str, Any]) -> str:
     total_pnl = pnl_data.get("total", 0.0)
 
     schedule_html = _render_schedule_html(data.get("schedule", {}))
+
+    # KPI cards
+    perf = data.get("performance", {})
+    kpi_net_pnl = perf.get("net_pnl", 0.0)
+    kpi_net_pnl_delta = perf.get("net_pnl_delta", 0.0)
+    kpi_win_rate = perf.get("win_rate", 0.0)
+    kpi_win_rate_delta = perf.get("win_rate_delta", 0.0)
+    kpi_sharpe = perf.get("sharpe_20d", 0.0)
+    kpi_sharpe_delta = perf.get("sharpe_20d_delta", 0.0)
+    kpi_max_dd = perf.get("max_drawdown_pct", 0.0)
+    kpi_max_dd_delta = perf.get("max_drawdown_delta", 0.0)
+    kpi_expectancy = perf.get("expectancy", 0.0)
+    kpi_expectancy_delta = perf.get("expectancy_delta", 0.0)
+
+    def _delta_str(v: float) -> str:
+        sign = "+" if v >= 0 else ""
+        return f"{sign}{v:.2f} vs prior"
+
+    def _delta_cls(v: float) -> str:
+        return "positive" if v >= 0 else "negative"
+
+    # Charts
+    equity_points = [
+        EquityPoint(date=d["date"], equity=d["equity"], pnl=d["pnl"])
+        for d in data.get("equity_curve", [])
+    ]
+    equity_svg = render_equity_curve_svg(equity_points)
+    drawdown_svg = render_drawdown_svg(equity_points)
 
     return (
         _DASHBOARD_HTML.replace("{{schedule_banner}}", schedule_html)
@@ -928,12 +1181,31 @@ def _render_html(data: dict[str, Any]) -> str:
             (
                 "\n".join(positions_rows)
                 if positions_rows
-                else "<tr><td colspan='6'>No open positions</td></tr>"
+                else "<tr><td colspan='7'>No open positions</td></tr>"
             ),
         )
         .replace("{{pnl_rows}}", "\n".join(pnl_rows))
         .replace("{{total_pnl}}", _fmt_pnl(total_pnl))
         .replace("{{total_pnl_class}}", _pnl_class(total_pnl))
+        .replace("{{kpi_net_pnl}}", _fmt_pnl(kpi_net_pnl))
+        .replace("{{kpi_net_pnl_class}}", _pnl_class(kpi_net_pnl))
+        .replace("{{kpi_net_pnl_delta}}", _delta_str(kpi_net_pnl_delta))
+        .replace("{{kpi_net_pnl_delta_class}}", _delta_cls(kpi_net_pnl_delta))
+        .replace("{{kpi_win_rate}}", f"{kpi_win_rate:.1f}%")
+        .replace("{{kpi_win_rate_delta}}", _delta_str(kpi_win_rate_delta))
+        .replace("{{kpi_win_rate_delta_class}}", _delta_cls(kpi_win_rate_delta))
+        .replace("{{kpi_sharpe}}", f"{kpi_sharpe:.2f}")
+        .replace("{{kpi_sharpe_delta}}", _delta_str(kpi_sharpe_delta))
+        .replace("{{kpi_sharpe_delta_class}}", _delta_cls(kpi_sharpe_delta))
+        .replace("{{kpi_max_dd}}", f"{kpi_max_dd:.2f}%")
+        .replace("{{kpi_max_dd_delta}}", _delta_str(kpi_max_dd_delta))
+        .replace("{{kpi_max_dd_delta_class}}", _delta_cls(kpi_max_dd_delta))
+        .replace("{{kpi_expectancy}}", _fmt_pnl(kpi_expectancy))
+        .replace("{{kpi_expectancy_class}}", _pnl_class(kpi_expectancy))
+        .replace("{{kpi_expectancy_delta}}", _delta_str(kpi_expectancy_delta))
+        .replace("{{kpi_expectancy_delta_class}}", _delta_cls(kpi_expectancy_delta))
+        .replace("{{equity_curve_svg}}", equity_svg)
+        .replace("{{drawdown_svg}}", drawdown_svg)
         .replace(
             "{{now}}",
             datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
@@ -975,6 +1247,27 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self._send_json(200, data)
         elif path.startswith("/api/bars/recent"):
             data = _handle_bars_recent(path, cfg)
+            self._send_json(200, data)
+        elif path.startswith("/api/equity-curve"):
+            parsed = urlparse(path)
+            params = parse_qs(parsed.query)
+            try:
+                days = int(params.get("days", ["30"])[0])
+            except ValueError:
+                days = 30
+            data = {"points": _get_equity_curve_data(cfg, days)}
+            self._send_json(200, data)
+        elif path.startswith("/api/drawdown"):
+            parsed = urlparse(path)
+            params = parse_qs(parsed.query)
+            try:
+                days = int(params.get("days", ["30"])[0])
+            except ValueError:
+                days = 30
+            data = _get_drawdown_data(cfg, days)
+            self._send_json(200, data)
+        elif path == "/api/performance":
+            data = _get_performance_data(cfg)
             self._send_json(200, data)
         else:
             # Serve dashboard HTML for any other path

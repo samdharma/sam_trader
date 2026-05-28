@@ -1034,6 +1034,307 @@ class TestScheduleHtmlRendering:
         assert data["schedule"]["indicators"] == ["✅ Markets Open"]
 
 
+class TestNewApiEndpoints:
+    """Tests for new Tier 1 analytics API endpoints."""
+
+    def test_get_api_equity_curve(self) -> None:
+        """GET /api/equity-curve returns equity curve points."""
+        from sam_trader.services.dashboard import _get_equity_curve_data
+
+        with patch(
+            "sam_trader.services.dashboard._query_daily_pnl_from_redis",
+            return_value=[
+                {"date": "2026-05-01", "pnl": 100.0},
+                {"date": "2026-05-02", "pnl": 50.0},
+            ],
+        ):
+            data = _get_equity_curve_data(DashboardConfig(), days=7)
+
+        assert len(data) == 2
+        assert data[0]["date"] == "2026-05-01"
+        assert data[0]["equity"] == 100.0
+        assert data[1]["equity"] == 150.0
+
+    def test_get_api_drawdown(self) -> None:
+        """GET /api/drawdown returns drawdown stats and events."""
+        from sam_trader.services.dashboard import _get_drawdown_data
+
+        with patch(
+            "sam_trader.services.dashboard._query_daily_pnl_from_redis",
+            return_value=[
+                {"date": "2026-05-01", "pnl": 100.0},
+                {"date": "2026-05-02", "pnl": -30.0},
+                {"date": "2026-05-03", "pnl": 50.0},
+            ],
+        ):
+            data = _get_drawdown_data(DashboardConfig(), days=7)
+
+        assert "current_dd_pct" in data
+        assert "max_dd_pct" in data
+        assert "events" in data
+        assert data["current_dd_pct"] == 0.0  # Recovered by end
+
+    def test_get_api_performance(self) -> None:
+        """GET /api/performance returns 5 KPIs with deltas."""
+        from sam_trader.services.dashboard import _get_performance_data
+
+        with patch(
+            "sam_trader.services.dashboard._query_daily_pnl_from_redis",
+            return_value=[
+                {"date": "2026-05-01", "pnl": 100.0},
+                {"date": "2026-05-02", "pnl": -30.0},
+                {"date": "2026-05-03", "pnl": 50.0},
+            ],
+        ):
+            data = _get_performance_data(DashboardConfig(), days=7)
+
+        assert "net_pnl" in data
+        assert "win_rate" in data
+        assert "sharpe_20d" in data
+        assert "max_drawdown_pct" in data
+        assert "expectancy" in data
+        assert data["net_pnl"] == 120.0
+
+
+class TestHtmlTier1Sections:
+    """Tests for new Tier 1 HTML sections."""
+
+    def test_html_renders_kpi_cards(self) -> None:
+        """Dashboard HTML includes KPI card section."""
+        data = {
+            "health": {"status": "healthy", "services": {}},
+            "fills": [],
+            "positions": [],
+            "market_data": {
+                "instruments": [],
+                "counts": {},
+                "venues": [],
+                "timestamp": "",
+            },
+            "pnl": {"strategies": {}, "total": 0.0, "date": ""},
+            "performance": {
+                "net_pnl": 1250.0,
+                "net_pnl_delta": 500.0,
+                "win_rate": 65.0,
+                "win_rate_delta": 5.0,
+                "sharpe_20d": 1.25,
+                "sharpe_20d_delta": 0.15,
+                "max_drawdown_pct": -8.5,
+                "max_drawdown_delta": -1.2,
+                "expectancy": 45.0,
+                "expectancy_delta": 10.0,
+            },
+            "equity_curve": [
+                {"date": "2026-05-01", "equity": 100.0, "pnl": 100.0},
+                {"date": "2026-05-02", "equity": 150.0, "pnl": 50.0},
+            ],
+            "drawdown": {
+                "current_dd_pct": 0.0,
+                "max_dd_pct": 0.0,
+                "events": [],
+            },
+            "timestamp": "",
+        }
+
+        from sam_trader.services.dashboard import _render_html
+
+        html = _render_html(data)
+
+        assert "PERFORMANCE KPIs" in html
+        assert "Net P&L" in html
+        assert "Win Rate" in html
+        assert "Sharpe 20d" in html
+        assert "Max DD" in html
+        assert "Expectancy" in html
+        assert "+$1,250.00" in html
+        assert "65.0%" in html
+        assert "1.25" in html
+        assert "-8.50%" in html
+        assert "+$45.00" in html
+
+    def test_html_renders_equity_curve(self) -> None:
+        """Dashboard HTML includes equity curve SVG chart."""
+        data = {
+            "health": {"status": "healthy", "services": {}},
+            "fills": [],
+            "positions": [],
+            "market_data": {
+                "instruments": [],
+                "counts": {},
+                "venues": [],
+                "timestamp": "",
+            },
+            "pnl": {"strategies": {}, "total": 0.0, "date": ""},
+            "performance": {
+                "net_pnl": 0.0,
+                "net_pnl_delta": 0.0,
+                "win_rate": 0.0,
+                "win_rate_delta": 0.0,
+                "sharpe_20d": 0.0,
+                "sharpe_20d_delta": 0.0,
+                "max_drawdown_pct": 0.0,
+                "max_drawdown_delta": 0.0,
+                "expectancy": 0.0,
+                "expectancy_delta": 0.0,
+            },
+            "equity_curve": [
+                {"date": "2026-05-01", "equity": 100.0, "pnl": 100.0},
+                {"date": "2026-05-02", "equity": 150.0, "pnl": 50.0},
+            ],
+            "drawdown": {
+                "current_dd_pct": 0.0,
+                "max_dd_pct": 0.0,
+                "events": [],
+            },
+            "timestamp": "",
+        }
+
+        from sam_trader.services.dashboard import _render_html
+
+        html = _render_html(data)
+
+        assert "EQUITY CURVE" in html
+        assert "<svg" in html
+        assert "</svg>" in html
+
+    def test_html_renders_drawdown(self) -> None:
+        """Dashboard HTML includes drawdown SVG chart."""
+        data = {
+            "health": {"status": "healthy", "services": {}},
+            "fills": [],
+            "positions": [],
+            "market_data": {
+                "instruments": [],
+                "counts": {},
+                "venues": [],
+                "timestamp": "",
+            },
+            "pnl": {"strategies": {}, "total": 0.0, "date": ""},
+            "performance": {
+                "net_pnl": 0.0,
+                "net_pnl_delta": 0.0,
+                "win_rate": 0.0,
+                "win_rate_delta": 0.0,
+                "sharpe_20d": 0.0,
+                "sharpe_20d_delta": 0.0,
+                "max_drawdown_pct": 0.0,
+                "max_drawdown_delta": 0.0,
+                "expectancy": 0.0,
+                "expectancy_delta": 0.0,
+            },
+            "equity_curve": [
+                {"date": "2026-05-01", "equity": 100.0, "pnl": 100.0},
+                {"date": "2026-05-02", "equity": 150.0, "pnl": 50.0},
+            ],
+            "drawdown": {
+                "current_dd_pct": 0.0,
+                "max_dd_pct": 0.0,
+                "events": [],
+            },
+            "timestamp": "",
+        }
+
+        from sam_trader.services.dashboard import _render_html
+
+        html = _render_html(data)
+
+        assert "DRAWDOWN" in html
+        assert "<svg" in html
+
+    def test_html_positions_include_mark_and_pnl_pct(self) -> None:
+        """Positions table includes mark price and P&L %."""
+        data = {
+            "health": {"status": "healthy", "services": {}},
+            "fills": [],
+            "positions": [
+                {
+                    "symbol": "TSLA.NASDAQ",
+                    "venue": "FUTU",
+                    "net_qty": "100",
+                    "avg_px": "245.30",
+                    "unrealized_pnl": "125.00",
+                    "strategy": "tsla-orb",
+                }
+            ],
+            "market_data": {
+                "instruments": [],
+                "counts": {},
+                "venues": [],
+                "timestamp": "",
+            },
+            "pnl": {"strategies": {}, "total": 0.0, "date": ""},
+            "performance": {
+                "net_pnl": 0.0,
+                "net_pnl_delta": 0.0,
+                "win_rate": 0.0,
+                "win_rate_delta": 0.0,
+                "sharpe_20d": 0.0,
+                "sharpe_20d_delta": 0.0,
+                "max_drawdown_pct": 0.0,
+                "max_drawdown_delta": 0.0,
+                "expectancy": 0.0,
+                "expectancy_delta": 0.0,
+            },
+            "equity_curve": [],
+            "drawdown": {
+                "current_dd_pct": 0.0,
+                "max_dd_pct": 0.0,
+                "events": [],
+            },
+            "timestamp": "",
+        }
+
+        from sam_trader.services.dashboard import _render_html
+
+        html = _render_html(data)
+
+        # Mark price = 245.30 + (125/100) = 246.55
+        assert "246.55" in html
+        # P&L % = 125 / (100 * 245.30) * 100 = 0.51%
+        assert "+0.51%" in html
+        assert "CURRENT POSITIONS" in html
+
+    def test_html_positions_no_open_positions_message(self) -> None:
+        """Empty positions shows 7-column no-data message."""
+        data = {
+            "health": {"status": "healthy", "services": {}},
+            "fills": [],
+            "positions": [],
+            "market_data": {
+                "instruments": [],
+                "counts": {},
+                "venues": [],
+                "timestamp": "",
+            },
+            "pnl": {"strategies": {}, "total": 0.0, "date": ""},
+            "performance": {
+                "net_pnl": 0.0,
+                "net_pnl_delta": 0.0,
+                "win_rate": 0.0,
+                "win_rate_delta": 0.0,
+                "sharpe_20d": 0.0,
+                "sharpe_20d_delta": 0.0,
+                "max_drawdown_pct": 0.0,
+                "max_drawdown_delta": 0.0,
+                "expectancy": 0.0,
+                "expectancy_delta": 0.0,
+            },
+            "equity_curve": [],
+            "drawdown": {
+                "current_dd_pct": 0.0,
+                "max_dd_pct": 0.0,
+                "events": [],
+            },
+            "timestamp": "",
+        }
+
+        from sam_trader.services.dashboard import _render_html
+
+        html = _render_html(data)
+        assert "No open positions" in html
+        assert "colspan='7'" in html
+
+
 class TestDashboardStartup:
     """Tests for dashboard main() startup behaviour including schema validation."""
 
