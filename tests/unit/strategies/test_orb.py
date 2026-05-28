@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pickle
 from datetime import timezone
 from decimal import Decimal
 from typing import Any
@@ -1177,6 +1178,75 @@ class TestStatePersistence:
         assert strategy._range_established is True
         assert strategy._range_high == 102.0
         assert strategy._range_low == 99.0
+
+    def test_on_save_includes_instrument_id(self) -> None:
+        """Saved state includes _config_instrument_id for cross-market guard."""
+        strategy = OrbStrategy(_make_config(instrument_id="TSLA.NASDAQ"))
+        _register_strategy(strategy)
+
+        state = strategy.on_save()
+        data = pickle.loads(state["state"])
+        assert data["_config_instrument_id"] == "TSLA.NASDAQ"
+
+    def test_on_load_rejects_cross_instrument_state(self) -> None:
+        """State from HK instrument is discarded when config is US."""
+        # Create state with HK instrument (manually — no on_start needed)
+        hk_strategy = OrbStrategy(_make_config(instrument_id="00700.HKEX"))
+        _register_strategy(hk_strategy)
+        saved = hk_strategy.on_save()  # includes _config_instrument_id="00700.HKEX"
+
+        # Now load into a US-configured strategy
+        us_strategy = OrbStrategy(_make_config(instrument_id="RDW.NYSE"))
+        _register_strategy(us_strategy)
+
+        # State should be rejected — instrument_id mismatch
+        us_strategy.on_load(saved)
+        # After rejection, state should still be at defaults
+        assert us_strategy._range_established is False
+        assert us_strategy._range_high is None
+        assert us_strategy._range_low is None
+
+    def test_on_load_accepts_same_instrument_state(self) -> None:
+        """State from same instrument is loaded normally."""
+        strategy_a = OrbStrategy(_make_config(instrument_id="AAPL.NASDAQ"))
+        _register_strategy(strategy_a)
+        # Set state manually (no on_start/on_bar needed for serialize test)
+        strategy_a._range_high = 155.0
+        strategy_a._range_low = 148.0
+        strategy_a._range_established = True
+        strategy_a._bars_seen = 5
+        strategy_a._daily_loss = 50.0
+        saved = strategy_a.on_save()
+
+        # Load into a fresh strategy with same instrument
+        strategy_b = OrbStrategy(_make_config(instrument_id="AAPL.NASDAQ"))
+        _register_strategy(strategy_b)
+        strategy_b.on_load(saved)
+        assert strategy_b._range_established is True
+        assert strategy_b._range_high == 155.0
+        assert strategy_b._range_low == 148.0
+        assert strategy_b._daily_loss == 50.0
+
+    def test_on_load_backward_compat_no_instrument_id(self) -> None:
+        """State without _config_instrument_id (old format) loads normally."""
+        strategy = OrbStrategy(_make_config(instrument_id="AAPL.NASDAQ"))
+        _register_strategy(strategy)
+
+        # Simulate old-style state (no instrument_id key)
+        old_state = {
+            "state": pickle.dumps(
+                {
+                    "_range_high": 155.0,
+                    "_range_low": 148.0,
+                    "_bars_seen": 5,
+                    "_range_established": True,
+                }
+            )
+        }
+        strategy.on_load(old_state)
+        # Should still load normally (backward compat)
+        assert strategy._range_established is True
+        assert strategy._range_high == 155.0
 
 
 # ---------------------------------------------------------------------------

@@ -557,6 +557,7 @@ class MomentumStrategy(Strategy):
         return {
             "state": pickle.dumps(
                 {
+                    "_config_instrument_id": self.config.instrument_id,
                     "_closes": list(self._closes),
                     "_daily_loss": self._daily_loss,
                     "_position_qty": self._position_qty,
@@ -572,6 +573,19 @@ class MomentumStrategy(Strategy):
         if raw is None:
             return
         data = pickle.loads(raw)
+
+        # Market-aware state guard: discard state from a different
+        # instrument.  Prevents cross-market contamination when the
+        # MARKET env var changes between restarts.
+        saved_inst = data.get("_config_instrument_id")
+        if saved_inst is not None and saved_inst != self.config.instrument_id:
+            self.log.warning(
+                f"State rejected: saved instrument {saved_inst!r} does not match "
+                f"config instrument {self.config.instrument_id!r}. "
+                f"Discarding stale state."
+            )
+            return
+
         closes = data.get("_closes", [])
         self._closes.clear()
         self._closes.extend(closes)

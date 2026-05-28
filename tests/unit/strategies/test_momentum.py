@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pickle
 from datetime import time, timezone
 from decimal import Decimal
 from typing import Any
@@ -696,6 +697,60 @@ class TestStatePersistence:
         strategy.on_load(state)
         assert len(strategy._closes) == 10
         assert strategy._daily_loss == 50.0
+
+    def test_on_save_includes_instrument_id(self) -> None:
+        """Saved state includes _config_instrument_id for cross-market guard."""
+        strategy = MomentumStrategy(_make_config(instrument_id="TSLA.NASDAQ"))
+        _register_strategy(strategy)
+
+        state = strategy.on_save()
+        data = pickle.loads(state["state"])
+        assert data["_config_instrument_id"] == "TSLA.NASDAQ"
+
+    def test_on_load_rejects_cross_instrument_state(self) -> None:
+        """State from HK instrument is discarded when config is US."""
+        hk_strategy = MomentumStrategy(_make_config(instrument_id="00700.HKEX"))
+        _register_strategy(hk_strategy)
+        hk_state = hk_strategy.on_save()
+
+        us_strategy = MomentumStrategy(_make_config(instrument_id="RDW.NYSE"))
+        _register_strategy(us_strategy)
+
+        # State should be rejected — instrument mismatch
+        us_strategy.on_load(hk_state)
+        assert len(us_strategy._closes) == 0
+        assert us_strategy._daily_loss == 0.0
+
+    def test_on_load_accepts_same_instrument_state(self) -> None:
+        """State from same instrument is loaded normally."""
+        strategy_a = MomentumStrategy(_make_config(instrument_id="AAPL.NASDAQ"))
+        _register_strategy(strategy_a)
+        strategy_a._closes.extend([100.0, 101.0, 102.0])
+        strategy_a._daily_loss = 25.0
+        saved = strategy_a.on_save()
+
+        strategy_b = MomentumStrategy(_make_config(instrument_id="AAPL.NASDAQ"))
+        _register_strategy(strategy_b)
+        strategy_b.on_load(saved)
+        assert len(strategy_b._closes) == 3
+        assert strategy_b._daily_loss == 25.0
+
+    def test_on_load_backward_compat_no_instrument_id(self) -> None:
+        """State without _config_instrument_id (old format) loads normally."""
+        strategy = MomentumStrategy(_make_config(instrument_id="AAPL.NASDAQ"))
+        _register_strategy(strategy)
+
+        old_state = {
+            "state": pickle.dumps(
+                {
+                    "_closes": [100.0, 101.0],
+                    "_daily_loss": 10.0,
+                }
+            )
+        }
+        strategy.on_load(old_state)
+        assert len(strategy._closes) == 2
+        assert strategy._daily_loss == 10.0
 
 
 # ---------------------------------------------------------------------------

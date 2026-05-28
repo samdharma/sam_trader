@@ -130,7 +130,17 @@ def _load_bundle(bundle: dict[str, Any]) -> ImportableStrategyConfig:
     config.setdefault("venue", venue)
 
     # Preserve bundle ID so permission checks and logs can reference it
-    config.setdefault("bundle_id", bundle.get("id", "unknown"))
+    bundle_id = bundle.get("id", "unknown")
+    config.setdefault("bundle_id", bundle_id)
+
+    # Market-aware strategy_id for Redis state key isolation.
+    # Nautilus uses config.strategy_id (or class name if None) as the
+    # component_id prefix in Redis state keys.  Including the market
+    # prefix prevents cross-market state contamination when switching
+    # between HK/US sessions.
+    #   US-orb_rdw_1m-000  vs  HK-orb_07666_1m-000
+    if bundle_id != "unknown":
+        config.setdefault("strategy_id", f"{market}-{bundle_id}")
 
     # Pass through optional metadata fields so strategies can access them
     for meta_key in ("family", "version", "variant"):

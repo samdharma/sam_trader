@@ -442,3 +442,96 @@ bundles:
         assert "family" not in cfg
         assert "version" not in cfg
         assert "variant" not in cfg
+
+    def test_strategy_id_includes_market_prefix_us(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """US bundles get 'US-' prefixed strategy_id for state key isolation."""
+        yaml_content = """
+bundles:
+  - id: "orb-rdw"
+    enabled: true
+    venue: FUTU
+    market: US
+    strategy:
+      path: sam_trader.strategies.orb:OrbStrategy
+      config:
+        instrument_id: "RDW.NYSE"
+        bar_type: "RDW.NYSE-1-MINUTE-LAST-EXTERNAL"
+"""
+        path = tmp_path / "bundles.yaml"
+        path.write_text(yaml_content)
+
+        configs = load_bundles(str(path))
+        assert len(configs) == 1
+        assert configs[0].config["strategy_id"] == "US-orb-rdw"
+
+    def test_strategy_id_includes_market_prefix_hk(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """HK bundles get 'HK-' prefixed strategy_id for state key isolation."""
+        yaml_content = """
+bundles:
+  - id: "orb-07666"
+    enabled: true
+    venue: FUTU
+    market: HK
+    strategy:
+      path: sam_trader.strategies.orb:OrbStrategy
+      config:
+        instrument_id: "07666.HKEX"
+        bar_type: "07666.HKEX-1-MINUTE-LAST-EXTERNAL"
+"""
+        path = tmp_path / "bundles.yaml"
+        path.write_text(yaml_content)
+
+        configs = load_bundles(str(path))
+        assert len(configs) == 1
+        assert configs[0].config["strategy_id"] == "HK-orb-07666"
+
+    def test_strategy_id_default_market_when_missing(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """Bundles without explicit market default to US prefix."""
+        yaml_content = """
+bundles:
+  - id: "orb-legacy"
+    enabled: true
+    venue: FUTU
+    strategy:
+      path: sam_trader.strategies.orb:OrbStrategy
+      config:
+        instrument_id: "TSLA.NASDAQ"
+        bar_type: "TSLA.NASDAQ-5-MINUTE-LAST-EXTERNAL"
+"""
+        path = tmp_path / "bundles.yaml"
+        path.write_text(yaml_content)
+
+        configs = load_bundles(str(path))
+        assert len(configs) == 1
+        assert configs[0].config["strategy_id"] == "US-orb-legacy"
+
+    def test_strategy_id_respects_explicit_override(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """Explicit strategy_id in config is preserved, not overwritten."""
+        yaml_content = """
+bundles:
+  - id: "orb-custom"
+    enabled: true
+    venue: FUTU
+    market: US
+    strategy:
+      path: sam_trader.strategies.orb:OrbStrategy
+      config:
+        instrument_id: "AAPL.NASDAQ"
+        bar_type: "AAPL.NASDAQ-5-MINUTE-LAST-EXTERNAL"
+        strategy_id: "CUSTOM-PREFIX-orb"
+"""
+        path = tmp_path / "bundles.yaml"
+        path.write_text(yaml_content)
+
+        configs = load_bundles(str(path))
+        assert len(configs) == 1
+        # Explicit override should be respected via setdefault
+        assert configs[0].config["strategy_id"] == "CUSTOM-PREFIX-orb"
