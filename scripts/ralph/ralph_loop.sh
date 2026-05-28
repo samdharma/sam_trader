@@ -212,6 +212,15 @@ ITERATION=0
 while true; do
     ITERATION=$((ITERATION + 1))
 
+    # --- Pull latest code from remote ---
+    echo "[RALPH] Pulling latest code from origin/master..."
+    if ! git pull --rebase origin master 2>&1; then
+        echo "[RALPH] ERROR: Failed to pull latest code from origin/master."
+        echo "[RALPH] Please resolve conflicts manually and restart the loop."
+        exit 1
+    fi
+    echo "[RALPH] Code is up to date."
+
     # --- Get ready tasks from beads ---
     if [[ ${SINGLE_SHOT} -eq 0 ]]; then
         if [[ -n "${BEADS_TAG}" ]]; then

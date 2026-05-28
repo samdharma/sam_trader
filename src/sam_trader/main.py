@@ -126,11 +126,16 @@ def build_trading_node() -> TradingNode:
             if venue == "IB" and not cfg.ib_enabled:
                 skipped.append(bundle.config.get("bundle_id", "unknown"))
                 continue
+            # Prevent cross-market contamination: skip bundles for other markets
+            bundle_market = bundle.config.get("market", "US")
+            if cfg.market and bundle_market != cfg.market:
+                skipped.append(bundle.config.get("bundle_id", "unknown"))
+                continue
             strategies.append(bundle)
 
         if skipped:
             logger.info(
-                "Skipped %d bundle(s) for disabled venue(s): %s",
+                "Skipped %d bundle(s) for disabled venue/market: %s",
                 len(skipped),
                 skipped,
             )

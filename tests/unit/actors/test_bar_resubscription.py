@@ -419,12 +419,14 @@ class TestBarResubscriptionActorCalendar:
             clock=TestComponentStubs.clock(),
         )
         actor.on_start()
+        # Simulate a holiday by making _is_market_hours return False.
         actor._last_bar_times[bar_type] = datetime(
             2024, 7, 4, 10, 0, 0, tzinfo=timezone.utc
         )
-        with patch.object(actor, "_force_resubscription") as mock_force:
-            actor._on_staleness_check()
-            mock_force.assert_not_called()
+        with patch.object(actor, "_is_market_hours", return_value=False):
+            with patch.object(actor, "_force_resubscription") as mock_force:
+                actor._on_staleness_check()
+                mock_force.assert_not_called()
 
 
 class TestBarResubscriptionActorHK:

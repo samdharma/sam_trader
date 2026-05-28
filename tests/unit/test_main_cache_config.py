@@ -21,6 +21,12 @@ class _FakeNode:
     def __init__(self, config: object) -> None:
         self._config = config
 
+    def add_data_client_factory(self, name: str, factory: object) -> None:
+        pass
+
+    def add_exec_client_factory(self, name: str, factory: object) -> None:
+        pass
+
 
 class TestCacheConfigWiring:
     """Tests that Redis CacheConfig is correctly wired from env vars."""
@@ -30,8 +36,10 @@ class TestCacheConfigWiring:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """CacheConfig with DatabaseConfig created when state persistence enabled."""
+        # Enable Futu so the load-state guard (zero exec clients) does not trigger.
         monkeypatch.setenv("IB_ENABLED", "false")
-        monkeypatch.setenv("FUTU_ENABLED", "false")
+        monkeypatch.setenv("FUTU_ENABLED", "true")
+        monkeypatch.setenv("FUTU_ACCOUNT_PWD_MD5", "test")
         monkeypatch.setenv("BUNDLES_PATH", "config/nonexistent_bundles.yaml")
         monkeypatch.setenv("STATE_SAVE_ENABLED", "true")
         monkeypatch.setenv("STATE_LOAD_ENABLED", "true")
