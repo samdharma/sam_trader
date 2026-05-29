@@ -16,6 +16,15 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Any, Awaitable, TypeVar
 from urllib.parse import parse_qs, urlparse
 
+from sam_trader.services.backtest.dashboard_api import (
+    handle_backtest_catalog_instruments,
+    handle_backtest_catalog_status,
+    handle_backtest_compare,
+    handle_backtest_run,
+    handle_backtest_run_status,
+    handle_backtest_runs,
+    handle_backtest_runs_detail,
+)
 from sam_trader.services.dashboard_analytics import (
     EquityPoint,
     compute_annual_returns,
@@ -1318,7 +1327,8 @@ def _render_html(data: dict[str, Any]) -> str:
 
 
 class DashboardHandler(BaseHTTPRequestHandler):
-    """Handle GET /health, GET /api/dashboard, and serve dashboard.html."""
+    """Handle GET /health, GET /api/dashboard, backtest API, and
+    serve dashboard.html."""
 
     def log_message(self, format: str, *args: Any) -> None:
         logger.debug(format, *args)
@@ -1334,6 +1344,21 @@ class DashboardHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.end_headers()
         self.wfile.write(html.encode())
+
+    def do_POST(self) -> None:  # noqa: N802
+        path = self.path
+        if path == "/api/backtest/run":
+            try:
+                content_length = int(self.headers.get("Content-Length", 0))
+                body_raw = self.rfile.read(content_length)
+                body = json.loads(body_raw) if body_raw else {}
+            except (json.JSONDecodeError, ValueError) as exc:
+                self._send_json(400, {"error": f"Invalid JSON: {exc}"})
+                return
+            data = handle_backtest_run(body)
+            self._send_json(200 if "error" not in data else 400, data)
+        else:
+            self._send_json(404, {"error": "Not found"})
 
     def do_GET(self) -> None:  # noqa: N802
         path = self.path
@@ -1412,6 +1437,52 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 days = 90
             benchmark = params.get("benchmark", ["SPY.NASDAQ"])[0]
             data = {"points": _get_rolling_beta_data(cfg, days, window, benchmark)}
+            self._send_json(200, data)
+        elif path.startswith("/api/backtest/run/"):
+            # /api/backtest/run/<id>/status
+            parts = path.split("/")
+            if len(parts) >= 5 and parts[-1] == "status":
+                run_id = parts[-2]
+                data = handle_backtest_run_status(run_id)
+                status_code = 200 if "error" not in data else 404
+                self._send_json(status_code, data)
+            else:
+                self._send_json(404, {"error": "Not found"})
+        elif path == "/api/backtest/runs":
+            parsed = urlparse(path)
+            params = parse_qs(parsed.query)
+            try:
+                limit = int(params.get("limit", ["50"])[0])
+            except ValueError:
+                limit = 50
+            data = handle_backtest_runs(limit=limit)  # type: ignore[assignment]
+            self._send_json(200, data)
+        elif path.startswith("/api/backtest/runs/"):
+            # /api/backtest/runs/<id>
+            parts = path.split("/")
+            if len(parts) == 5:
+                run_id = parts[-1]
+                data = handle_backtest_runs_detail(run_id)
+                status_code = 200 if "error" not in data else 404
+                self._send_json(status_code, data)
+            else:
+                self._send_json(404, {"error": "Not found"})
+        elif path.startswith("/api/backtest/compare"):
+            parsed = urlparse(path)
+            params = parse_qs(parsed.query)
+            runs_raw = params.get("runs", [""])[0]
+            run_ids = [r.strip() for r in runs_raw.split(",") if r.strip()]
+            data = (
+                handle_backtest_compare(run_ids)
+                if run_ids
+                else {"error": "Missing runs parameter"}
+            )
+            self._send_json(200 if "error" not in data else 400, data)
+        elif path == "/api/backtest/catalog/instruments":
+            data = handle_backtest_catalog_instruments()  # type: ignore[assignment]
+            self._send_json(200, data)
+        elif path == "/api/backtest/catalog/status":
+            data = handle_backtest_catalog_status()
             self._send_json(200, data)
         else:
             # Serve dashboard HTML for any other path

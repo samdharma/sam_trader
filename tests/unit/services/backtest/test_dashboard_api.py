@@ -1,0 +1,760 @@
+"""Unit tests for backtest dashboard REST API handlers."""
+
+from __future__ import annotations
+
+import threading
+from datetime import date, datetime, timezone
+from pathlib import Path
+from typing import Any
+from unittest.mock import MagicMock, patch
+
+from sam_trader.services.backtest.dashboard_api import (
+    _discover_bar_types,
+    _generate_run_id,
+    _get_catalog,
+    _run_registry,
+    _run_registry_lock,
+    handle_backtest_catalog_instruments,
+    handle_backtest_catalog_status,
+    handle_backtest_compare,
+    handle_backtest_run,
+    handle_backtest_run_status,
+    handle_backtest_runs,
+    handle_backtest_runs_detail,
+)
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _mock_store_rows(*rows: dict[str, Any]) -> MagicMock:
+    """Create a store mock that returns given rows from get_all and related methods."""
+    store = MagicMock()
+    store.get_all = MagicMock()
+    store.get_by_run_id = MagicMock()
+    store.get_by_run_ids = MagicMock()
+
+    async def _get_all(*args: Any, **kwargs: Any) -> list[dict[str, Any]]:
+        return list(rows)
+
+    async def _get_by_run_id(run_id: str) -> dict[str, Any] | None:
+        for r in rows:
+            if r.get("run_id") == run_id:
+                return r
+        return None
+
+    async def _get_by_run_ids(run_ids: list[str]) -> list[dict[str, Any]]:
+        return [r for r in rows if r.get("run_id") in run_ids]
+
+    store.get_all.side_effect = _get_all
+    store.get_by_run_id.side_effect = _get_by_run_id
+    store.get_by_run_ids.side_effect = _get_by_run_ids
+    return store
+
+
+def _make_row(
+    run_id: str = "bt-001",
+    strategy_id: str = "tsla-orb",
+    instrument_id: str = "TSLA.NASDAQ",
+    bar_type: str = "TSLA.NASDAQ-5-MINUTE-LAST-EXTERNAL",
+    start_date: date = date(2024, 1, 1),
+    end_date: date = date(2024, 6, 30),
+    status: str = "completed",
+    total_events: int = 1000,
+    total_orders: int = 20,
+    total_positions: int = 10,
+    elapsed_secs: float = 5.5,
+    stats_returns: dict[str, Any] | None = None,
+    stats_pnls: dict[str, Any] | None = None,
+    equity_curve: list[dict] | None = None,
+    strategy_family: str | None = "ORB",
+    strategy_version: str | None = "1.0",
+    tags: list[str] | None = None,
+    created_at: datetime | None = None,
+) -> dict[str, Any]:
+    return {
+        "run_id": run_id,
+        "strategy_id": strategy_id,
+        "instrument_id": instrument_id,
+        "bar_type": bar_type,
+        "start_date": start_date,
+        "end_date": end_date,
+        "status": status,
+        "total_events": total_events,
+        "total_orders": total_orders,
+        "total_positions": total_positions,
+        "elapsed_secs": elapsed_secs,
+        "stats_returns": stats_returns or {"sharpe_ratio": 1.5, "total_pnl": 5000.0},
+        "stats_pnls": stats_pnls or {},
+        "equity_curve": equity_curve or [],
+        "error_message": None,
+        "strategy_family": strategy_family,
+        "strategy_version": strategy_version,
+        "tags": tags or [],
+        "created_at": created_at
+        or datetime(2024, 6, 30, 12, 0, 0, tzinfo=timezone.utc),
+    }
+
+
+def _clear_run_registry() -> None:
+    """Clear the in-memory run registry between tests."""
+    with _run_registry_lock:
+        _run_registry.clear()
+
+
+# ---------------------------------------------------------------------------
+# handle_backtest_run (POST /api/backtest/run)
+# ---------------------------------------------------------------------------
+
+
+class TestHandleBacktestRun:
+    """Tests for POST /api/backtest/run — launch asynchronous backtest."""
+
+    def test_minimal_body(self) -> None:
+        """Launch with required fields only."""
+        body = {
+            "strategy_id": "tsla-orb",
+            "instrument_ids": ["TSLA.NASDAQ"],
+            "start": "2024-01-01",
+            "end": "2024-06-30",
+        }
+        _clear_run_registry()
+        with patch(
+            "sam_trader.services.backtest.dashboard_api._get_catalog",
+            return_value=None,
+        ):
+            with patch(
+                "sam_trader.services.backtest.dashboard_api.threading.Thread",
+            ) as mock_thread:
+                result = handle_backtest_run(body, catalog_path="data/catalog")
+
+        assert result["run_id"].startswith("bt-")
+        assert result["status"] == "started"
+        assert mock_thread.called
+
+    def test_missing_strategy_id(self) -> None:
+        """Missing strategy_id returns error."""
+        result = handle_backtest_run(
+            {
+                "instrument_ids": ["TSLA.NASDAQ"],
+                "start": "2024-01-01",
+                "end": "2024-06-30",
+            }
+        )
+        assert "error" in result
+
+    def test_missing_instrument_ids(self) -> None:
+        """Missing instrument_ids returns error."""
+        result = handle_backtest_run(
+            {"strategy_id": "tsla-orb", "start": "2024-01-01", "end": "2024-06-30"}
+        )
+        assert "error" in result
+
+    def test_missing_dates(self) -> None:
+        """Missing start or end returns error."""
+        result = handle_backtest_run(
+            {"strategy_id": "tsla-orb", "instrument_ids": ["TSLA.NASDAQ"]}
+        )
+        assert "error" in result
+
+    def test_auto_bar_types_no_catalog(self) -> None:
+        """Auto-discovers bar types as default when catalog is unavailable."""
+        body = {
+            "strategy_id": "tsla-orb",
+            "instrument_ids": ["TSLA.NASDAQ"],
+            "start": "2024-01-01",
+            "end": "2024-06-30",
+        }
+        _clear_run_registry()
+        with patch(
+            "sam_trader.services.backtest.dashboard_api._get_catalog",
+            return_value=None,
+        ):
+            with patch(
+                "sam_trader.services.backtest.dashboard_api.threading.Thread",
+            ):
+                result = handle_backtest_run(body)
+
+        assert result["run_id"].startswith("bt-")
+        # Verify the run_registry has default bar types
+        with _run_registry_lock:
+            entry = _run_registry.get(result["run_id"])
+            assert entry is not None
+            assert entry["bar_types"] == ["TSLA.NASDAQ-5-MINUTE-LAST-EXTERNAL"]
+
+    def test_run_registry_created(self) -> None:
+        """A new backtest adds an entry to the run registry."""
+        body = {
+            "strategy_id": "tsla-orb",
+            "instrument_ids": ["TSLA.NASDAQ"],
+            "start": "2024-01-01",
+            "end": "2024-06-30",
+        }
+        _clear_run_registry()
+        with patch(
+            "sam_trader.services.backtest.dashboard_api._get_catalog",
+            return_value=None,
+        ):
+            with patch(
+                "sam_trader.services.backtest.dashboard_api.threading.Thread",
+            ):
+                result = handle_backtest_run(body)
+
+        with _run_registry_lock:
+            entry = _run_registry.get(result["run_id"])
+            assert entry is not None
+            assert entry["status"] == "started"
+            assert entry["strategy_id"] == "tsla-orb"
+            assert entry["instrument_ids"] == ["TSLA.NASDAQ"]
+
+
+# ---------------------------------------------------------------------------
+# handle_backtest_run_status (GET /api/backtest/run/<id>/status)
+# ---------------------------------------------------------------------------
+
+
+class TestHandleBacktestRunStatus:
+    """Tests for GET /api/backtest/run/<id>/status."""
+
+    def test_existing_run(self) -> None:
+        """Return status for an existing run."""
+        _clear_run_registry()
+        with _run_registry_lock:
+            _run_registry["bt-abc"] = {
+                "run_id": "bt-abc",
+                "status": "running",
+                "progress_pct": 45,
+                "created_at": "2024-01-01T00:00:00",
+                "updated_at": "2024-01-01T00:01:00",
+            }
+
+        result = handle_backtest_run_status("bt-abc")
+        assert result["run_id"] == "bt-abc"
+        assert result["status"] == "running"
+        assert result["progress_pct"] == 45
+
+    def test_unknown_run(self) -> None:
+        """Return error for unknown run."""
+        _clear_run_registry()
+        result = handle_backtest_run_status("bt-nonexistent")
+        assert "error" in result
+
+    def test_completed_run_with_result(self) -> None:
+        """Completed run returns result data."""
+        _clear_run_registry()
+        with _run_registry_lock:
+            _run_registry["bt-xyz"] = {
+                "run_id": "bt-xyz",
+                "status": "completed",
+                "progress_pct": 100,
+                "result": {"sharpe_ratio": 2.1, "total_pnl": 10000.0},
+                "created_at": "2024-01-01T00:00:00",
+                "updated_at": "2024-01-01T00:02:00",
+            }
+
+        result = handle_backtest_run_status("bt-xyz")
+        assert result["status"] == "completed"
+        assert result["progress_pct"] == 100
+        assert result["result"]["sharpe_ratio"] == 2.1
+
+    def test_failed_run_with_error(self) -> None:
+        """Failed run returns error message."""
+        _clear_run_registry()
+        with _run_registry_lock:
+            _run_registry["bt-fail"] = {
+                "run_id": "bt-fail",
+                "status": "failed",
+                "progress_pct": 50,
+                "error": "Catalog not found",
+                "created_at": "2024-01-01T00:00:00",
+                "updated_at": "2024-01-01T00:01:00",
+            }
+
+        result = handle_backtest_run_status("bt-fail")
+        assert result["status"] == "failed"
+        assert result["error"] == "Catalog not found"
+
+
+# ---------------------------------------------------------------------------
+# handle_backtest_runs (GET /api/backtest/runs)
+# ---------------------------------------------------------------------------
+
+
+class TestHandleBacktestRuns:
+    """Tests for GET /api/backtest/runs — list past runs."""
+
+    def test_empty_store(self) -> None:
+        """Empty store returns empty list."""
+        store = _mock_store_rows()
+        with patch(
+            "sam_trader.services.backtest.dashboard_api.BacktestResultStore",
+            return_value=store,
+        ):
+            result = handle_backtest_runs(limit=10)
+        assert result == []
+
+    def test_returns_summary_fields(self) -> None:
+        """Each result has summary fields, no heavy JSONB."""
+        row = _make_row()
+        store = _mock_store_rows(row)
+        with patch(
+            "sam_trader.services.backtest.dashboard_api.BacktestResultStore",
+            return_value=store,
+        ):
+            result = handle_backtest_runs()
+
+        assert len(result) == 1
+        r = result[0]
+        assert r["run_id"] == "bt-001"
+        assert r["strategy_id"] == "tsla-orb"
+        assert r["instrument_id"] == "TSLA.NASDAQ"
+        assert r["bar_type"] == "TSLA.NASDAQ-5-MINUTE-LAST-EXTERNAL"
+        assert r["start_date"] == "2024-01-01"
+        assert r["end_date"] == "2024-06-30"
+        assert r["status"] == "completed"
+        assert r["elapsed_secs"] == 5.5
+        assert r["strategy_family"] == "ORB"
+        # Heavy fields should NOT be in summary
+        assert "stats_returns" not in r
+        assert "stats_pnls" not in r
+        assert "equity_curve" not in r
+
+    def test_limit_parameter(self) -> None:
+        """limit parameter is passed to store."""
+        store = _mock_store_rows(_make_row("a"), _make_row("b"), _make_row("c"))
+        with patch(
+            "sam_trader.services.backtest.dashboard_api.BacktestResultStore",
+            return_value=store,
+        ):
+            handle_backtest_runs(limit=5)
+        store.get_all.assert_called_once()
+        # Check limit was passed
+        call_kwargs = store.get_all.call_args
+        assert call_kwargs.kwargs.get("limit") == 5
+
+    def test_multiple_runs(self) -> None:
+        """Multiple runs are returned."""
+        rows = [
+            _make_row("bt-001", strategy_id="tsla-orb"),
+            _make_row("bt-002", strategy_id="aapl-mom"),
+            _make_row("bt-003", strategy_id="nvda-orb"),
+        ]
+        store = _mock_store_rows(*rows)
+        with patch(
+            "sam_trader.services.backtest.dashboard_api.BacktestResultStore",
+            return_value=store,
+        ):
+            result = handle_backtest_runs()
+        assert len(result) == 3
+
+    def test_db_error_returns_empty(self) -> None:
+        """Database error returns empty list gracefully."""
+        store = MagicMock()
+
+        async def _raise(*_: Any, **__: Any) -> list:
+            raise RuntimeError("DB down")
+
+        store.get_all.side_effect = _raise
+        with patch(
+            "sam_trader.services.backtest.dashboard_api.BacktestResultStore",
+            return_value=store,
+        ):
+            result = handle_backtest_runs()
+        assert result == []
+
+
+# ---------------------------------------------------------------------------
+# handle_backtest_runs_detail (GET /api/backtest/runs/<id>)
+# ---------------------------------------------------------------------------
+
+
+class TestHandleBacktestRunsDetail:
+    """Tests for GET /api/backtest/runs/<id> — full result."""
+
+    def test_existing_run(self) -> None:
+        """Return full detail including stats and equity curve."""
+        equity = [{"timestamp": "2024-01-01", "value": 100000}]
+        row = _make_row(
+            equity_curve=equity,
+            stats_returns={"sharpe_ratio": 1.8, "total_pnl": 7500.0},
+            stats_pnls={"tsla-orb": {"pnl": 7500.0}},
+        )
+        store = _mock_store_rows(row)
+        with patch(
+            "sam_trader.services.backtest.dashboard_api.BacktestResultStore",
+            return_value=store,
+        ):
+            result = handle_backtest_runs_detail("bt-001")
+
+        assert result["run_id"] == "bt-001"
+        assert result["stats_returns"]["sharpe_ratio"] == 1.8
+        assert result["equity_curve"] == equity
+        assert result["total_events"] == 1000
+        assert result["strategy_version"] == "1.0"
+
+    def test_unknown_run(self) -> None:
+        """Unknown run_id returns error."""
+        store = _mock_store_rows()
+        with patch(
+            "sam_trader.services.backtest.dashboard_api.BacktestResultStore",
+            return_value=store,
+        ):
+            result = handle_backtest_runs_detail("bt-unknown")
+
+        assert "error" in result
+        assert "not found" in result["error"].lower()
+
+    def test_null_dates_in_row(self) -> None:
+        """Rows with None dates show as None strings."""
+        row = _make_row(start_date=None, end_date=None)  # type: ignore[arg-type]
+        row["start_date"] = None
+        row["end_date"] = None
+        store = _mock_store_rows(row)
+        with patch(
+            "sam_trader.services.backtest.dashboard_api.BacktestResultStore",
+            return_value=store,
+        ):
+            result = handle_backtest_runs_detail("bt-001")
+
+        assert result["start_date"] is None
+        assert result["end_date"] is None
+
+    def test_db_error(self) -> None:
+        """Database error returns error dict."""
+        store = MagicMock()
+
+        async def _raise(*_: Any, **__: Any) -> dict | None:
+            raise RuntimeError("DB down")
+
+        store.get_by_run_id.side_effect = _raise
+        with patch(
+            "sam_trader.services.backtest.dashboard_api.BacktestResultStore",
+            return_value=store,
+        ):
+            result = handle_backtest_runs_detail("bt-001")
+
+        assert "error" in result
+        assert "Database error" in result["error"]
+
+
+# ---------------------------------------------------------------------------
+# handle_backtest_compare (GET /api/backtest/compare?runs=id1,id2)
+# ---------------------------------------------------------------------------
+
+
+class TestHandleBacktestCompare:
+    """Tests for GET /api/backtest/compare — side-by-side metrics."""
+
+    def test_two_runs_comparison(self) -> None:
+        """Compare two runs returns side-by-side metrics."""
+        rows = [
+            _make_row(
+                "bt-001",
+                strategy_id="tsla-orb",
+                stats_returns={
+                    "sharpe_ratio": 1.5,
+                    "total_pnl": 5000.0,
+                    "max_drawdown": 0.10,
+                },
+            ),
+            _make_row(
+                "bt-002",
+                strategy_id="aapl-mom",
+                stats_returns={
+                    "sharpe_ratio": 0.8,
+                    "total_pnl": -1000.0,
+                    "max_drawdown": 0.25,
+                },
+            ),
+        ]
+        store = _mock_store_rows(*rows)
+        with patch(
+            "sam_trader.services.backtest.dashboard_api.BacktestResultStore",
+            return_value=store,
+        ):
+            result = handle_backtest_compare(["bt-001", "bt-002"])
+
+        assert "runs" in result
+        assert "comparison" in result
+        assert len(result["runs"]) == 2
+        assert result["runs"]["bt-001"]["strategy_id"] == "tsla-orb"
+        assert result["runs"]["bt-002"]["strategy_id"] == "aapl-mom"
+
+        # Comparison table
+        comparison = result["comparison"]
+        sharpe_row = [r for r in comparison if r["metric"] == "sharpe_ratio"][0]
+        assert sharpe_row["bt-001"] == 1.5
+        assert sharpe_row["bt-002"] == 0.8
+
+    def test_missing_runs(self) -> None:
+        """Requested run that doesn't exist gets error marker."""
+        store = _mock_store_rows(_make_row("bt-001"))
+        with patch(
+            "sam_trader.services.backtest.dashboard_api.BacktestResultStore",
+            return_value=store,
+        ):
+            result = handle_backtest_compare(["bt-001", "bt-missing"])
+
+        assert result["runs"]["bt-001"]["strategy_id"] == "tsla-orb"
+        assert result["runs"]["bt-missing"] == {"error": "Not found"}
+
+    def test_empty_run_ids(self) -> None:
+        """No run_ids provided returns nothing."""
+        store = _mock_store_rows()
+        with patch(
+            "sam_trader.services.backtest.dashboard_api.BacktestResultStore",
+            return_value=store,
+        ):
+            result = handle_backtest_compare([])
+
+        # get_by_run_ids should not be called with empty list
+        assert "comparison" in result or "error" in result
+
+    def test_db_error_returns_error(self) -> None:
+        """Database error returns error dict."""
+        store = MagicMock()
+
+        async def _raise(*_: Any, **__: Any) -> list:
+            raise RuntimeError("DB down")
+
+        store.get_by_run_ids.side_effect = _raise
+        with patch(
+            "sam_trader.services.backtest.dashboard_api.BacktestResultStore",
+            return_value=store,
+        ):
+            result = handle_backtest_compare(["bt-001"])
+
+        assert "error" in result
+
+    def test_all_metrics_included(self) -> None:
+        """Comparison table includes all expected metrics."""
+        rows = [
+            _make_row("bt-001", stats_returns={"sharpe_ratio": 1.0}),
+            _make_row("bt-002", stats_returns={"sharpe_ratio": 1.0}),
+        ]
+        store = _mock_store_rows(*rows)
+        with patch(
+            "sam_trader.services.backtest.dashboard_api.BacktestResultStore",
+            return_value=store,
+        ):
+            result = handle_backtest_compare(["bt-001", "bt-002"])
+
+        metrics = [r["metric"] for r in result["comparison"]]
+        assert "sharpe_ratio" in metrics
+        assert "sortino_ratio" in metrics
+        assert "max_drawdown" in metrics
+        assert "win_rate" in metrics
+        assert "profit_factor" in metrics
+        assert "expectancy" in metrics
+        assert "total_pnl" in metrics
+        assert "cagr" in metrics
+        assert "calmar_ratio" in metrics
+        assert "volatility" in metrics
+        assert "total_events" in metrics
+        assert "total_orders" in metrics
+        assert "total_positions" in metrics
+        assert "elapsed_secs" in metrics
+
+
+# ---------------------------------------------------------------------------
+# handle_backtest_catalog_instruments
+# ---------------------------------------------------------------------------
+
+
+class TestHandleBacktestCatalogInstruments:
+    """Tests for GET /api/backtest/catalog/instruments."""
+
+    def test_no_catalog_directory(self) -> None:
+        """Non-existent catalog returns empty list."""
+        with patch(
+            "sam_trader.services.backtest.dashboard_api._get_catalog",
+            return_value=None,
+        ):
+            result = handle_backtest_catalog_instruments(catalog_path="/nonexistent")
+        assert result == []
+
+    def test_catalog_instruments(self) -> None:
+        """Catalog with instruments returns list."""
+        mock_catalog = MagicMock()
+        mock_instr_a = MagicMock()
+        mock_instr_a.id = "TSLA.NASDAQ"
+        mock_instr_b = MagicMock()
+        mock_instr_b.id = "AAPL.NASDAQ"
+        mock_catalog.instruments.return_value = [mock_instr_a, mock_instr_b]
+        mock_catalog.path = "/fake/catalog"
+        mock_catalog.query_first_timestamp.return_value = "2024-01-01T00:00:00"
+        mock_catalog.query_last_timestamp.return_value = "2024-06-30T00:00:00"
+
+        with patch(
+            "sam_trader.services.backtest.dashboard_api._get_catalog",
+            return_value=mock_catalog,
+        ):
+            with patch(
+                "sam_trader.services.backtest.dashboard_api._discover_bar_types",
+                return_value=["5-MINUTE-LAST-EXTERNAL", "1-HOUR-LAST-EXTERNAL"],
+            ):
+                result = handle_backtest_catalog_instruments()
+
+        assert len(result) == 2
+        assert result[0]["instrument_id"] == "TSLA.NASDAQ"
+        assert "5-MINUTE-LAST-EXTERNAL" in result[0]["bar_types"]
+        assert result[1]["instrument_id"] == "AAPL.NASDAQ"
+
+    def test_catalog_enumeration_error(self) -> None:
+        """Error during catalog enumeration returns empty list."""
+        mock_catalog = MagicMock()
+        mock_catalog.instruments.side_effect = RuntimeError("Permission denied")
+        mock_catalog.path = "/fake/catalog"
+
+        with patch(
+            "sam_trader.services.backtest.dashboard_api._get_catalog",
+            return_value=mock_catalog,
+        ):
+            result = handle_backtest_catalog_instruments()
+
+        assert result == []
+
+
+# ---------------------------------------------------------------------------
+# handle_backtest_catalog_status
+# ---------------------------------------------------------------------------
+
+
+class TestHandleBacktestCatalogStatus:
+    """Tests for GET /api/backtest/catalog/status."""
+
+    def test_empty_catalog(self) -> None:
+        """Empty catalog returns zeros."""
+        with patch(
+            "sam_trader.services.backtest.dashboard_api._get_catalog",
+            return_value=None,
+        ):
+            result = handle_backtest_catalog_status()
+
+        assert result["total_instruments"] == 0
+        assert result["oldest_bar"] is None
+        assert result["newest_bar"] is None
+
+    def test_catalog_with_data(self) -> None:
+        """Catalog with instruments returns aggregate stats."""
+        mock_catalog = MagicMock()
+        mock_instr = MagicMock()
+        mock_instr.id = "TSLA.NASDAQ"
+        mock_catalog.instruments.return_value = [mock_instr]
+        mock_catalog.path = "/fake/catalog"
+        mock_catalog.query_first_timestamp.return_value = "2024-01-01T00:00:00"
+        mock_catalog.query_last_timestamp.return_value = "2024-06-30T00:00:00"
+
+        with patch(
+            "sam_trader.services.backtest.dashboard_api._get_catalog",
+            return_value=mock_catalog,
+        ):
+            with patch(
+                "sam_trader.services.backtest.dashboard_api._discover_bar_types",
+                return_value=["5-MINUTE-LAST-EXTERNAL"],
+            ):
+                result = handle_backtest_catalog_status()
+
+        assert result["total_instruments"] == 1
+        assert result["oldest_bar"] is not None
+        assert result["newest_bar"] is not None
+
+
+# ---------------------------------------------------------------------------
+# Utility tests
+# ---------------------------------------------------------------------------
+
+
+class TestGenerateRunId:
+    """Tests for _generate_run_id."""
+
+    def test_generates_unique_ids(self) -> None:
+        """Each call produces a unique ID."""
+        ids = {_generate_run_id() for _ in range(100)}
+        assert len(ids) == 100
+
+    def test_prefix_is_bt(self) -> None:
+        """IDs start with bt-."""
+        for _ in range(10):
+            assert _generate_run_id().startswith("bt-")
+
+
+class TestGetCatalog:
+    """Tests for _get_catalog."""
+
+    def test_nonexistent_path(self) -> None:
+        """Returns None for nonexistent path."""
+        result = _get_catalog("/definitely/not/a/real/catalog")
+        assert result is None
+
+
+class TestDiscoverBarTypes:
+    """Tests for _discover_bar_types."""
+
+    def test_no_data_dir(self) -> None:
+        """Returns empty when data/bar doesn't exist."""
+        catalog = MagicMock()
+        catalog.path = "/fake/catalog"
+        # Mock Path.exists to return False for data/bar
+        with patch("pathlib.Path.exists", return_value=False):
+            result = _discover_bar_types(catalog, "TSLA.NASDAQ")
+        assert result == []
+
+    def test_discover_bar_types(self) -> None:
+        """Returns discovered bar types from filenames."""
+        catalog = MagicMock()
+        catalog.path = "/fake/catalog"
+
+        # Create fake Path.glob results
+        fake_files = [
+            Path("/fake/catalog/data/bar/TSLA.NASDAQ-5-MINUTE-LAST-EXTERNAL.parquet"),
+            Path("/fake/catalog/data/bar/TSLA.NASDAQ-1-HOUR-LAST-EXTERNAL.parquet"),
+            Path("/fake/catalog/data/bar/AAPL.NASDAQ-5-MINUTE-LAST-EXTERNAL.parquet"),
+        ]
+
+        with patch("pathlib.Path.exists", return_value=True):
+            with patch("pathlib.Path.glob", return_value=fake_files):
+                result = _discover_bar_types(catalog, "TSLA.NASDAQ")
+
+        assert len(result) == 2
+        assert "5-MINUTE-LAST-EXTERNAL" in result
+        assert "1-HOUR-LAST-EXTERNAL" in result
+        # AAPL should NOT be included
+        assert "AAPL.NASDAQ-5-MINUTE-LAST-EXTERNAL" not in result
+
+
+class TestRunRegistryThreadSafety:
+    """Tests for the in-memory run registry thread safety."""
+
+    def test_concurrent_writes(self) -> None:
+        """Multiple threads updating registry don't corrupt data."""
+        _clear_run_registry()
+
+        errors: list[Exception] = []
+
+        def _writer(start: int, count: int) -> None:
+            try:
+                for i in range(start, start + count):
+                    run_id = f"bt-{i:04d}"
+                    with _run_registry_lock:
+                        _run_registry[run_id] = {
+                            "run_id": run_id,
+                            "status": "completed",
+                            "progress_pct": 100,
+                        }
+            except Exception as exc:
+                errors.append(exc)
+
+        threads: list[threading.Thread] = []
+        for ti in range(4):
+            th = threading.Thread(target=_writer, args=(ti * 100, 100))
+            threads.append(th)
+            th.start()
+
+        for th in threads:
+            th.join()
+
+        assert len(errors) == 0  # noqa: S101
+        with _run_registry_lock:
+            assert len(_run_registry) == 400

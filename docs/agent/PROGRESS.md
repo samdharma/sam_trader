@@ -1,5 +1,23 @@
 > **Note: see first-entry Iteration 20 for Phase 2 config dataclasses.**
 
+## Iteration 138
+- **Task**: 12.1.7: Backtest dashboard API endpoints
+- **Task ID**: sam_trader-9z3.13.1.7
+- **Status**: COMPLETE
+- **Decisions**: Created `backtest/dashboard_api.py` with 7 handler functions for backtest REST API:
+  - `handle_backtest_run()` — POST /api/backtest/run: launches async backtest in background thread with in-memory run registry tracking status/progress. Returns `{run_id, status: "started"}` immediately.
+  - `handle_backtest_run_status()` — GET /api/backtest/run/<id>/status: polls run registry for progress_pct and result.
+  - `handle_backtest_runs()` — GET /api/backtest/runs: lists completed runs from PG via `BacktestResultStore.get_all()`.
+  - `handle_backtest_runs_detail()` — GET /api/backtest/runs/<id>: full result with stats_pnls, stats_returns, equity_curve via `BacktestResultStore.get_by_run_id()`.
+  - `handle_backtest_compare()` — GET /api/backtest/compare?runs=id1,id2: side-by-side metric comparison via `BacktestResultStore.get_by_run_ids()`.
+  - `handle_backtest_catalog_instruments()` — GET /api/backtest/catalog/instruments: list instruments with bar types and date ranges from ParquetDataCatalog.
+  - `handle_backtest_catalog_status()` — GET /api/backtest/catalog/status: aggregate summary (total_instruments, oldest_bar, newest_bar).
+  - Added `get_all()`, `get_by_run_id()`, `get_by_run_ids()` methods to `BacktestResultStore`.
+  - Wired 7 GET routes + 1 POST route into `DashboardHandler` in `dashboard.py`.
+- **Files Changed**: `src/sam_trader/services/backtest/dashboard_api.py` (new), `src/sam_trader/services/backtest/__init__.py` (export dashboard API), `src/sam_trader/services/backtest/results.py` (add get_all/get_by_run_id/get_by_run_ids), `src/sam_trader/services/dashboard.py` (add imports + do_POST + 7 backtest routes), `tests/unit/services/backtest/test_dashboard_api.py` (new, 35 tests)
+- **Validation Result**: PASS (RALPH_GATE_PASSED — 35/35 targeted tests, 142/142 total backtest tests, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: Pre-existing `TestDashboardServer::test_get_root_returns_html` timeout issue (not caused by these changes). Catalog endpoints read from filesystem via ParquetDataCatalog. Run status tracking is in-memory (non-durable across restarts).
+
 ## Iteration 137
 - **Task**: 12.1.6: Walk-forward optimization — rolling train/test windows
 - **Task ID**: sam_trader-9z3.13.1.6

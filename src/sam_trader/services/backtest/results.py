@@ -358,6 +358,77 @@ class BacktestResultStore:
             limit,
         )
 
+    async def get_all(
+        self,
+        *,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        """Return all backtest runs, newest first.
+
+        Parameters
+        ----------
+        limit : int
+            Maximum number of rows to return (default 50).
+
+        Returns
+        -------
+        list[dict]
+            Deserialized rows.
+
+        """
+        return await self._query(
+            "ORDER BY created_at DESC LIMIT $1",
+            limit,
+        )
+
+    async def get_by_run_id(
+        self,
+        run_id: str,
+    ) -> dict[str, Any] | None:
+        """Return a single backtest run by run_id.
+
+        Parameters
+        ----------
+        run_id : str
+            The run_id to look up.
+
+        Returns
+        -------
+        dict | None
+            Deserialized row, or ``None`` if not found.
+
+        """
+        rows = await self._query(
+            "WHERE run_id = $1 LIMIT 1",
+            run_id,
+        )
+        return rows[0] if rows else None
+
+    async def get_by_run_ids(
+        self,
+        run_ids: list[str],
+    ) -> list[dict[str, Any]]:
+        """Return backtest runs matching a list of run_ids.
+
+        Parameters
+        ----------
+        run_ids : list[str]
+            Run identifiers to fetch.
+
+        Returns
+        -------
+        list[dict]
+            Deserialized rows (may be fewer than input if some not found).
+
+        """
+        if not run_ids:
+            return []
+        placeholders = ", ".join(f"${i + 1}" for i in range(len(run_ids)))
+        return await self._query(
+            f"WHERE run_id IN ({placeholders}) ORDER BY created_at DESC",
+            *run_ids,
+        )
+
     # ------------------------------------------------------------------
     # Internal
     # ------------------------------------------------------------------
