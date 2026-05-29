@@ -1,5 +1,14 @@
 > **Note: see first-entry Iteration 20 for Phase 2 config dataclasses.**
 
+## Iteration 135
+- **Task**: 12.1.4: backtest_results PG table + storage service
+- **Task ID**: sam_trader-9z3.13.1.4
+- **Status**: COMPLETE
+- **Decisions**: (1) DDL migration `docker/postgres/init/02_backtest_results.sql` creates `backtest_results` table with all columns per BUILD_PLAN_12.1.md §5: `run_id` (UNIQUE), `run_config_id`, `strategy_id`, `instrument_id`, `bar_type`, `start_date`/`end_date`, `status` (CHECK constraint: running/completed/failed), `total_events`/`total_orders`/`total_positions`, `elapsed_secs`, `stats_pnls` (JSONB), `stats_returns` (JSONB), `equity_curve` (JSONB), `error_message`, `strategy_family`, `strategy_version`, `tags` (JSONB), plus indexes on `strategy_id` and `(start_date, end_date)`. (2) `BacktestResultStore` in `services/backtest/results.py` uses asyncpg with pool-per-operation pattern (consistent with existing `PerformanceAnalyzer`). `save()` takes `BacktestResult` + metadata (strategy_id, instrument_id, bar_type, start/end_date, optional equity_curve, tags, family, version) and upserts via `ON CONFLICT (run_id) DO UPDATE`. NaN values in stats are recursively sanitized to `None` before JSON serialization. `get_by_strategy()`, `get_by_date_range()`, and `get_by_family()` query methods deserialize JSONB columns back to Python objects. (3) Added `_sanitize_nan()` recursive helper for dict/list NaN→None conversion. (4) 18 unit tests covering: save with all fields, equity_curve round-trip, empty stats, upsert on conflict, status pass-through, pool cleanup, strategy query with deserialization, empty results, limit parameter, date range overlap filtering, family filtering, NaN→null conversion, deeply nested stats, and tags JSONB round-trip.
+- **Files Changed**: `docker/postgres/init/02_backtest_results.sql` (new), `src/sam_trader/services/backtest/results.py` (new), `src/sam_trader/services/backtest/__init__.py` (export BacktestResultStore), `tests/unit/services/backtest/test_results.py` (new)
+- **Validation Result**: PASS (RALPH_GATE_PASSED — 18/18 targeted tests, 40/40 total backtest tests, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. PG connectivity is via pool-per-operation (not persistent pool) — consistent with `PerformanceAnalyzer` pattern. The `backtest_results` table is NOT added to `EXPECTED_TABLES` in `db_schema.py` since it's not critical for core trading platform function.
+
 ## Iteration 134
 - **Task**: 12.1.3: sam backtest CLI — single run with table output
 - **Task ID**: sam_trader-9z3.13.1.3
