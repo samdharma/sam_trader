@@ -1,5 +1,14 @@
 > **Note: see first-entry Iteration 20 for Phase 2 config dataclasses.**
 
+## Iteration 133
+- **Task**: 12.1.2: Backtest engine wrapper — BacktestNode + BacktestRunConfig integration
+- **Task ID**: sam_trader-9z3.13.1.2
+- **Status**: COMPLETE
+- **Decisions**: Created `BacktestEngineWrapper` class in `src/sam_trader/services/backtest/engine.py`. Wraps Nautilus BacktestNode lifecycle (build → run → get_result). Constructs BacktestRunConfig from ImportableStrategyConfig list + instrument_ids + bar_types + date range. Supports run_analysis=True for PortfolioAnalyzer auto-stats. Provides `build_run_config()` for config inspection plus `run()` / `run_multi()` for execution. 22 unit tests cover: config construction (all sub-configs verified), venue derivation from instrument IDs, custom params (OMS type, account type, starting balances, trader_id, instance_id), error handling (empty strategies/instruments/bar_types/configs), mocked BacktestNode lifecycle, dispose-on-error, and default values.
+- **Files Changed**: `src/sam_trader/services/backtest/__init__.py` (new), `src/sam_trader/services/backtest/engine.py` (new), `tests/unit/services/backtest/__init__.py` (new), `tests/unit/services/backtest/test_engine.py` (new)
+- **Validation Result**: PASS (RALPH_GATE_PASSED — 22/22 targeted tests, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: Cython type quirks handled: venue comparison needs str(), timestamps are int (nanoseconds) not datetime, engine config fields are Optional per pyo3 stubs but always set by our wrapper. Ready for sam_trader-9z3.13.1.3 (backtest CLI).
+
 ## Iteration 132
 - **Task**: ORB strategy: TypeError on super().__init__(config) — StrategyId passed where str expected
 - **Task ID**: sam_trader-0y8
