@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from unittest.mock import MagicMock, patch
 
 import pandas as pd
@@ -883,6 +884,399 @@ class TestAccountDiscovery:
         assert client._venue_account_aliases[Venue("HKEX")] == AccountId(
             "FUTU-234387941"
         )
+
+    # ── String trd_env / sim_acc_type (Futu SDK v10.6+ returns strings) ──
+
+    def test_trd_env_string_simulate(self, event_loop, make_client, mock_trade_ctx):
+        """trd_env as string "SIMULATE" is recognised as paper trading."""
+        cfg = FutuExecClientConfig(
+            host="test-host",
+            port=11111,
+            trd_env="SIMULATE",
+            trd_market="HK",
+            client_id=1,
+        )
+        clock = LiveClock()
+        msgbus = TestComponentStubs.msgbus()
+        cache = TestComponentStubs.cache()
+        provider = MagicMock(spec=InstrumentProvider)
+        client = FutuLiveExecutionClient(
+            loop=event_loop,
+            client=mock_trade_ctx,
+            msgbus=msgbus,
+            cache=cache,
+            clock=clock,
+            instrument_provider=provider,
+            config=cfg,
+        )
+
+        mock_trade_ctx.get_acc_list.return_value = (
+            RET_OK,
+            pd.DataFrame(
+                {
+                    "acc_id": [19064358],
+                    "trd_env": ["SIMULATE"],
+                    "trdmarket_auth": [[1]],
+                    "sim_acc_type": [0],  # int still works
+                }
+            ),
+        )
+        event_loop.run_until_complete(client._discover_accounts())
+
+        # Should be registered despite trd_env being a string
+        assert len(client._venue_account_aliases) >= 1
+        assert Venue("HKEX") in client._venue_account_aliases
+
+    def test_trd_env_string_real_excluded(
+        self, event_loop, make_client, mock_trade_ctx
+    ):
+        """trd_env as string "REAL" is excluded from paper trading."""
+        mock_trade_ctx.get_acc_list.return_value = (
+            RET_OK,
+            pd.DataFrame(
+                {
+                    "acc_id": [999],
+                    "trd_env": ["REAL"],
+                    "trdmarket_auth": [[2]],
+                    "sim_acc_type": [2],
+                }
+            ),
+        )
+        client = make_client()  # trd_market="US"
+        event_loop.run_until_complete(client._discover_accounts())
+
+        # REAL string account excluded; falls back to env
+        assert len(client._venue_account_aliases) == 0
+
+    def test_sim_acc_type_string_stock_hk(
+        self, event_loop, make_client, mock_trade_ctx
+    ):
+        """sim_acc_type as string "STOCK" matches HK config."""
+        cfg = FutuExecClientConfig(
+            host="test-host",
+            port=11111,
+            trd_env="SIMULATE",
+            trd_market="HK",
+            client_id=1,
+        )
+        clock = LiveClock()
+        msgbus = TestComponentStubs.msgbus()
+        cache = TestComponentStubs.cache()
+        provider = MagicMock(spec=InstrumentProvider)
+        client = FutuLiveExecutionClient(
+            loop=event_loop,
+            client=mock_trade_ctx,
+            msgbus=msgbus,
+            cache=cache,
+            clock=clock,
+            instrument_provider=provider,
+            config=cfg,
+        )
+
+        mock_trade_ctx.get_acc_list.return_value = (
+            RET_OK,
+            pd.DataFrame(
+                {
+                    "acc_id": [19064358],
+                    "trd_env": ["SIMULATE"],
+                    "trdmarket_auth": [[1]],
+                    "sim_acc_type": ["STOCK"],  # string!
+                }
+            ),
+        )
+        event_loop.run_until_complete(client._discover_accounts())
+
+        assert Venue("HKEX") in client._venue_account_aliases
+        assert client._venue_account_aliases[Venue("HKEX")] == AccountId(
+            "FUTU-19064358"
+        )
+
+    def test_sim_acc_type_string_stock_and_option_us(
+        self, event_loop, make_client, mock_trade_ctx
+    ):
+        """sim_acc_type as string "STOCK_AND_OPTION" matches US config."""
+        mock_trade_ctx.get_acc_list.return_value = (
+            RET_OK,
+            pd.DataFrame(
+                {
+                    "acc_id": [19064362],
+                    "trd_env": ["SIMULATE"],
+                    "trdmarket_auth": [[2]],
+                    "sim_acc_type": ["STOCK_AND_OPTION"],  # string!
+                }
+            ),
+        )
+        client = make_client()  # trd_market="US"
+        event_loop.run_until_complete(client._discover_accounts())
+
+        assert Venue("NASDAQ") in client._venue_account_aliases
+        assert client._venue_account_aliases[Venue("NASDAQ")] == AccountId(
+            "FUTU-19064362"
+        )
+
+    def test_bug_scenario_hk_simulate_filters_correctly(
+        self, event_loop, make_client, mock_trade_ctx
+    ):
+        """Exact bug scenario: HK market, 3 accounts, string trd_env/sim_acc_type.
+
+        Data as reported on 29-May HK session:
+        - acc_id 281756477933385889: REAL, N/A, [HK, US, ...]
+        - acc_id 19064358:           SIMULATE, STOCK, [HK]
+        - acc_id 19064361:           SIMULATE, OPTION, [HK]
+
+        HK + SIMULATE → selects acc_id 19064358 (STOCK, HK-authorised).
+        """
+        cfg = FutuExecClientConfig(
+            host="test-host",
+            port=11111,
+            trd_env="SIMULATE",
+            trd_market="HK",
+            client_id=1,
+        )
+        clock = LiveClock()
+        msgbus = TestComponentStubs.msgbus()
+        cache = TestComponentStubs.cache()
+        provider = MagicMock(spec=InstrumentProvider)
+        client = FutuLiveExecutionClient(
+            loop=event_loop,
+            client=mock_trade_ctx,
+            msgbus=msgbus,
+            cache=cache,
+            clock=clock,
+            instrument_provider=provider,
+            config=cfg,
+        )
+
+        mock_trade_ctx.get_acc_list.return_value = (
+            RET_OK,
+            pd.DataFrame(
+                {
+                    "acc_id": [281756477933385889, 19064358, 19064361],
+                    "trd_env": ["REAL", "SIMULATE", "SIMULATE"],
+                    "sim_acc_type": ["N/A", "STOCK", "OPTION"],
+                    "trdmarket_auth": [[1, 2], [1], [1]],
+                }
+            ),
+        )
+        event_loop.run_until_complete(client._discover_accounts())
+
+        # Only acc_id 19064358 (STOCK, HK) should be selected
+        assert client._account_id == AccountId("FUTU-19064358")
+        assert Venue("HKEX") in client._venue_account_aliases
+        assert client._venue_account_aliases[Venue("HKEX")] == AccountId(
+            "FUTU-19064358"
+        )
+
+    # ── REAL mode tests ──
+
+    def test_real_mode_uses_env_account(self, event_loop, make_client, mock_trade_ctx):
+        """REAL trd_env uses FUTU_ACCOUNT_ID from environment."""
+        cfg = FutuExecClientConfig(
+            host="test-host",
+            port=11111,
+            trd_env="REAL",
+            trd_market="HK",
+            client_id=1,
+        )
+        clock = LiveClock()
+        msgbus = TestComponentStubs.msgbus()
+        cache = TestComponentStubs.cache()
+        provider = MagicMock(spec=InstrumentProvider)
+        client = FutuLiveExecutionClient(
+            loop=event_loop,
+            client=mock_trade_ctx,
+            msgbus=msgbus,
+            cache=cache,
+            clock=clock,
+            instrument_provider=provider,
+            config=cfg,
+        )
+
+        with patch.dict(os.environ, {"FUTU_ACCOUNT_ID": "999888777"}):
+            event_loop.run_until_complete(client._discover_accounts())
+
+        assert client._account_id == AccountId("FUTU-999888777")
+
+    def test_real_mode_warns_when_no_env_account(
+        self, event_loop, make_client, mock_trade_ctx
+    ):
+        """REAL trd_env without FUTU_ACCOUNT_ID logs warning."""
+        cfg = FutuExecClientConfig(
+            host="test-host",
+            port=11111,
+            trd_env="REAL",
+            trd_market="HK",
+            client_id=1,
+        )
+        clock = LiveClock()
+        msgbus = TestComponentStubs.msgbus()
+        cache = TestComponentStubs.cache()
+        provider = MagicMock(spec=InstrumentProvider)
+        client = FutuLiveExecutionClient(
+            loop=event_loop,
+            client=mock_trade_ctx,
+            msgbus=msgbus,
+            cache=cache,
+            clock=clock,
+            instrument_provider=provider,
+            config=cfg,
+        )
+        placeholder = client._account_id
+
+        with patch.dict(os.environ, {}, clear=True):
+            event_loop.run_until_complete(client._discover_accounts())
+
+        # Account ID unchanged (stays at placeholder)
+        assert client._account_id == placeholder
+
+    # ── Fallback tests ──
+
+    def test_fallback_to_env_account_on_no_match(
+        self, event_loop, make_client, mock_trade_ctx
+    ):
+        """When no paper account matches, fall back to FUTU_ACCOUNT_ID."""
+        mock_trade_ctx.get_acc_list.return_value = (
+            RET_OK,
+            pd.DataFrame(
+                {
+                    "acc_id": [100, 200],
+                    "trd_env": ["SIMULATE", "SIMULATE"],
+                    "trdmarket_auth": [[1], [1]],
+                    "sim_acc_type": ["OPTION", "OPTION"],  # no STOCK for HK
+                }
+            ),
+        )
+        cfg = FutuExecClientConfig(
+            host="test-host",
+            port=11111,
+            trd_env="SIMULATE",
+            trd_market="HK",
+            client_id=1,
+        )
+        clock = LiveClock()
+        msgbus = TestComponentStubs.msgbus()
+        cache = TestComponentStubs.cache()
+        provider = MagicMock(spec=InstrumentProvider)
+        client = FutuLiveExecutionClient(
+            loop=event_loop,
+            client=mock_trade_ctx,
+            msgbus=msgbus,
+            cache=cache,
+            clock=clock,
+            instrument_provider=provider,
+            config=cfg,
+        )
+
+        with patch.dict(os.environ, {"FUTU_ACCOUNT_ID": "fallback-123"}):
+            event_loop.run_until_complete(client._discover_accounts())
+
+        assert client._account_id == AccountId("FUTU-fallback-123")
+
+    def test_fallback_warns_when_no_env(self, event_loop, make_client, mock_trade_ctx):
+        """No match and no FUTU_ACCOUNT_ID — placeholder kept, warning logged."""
+        mock_trade_ctx.get_acc_list.return_value = (
+            RET_OK,
+            pd.DataFrame(
+                {
+                    "acc_id": [100],
+                    "trd_env": ["REAL"],  # all REAL, none SIMULATE
+                    "trdmarket_auth": [[2]],
+                    "sim_acc_type": ["STOCK_AND_OPTION"],
+                }
+            ),
+        )
+        client = make_client()
+        placeholder = client._account_id
+
+        with patch.dict(os.environ, {}, clear=True):
+            event_loop.run_until_complete(client._discover_accounts())
+
+        assert client._account_id == placeholder
+        assert client._venue_account_aliases == {}
+
+    def test_fallback_on_empty_response(self, event_loop, make_client, mock_trade_ctx):
+        """Empty get_acc_list response triggers fallback."""
+        mock_trade_ctx.get_acc_list.return_value = (RET_OK, pd.DataFrame())
+        client = make_client()
+
+        with patch.dict(os.environ, {"FUTU_ACCOUNT_ID": "empty-fallback"}):
+            event_loop.run_until_complete(client._discover_accounts())
+
+        assert client._account_id == AccountId("FUTU-empty-fallback")
+
+
+# ---------------------------------------------------------------------------
+# Module-level helpers
+# ---------------------------------------------------------------------------
+
+
+class TestModuleHelpers:
+    """Tests for _is_simulate_trd_env and _matches_sim_acc_type helpers."""
+
+    def test_is_simulate_trd_env_int_0(self):
+        from sam_trader.adapters.futu.execution import _is_simulate_trd_env
+
+        assert _is_simulate_trd_env(0) is True
+
+    def test_is_simulate_trd_env_int_1(self):
+        from sam_trader.adapters.futu.execution import _is_simulate_trd_env
+
+        assert _is_simulate_trd_env(1) is False
+
+    def test_is_simulate_trd_env_str_simulate(self):
+        from sam_trader.adapters.futu.execution import _is_simulate_trd_env
+
+        assert _is_simulate_trd_env("SIMULATE") is True
+
+    def test_is_simulate_trd_env_str_simulate_lower(self):
+        from sam_trader.adapters.futu.execution import _is_simulate_trd_env
+
+        assert _is_simulate_trd_env("simulate") is True
+
+    def test_is_simulate_trd_env_str_real(self):
+        from sam_trader.adapters.futu.execution import _is_simulate_trd_env
+
+        assert _is_simulate_trd_env("REAL") is False
+
+    def test_is_simulate_trd_env_none(self):
+        from sam_trader.adapters.futu.execution import _is_simulate_trd_env
+
+        assert _is_simulate_trd_env(None) is False
+
+    def test_matches_sim_acc_type_int_match(self):
+        from sam_trader.adapters.futu.execution import _matches_sim_acc_type
+
+        assert _matches_sim_acc_type(0, 0, "STOCK") is True
+
+    def test_matches_sim_acc_type_int_no_match(self):
+        from sam_trader.adapters.futu.execution import _matches_sim_acc_type
+
+        assert _matches_sim_acc_type(1, 0, "STOCK") is False
+
+    def test_matches_sim_acc_type_str_match(self):
+        from sam_trader.adapters.futu.execution import _matches_sim_acc_type
+
+        assert _matches_sim_acc_type("STOCK", 0, "STOCK") is True
+
+    def test_matches_sim_acc_type_str_match_lower(self):
+        from sam_trader.adapters.futu.execution import _matches_sim_acc_type
+
+        assert _matches_sim_acc_type("stock", 0, "STOCK") is True
+
+    def test_matches_sim_acc_type_str_no_match(self):
+        from sam_trader.adapters.futu.execution import _matches_sim_acc_type
+
+        assert _matches_sim_acc_type("OPTION", 0, "STOCK") is False
+
+    def test_matches_sim_acc_type_stock_and_option(self):
+        from sam_trader.adapters.futu.execution import _matches_sim_acc_type
+
+        assert _matches_sim_acc_type("STOCK_AND_OPTION", 2, "STOCK_AND_OPTION") is True
+
+    def test_matches_sim_acc_type_none(self):
+        from sam_trader.adapters.futu.execution import _matches_sim_acc_type
+
+        assert _matches_sim_acc_type(None, 0, "STOCK") is False
 
 
 # ---------------------------------------------------------------------------
