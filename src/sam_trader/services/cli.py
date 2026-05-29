@@ -2949,6 +2949,97 @@ def switch_market(ctx: click.Context, market: str, timeout: int) -> None:
 # ---------------------------------------------------------------------------
 
 
+def _run_walk_forward(
+    ctx: click.Context,
+    strategies: list,
+    instrument_ids: list[str],
+    bar_types: list[str],
+    start_date: str,
+    end_date: str,
+    catalog_path: str,
+    sweep_flags: list[str],
+    train_days: str,
+    test_days: str,
+) -> None:
+    """Execute a walk-forward optimization and output results."""
+    from sam_trader.services.backtest.engine import BacktestEngineWrapper
+    from sam_trader.services.backtest.sweep import parse_sweep_flags
+    from sam_trader.services.backtest.walk_forward import (
+        WalkForward,
+        parse_days_flag,
+    )
+
+    # Parse sweep grid (required for walk-forward)
+    try:
+        param_grid = parse_sweep_flags(sweep_flags)
+    except ValueError as exc:
+        raise click.ClickException(str(exc))
+
+    if not param_grid:
+        raise click.ClickException(
+            "Walk-forward requires --sweep flags"
+            " (e.g., --sweep stop_loss_ticks=5,10,15)"
+        )
+
+    # Parse train/test days
+    try:
+        train = parse_days_flag(train_days)
+        test = parse_days_flag(test_days)
+    except ValueError as exc:
+        raise click.ClickException(str(exc))
+
+    # Run walk-forward
+    wrapper = BacktestEngineWrapper(catalog_path=catalog_path)
+    wf = WalkForward(
+        wrapper=wrapper,
+        base_strategies=list(strategies),
+        instrument_ids=instrument_ids,
+        bar_types=bar_types,
+        train_days=train,
+        test_days=test,
+        data_start=start_date,
+        data_end=end_date,
+    )
+
+    try:
+        result = wf.run(param_grid=param_grid)
+    except ValueError as exc:
+        raise click.ClickException(str(exc))
+    except Exception as exc:
+        raise click.ClickException(f"Walk-forward failed: {exc}")
+
+    if ctx.obj.get("json"):
+        json_result: dict[str, Any] = {
+            "command": "backtest-walk-forward",
+            "config": result.config,
+            "overall_sharpe": result.overall_sharpe,
+            "overall_pnl": result.overall_pnl,
+            "profitable_windows": result.profitable_windows,
+            "total_windows": result.total_windows,
+            "param_stability": {k: dict(v) for k, v in result.param_stability.items()},
+            "windows": [
+                {
+                    "train_start": w.train_start,
+                    "train_end": w.train_end,
+                    "test_start": w.test_start,
+                    "test_end": w.test_end,
+                    "best_params": w.best_params,
+                    "train_sharpe": w.train_sharpe,
+                    "test_sharpe": w.test_sharpe,
+                    "test_pnl": w.test_pnl,
+                    "test_win_rate": w.test_win_rate,
+                    "test_max_dd": w.test_max_dd,
+                    "test_trades": w.test_trades,
+                    "error": w.error,
+                }
+                for w in result.windows
+            ],
+        }
+        _out(ctx, json_result)
+    else:
+        click.echo(WalkForward.format_report(result))
+
+
 def _run_sweep(
     ctx: click.Context,
     strategies: list,
@@ -3184,6 +3275,24 @@ def _build_backtest_summary(
         "Format: key=val1,val2,val3 (e.g., --sweep stop_loss_ticks=5,10,15)."
     ),
 )
+@click.option(
+    "--walk-forward",
+    is_flag=True,
+    default=False,
+    help="Enable walk-forward optimization with rolling train/test windows.",
+)
+@click.option(
+    "--train",
+    "train_days",
+    default="90d",
+    help="Training (in-sample) window in days (e.g., 90 or 90d).",
+)
+@click.option(
+    "--test",
+    "test_days",
+    default="30d",
+    help="Test (out-of-sample) window in days (e.g., 30 or 30d).",
+)
 @click.pass_context
 def backtest(
     ctx: click.Context,
@@ -3193,10 +3302,13 @@ def backtest(
     end_date: str,
     catalog_path: str,
     sweep_flags: tuple[str, ...],
+    walk_forward: bool,
+    train_days: str,
+    test_days: str,
 ) -> None:
     """Run a backtest using NautilusTrader's BacktestNode.
 
-    BACKTEST_EXAMPLES:
+    BACKTEST EXAMPLES:
 
         sam backtest tsla-orb-15m-futu --start 2024-01-01 --end 2024-06-30
 
@@ -3208,6 +3320,13 @@ def backtest(
             --sweep take_profit_ticks=20,30,40 \
             --bundles config/bundles.yaml \
             --start 2024-01-01 --end 2024-06-30
+
+    WALK-FORWARD EXAMPLES:
+
+        sam backtest --walk-forward --train 90d --test 30d \
+            --sweep stop_loss_ticks=5,10,15 \
+            --bundles config/bundles.yaml \
+            --start 2024-01-01 --end 2024-12-31
 
     """
     from sam_trader.bundle_loader import BundleLoaderError, load_bundles
@@ -3258,6 +3377,22 @@ def backtest(
         raise click.ClickException("No instrument_ids found in bundle configs")
     if not bar_types:
         raise click.ClickException("No bar_types found in bundle configs")
+
+    # --- Walk-Forward path ---
+    if walk_forward:
+        _run_walk_forward(
+            ctx=ctx,
+            strategies=strategies,
+            instrument_ids=instrument_ids,
+            bar_types=bar_types,
+            start_date=start_date,
+            end_date=end_date,
+            catalog_path=catalog_path,
+            sweep_flags=list(sweep_flags),
+            train_days=train_days,
+            test_days=test_days,
+        )
+        return
 
     # --- Parameter Sweep path ---
     if sweep_flags:

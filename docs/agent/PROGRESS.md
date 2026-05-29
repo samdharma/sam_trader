@@ -1,5 +1,14 @@
 > **Note: see first-entry Iteration 20 for Phase 2 config dataclasses.**
 
+## Iteration 137
+- **Task**: 12.1.6: Walk-forward optimization — rolling train/test windows
+- **Task ID**: sam_trader-9z3.13.1.6
+- **Status**: COMPLETE
+- **Decisions**: Created `WalkForward` in `src/sam_trader/services/backtest/walk_forward.py` with: (1) `_generate_windows()` — rolling train/test windows from data_start to data_end, stepping by test_days. Generates chronological (train_start, train_end, test_start, test_end) tuples; last window's test_end clamped to data_end. Edge case: when data < train+test, attempts shortened window requiring train >= test_days minimum — returns empty list if too short. (2) `_process_window()` — per-window: creates ParameterSweep on train period, selects best params by Sharpe (already sorted descending by sweep), patches strategies with best params, runs single backtest on test period via BacktestEngineWrapper.run(). Errors in sweep or test are captured in WindowResult.error rather than aborting the entire walk-forward. (3) `WalkForward.run()` — orchestrates all windows, aggregates overall Sharpe (mean of test Sharpes), overall P&L (sum of test P&Ls), profitable_windows count (P&L > 0), and param_stability dict (param_name → value → selection count across windows). (4) `WalkForward.format_report()` — human-readable report with aggregate summary, parameter stability table (★ marks most-selected value), per-window detail table, and error/warning summary. (5) `WalkForwardResult` and `WindowResult` frozen dataclasses for structured output. (6) `parse_days_flag()` helper accepts bare integers or suffixed ("90d", "30D"). CLI integration: added `--walk-forward` flag, `--train` (default 90d), `--test` (default 30d) options to `sam backtest` command. Walk-forward path checked before sweep path; requires --sweep flags. JSON output includes all window details and aggregate stats.
+- **Files Changed**: `src/sam_trader/services/backtest/walk_forward.py` (new), `src/sam_trader/services/backtest/__init__.py` (export WalkForward, WalkForwardResult, WindowResult, parse_days_flag), `src/sam_trader/services/cli.py` (add --walk-forward, --train, --test options + _run_walk_forward helper), `tests/unit/services/backtest/test_walk_forward.py` (new, 38 tests)
+- **Validation Result**: PASS (RALPH_GATE_PASSED — 38/38 targeted tests, 107/107 total backtest tests, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for sam_trader-9z3.13.1.9 (unit + integration tests).
+
 ## Iteration 136
 - **Task**: 12.1.5: Parameter sweep — grid search via multi-config BacktestNode
 - **Task ID**: sam_trader-9z3.13.1.5
