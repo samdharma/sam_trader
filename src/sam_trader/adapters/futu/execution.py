@@ -206,9 +206,11 @@ class FutuLiveExecutionClient(LiveExecutionClient):
     async def _discover_accounts(self) -> None:
         """Discover SIMULATE paper trading accounts and register venue aliases.
 
-        Calls ``get_acc_list(trd_env=TrdEnv.SIMULATE)`` to retrieve only
-        paper trading accounts. Filters by ``sim_acc_type`` based on
-        the configured market: STOCK (0) for HK, STOCK_AND_OPTION (2) for US.
+        Calls ``get_acc_list()`` (no arguments; the SDK filters by the
+        ``trd_market`` the context was created with).  Post-filters the
+        response to keep only SIMULATE accounts, then further filters by
+        ``sim_acc_type`` for the configured market:
+        STOCK (0) for HK, STOCK_AND_OPTION (2) for US.
         """
         if self._trade_ctx is None:
             return
@@ -222,12 +224,31 @@ class FutuLiveExecutionClient(LiveExecutionClient):
         }
 
         try:
-            ret, data = self._trade_ctx.get_acc_list(trd_env=TrdEnv.SIMULATE)
+            # Futu API v10.6.6608: get_acc_list() takes no arguments.
+            # It filters by the context's trd_market internally and
+            # returns both SIMULATE and REAL accounts.
+            ret, data = self._trade_ctx.get_acc_list()
             if ret != RET_OK or data is None or data.empty:
-                self._log.warning("Account discovery returned no SIMULATE accounts")
+                self._log.warning("Account discovery returned no accounts")
                 return
 
             accounts: list[dict[str, Any]] = data.to_dict("records")
+
+            # Post-filter: keep only SIMULATE (paper trading) accounts.
+            # The SDK may return REAL accounts alongside SIMULATE ones.
+            # ``trd_env`` is an integer in the protobuf response:
+            # 0 = SIMULATE, 1 = REAL (TrdEnv is a FtEnum, not IntEnum).
+            before_env = len(accounts)
+            accounts = [
+                a for a in accounts
+                if a.get("trd_env") == 0  # TrdEnv.SIMULATE in protobuf
+            ]
+            if not accounts:
+                self._log.warning(
+                    f"No SIMULATE accounts found in discovery response "
+                    f"(filtered {before_env} accounts)"
+                )
+                return
 
             # Filter by sim_acc_type for the configured market
             expected_type = _EXPECTED_SIM_ACC_TYPE.get(self._config.trd_market)

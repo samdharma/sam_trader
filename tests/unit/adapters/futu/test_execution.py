@@ -735,10 +735,13 @@ class TestAccountDiscovery:
         assert Venue("HKEX") in client._venue_account_aliases
         assert client._venue_account_aliases[Venue("HKEX")] == AccountId("FUTU-400")
 
-    def test_discover_accounts_passes_trd_env_simulate(
+    def test_discover_accounts_calls_get_acc_list_with_no_args(
         self, event_loop, make_client, mock_trade_ctx
     ):
-        """_discover_accounts calls get_acc_list with trd_env=TrdEnv.SIMULATE."""
+        """_discover_accounts calls get_acc_list() with NO arguments.
+
+        Futu API v10.6.6608's get_acc_list() takes no kwargs.
+        """
         mock_trade_ctx.get_acc_list.return_value = (
             RET_OK,
             pd.DataFrame(
@@ -754,12 +757,36 @@ class TestAccountDiscovery:
         event_loop.run_until_complete(client._discover_accounts())
 
         mock_trade_ctx.get_acc_list.assert_called_once()
-        from futu import TrdEnv
+        # No kwargs should be passed (the old trd_env kwarg is removed)
+        assert mock_trade_ctx.get_acc_list.call_args.kwargs == {}
 
-        assert (
-            mock_trade_ctx.get_acc_list.call_args.kwargs.get("trd_env")
-            == TrdEnv.SIMULATE
+    def test_discover_accounts_post_filters_simulate_only(
+        self, event_loop, make_client, mock_trade_ctx
+    ):
+        """get_acc_list() may return both REAL and SIMULATE accounts.
+
+        _discover_accounts() must post-filter to keep only SIMULATE
+        (trd_env == TrdEnv.SIMULATE).  REAL accounts are excluded.
+        """
+        mock_trade_ctx.get_acc_list.return_value = (
+            RET_OK,
+            pd.DataFrame(
+                {
+                    "acc_id": [100, 200, 300],
+                    "trd_env": [0, 1, 0],  # SIMULATE, REAL, SIMULATE
+                    "trdmarket_auth": [[2], [2], [2]],
+                    "sim_acc_type": [2, 2, 2],
+                }
+            ),
         )
+        client = make_client()
+        event_loop.run_until_complete(client._discover_accounts())
+
+        # Only the two SIMULATE accounts (100, 300) should be processed.
+        # Real account 200 should be filtered out before venue registration.
+        assert client._account_id == AccountId("FUTU-100")
+        # NASDAQ alias should be set to the last SIMULATE account (300)
+        assert client._venue_account_aliases[Venue("NASDAQ")] == AccountId("FUTU-300")
 
     def test_discover_accounts_handles_string_trdmarket_auth(
         self, event_loop, make_client, mock_trade_ctx

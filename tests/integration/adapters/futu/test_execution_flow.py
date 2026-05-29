@@ -199,7 +199,9 @@ class TestLimitOrderLifecycle:
             pd.DataFrame(
                 {
                     "acc_id": [123, 456],
-                    "trdMarket": [2, 1],  # US, HK
+                    "trd_env": [0, 0],  # SIMULATE
+                    "trdmarket_auth": [[2], [2, 1]],  # US, US+HK
+                    "sim_acc_type": [2, 2],  # STOCK_AND_OPTION
                 }
             ),
         )
@@ -276,7 +278,9 @@ class TestLimitOrderLifecycle:
             pd.DataFrame(
                 {
                     "acc_id": [123],
-                    "trdMarket": [2],  # US
+                    "trd_env": [0],  # SIMULATE
+                    "trdmarket_auth": [[2]],  # US
+                    "sim_acc_type": [2],  # STOCK_AND_OPTION
                 }
             ),
         )
