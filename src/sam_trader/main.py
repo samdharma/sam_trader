@@ -197,6 +197,11 @@ def build_trading_node() -> TradingNode:
                 port=cfg.futu_opend_port,
                 trd_env=cfg.futu_trd_env,
                 trd_market=cfg.futu_trd_market,
+                paper_acc_type=(
+                    cfg.market_config.futu_paper_acc_type
+                    if cfg.market_config is not None
+                    else "STOCK_AND_OPTION"
+                ),
                 unlock_pwd_md5=cfg.futu_unlock_pwd_md5,
                 routing=RoutingConfig(venues=futu_routing_venues),
             )

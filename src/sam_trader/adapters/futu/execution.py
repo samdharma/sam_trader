@@ -269,31 +269,18 @@ class FutuLiveExecutionClient(LiveExecutionClient):
         """Discover trading accounts and register venue aliases.
 
         For REAL trading (``trd_env=REAL``), uses ``FUTU_ACCOUNT_ID``
-        from the environment directly.  For SIMULATE (paper trading),
-        calls ``get_acc_list()`` and selects the account matching the
-        configured ``trd_market`` and instrument type:
-        STOCK for HK, STOCK_AND_OPTION for US.
+        from the environment directly.
 
-        Falls back to ``FUTU_ACCOUNT_ID`` if no matching paper trading
-        account is found.
+        For SIMULATE (paper trading), calls ``get_acc_list()`` and
+        selects the account matching the ``paper_acc_type`` from the
+        exec client config (derived from ``market_config.yaml``).
+
+        If no matching paper account is found, checks
+        ``FUTU_PAPER_ACCOUNT_ID`` as an explicit override before
+        logging CRITICAL and keeping the placeholder account ID.
         """
         if self._trade_ctx is None:
             return
-
-        # Map trd_market string to expected sim_acc_type for paper trading.
-        # Support both integer and string SDK response formats.
-        _SIM_ACC_TYPE_STOCK_INT = 0
-        _SIM_ACC_TYPE_STOCK_AND_OPTION_INT = 2
-        _SIM_ACC_TYPE_STOCK_STR = "STOCK"
-        _SIM_ACC_TYPE_STOCK_AND_OPTION_STR = "STOCK_AND_OPTION"
-        _EXPECTED_SIM_ACC_TYPE_INT: dict[str, int] = {
-            "HK": _SIM_ACC_TYPE_STOCK_INT,
-            "US": _SIM_ACC_TYPE_STOCK_AND_OPTION_INT,
-        }
-        _EXPECTED_SIM_ACC_TYPE_STR: dict[str, str] = {
-            "HK": _SIM_ACC_TYPE_STOCK_STR,
-            "US": _SIM_ACC_TYPE_STOCK_AND_OPTION_STR,
-        }
 
         # ── REAL mode: use the configured account directly ──────────
         if self._config.trd_env == "REAL":
@@ -313,6 +300,13 @@ class FutuLiveExecutionClient(LiveExecutionClient):
             return
 
         # ── SIMULATE mode: discover paper trading accounts ──────────
+        paper_acc_type = self._config.paper_acc_type
+        self._log.info(
+            f"Account discovery: searching for SIMULATE accounts "
+            f"with sim_acc_type={paper_acc_type} "
+            f"for market={self._config.trd_market}"
+        )
+
         try:
             # Futu API v10.6.6608: get_acc_list() takes no arguments.
             # It filters by the context's trd_market internally and
@@ -320,7 +314,9 @@ class FutuLiveExecutionClient(LiveExecutionClient):
             ret, data = self._trade_ctx.get_acc_list()
             if ret != RET_OK or data is None or data.empty:
                 self._log.warning("Account discovery returned no accounts")
-                self._fallback_to_env_account()
+                self._handle_account_discovery_failure(
+                    "get_acc_list returned empty/no data"
+                )
                 return
 
             accounts: list[dict[str, Any]] = data.to_dict("records")
@@ -336,52 +332,86 @@ class FutuLiveExecutionClient(LiveExecutionClient):
                     f"No SIMULATE accounts found in discovery response "
                     f"(filtered {before_env} accounts — all REAL or unknown)"
                 )
-                self._fallback_to_env_account()
+                self._handle_account_discovery_failure(
+                    "no SIMULATE accounts in response"
+                )
                 return
 
-            # Filter by sim_acc_type for the configured market.
-            # SDK may return int (0/2) or string ("STOCK"/"STOCK_AND_OPTION").
-            expected_int = _EXPECTED_SIM_ACC_TYPE_INT.get(self._config.trd_market)
-            expected_str = _EXPECTED_SIM_ACC_TYPE_STR.get(self._config.trd_market, "")
+            # Filter by sim_acc_type from config (market_config.yaml).
+            # Map the config string to the expected int for matching.
+            # SDK may return sim_acc_type as int (0/2) or string.
+            _ACC_TYPE_NAME_TO_INT: dict[str, int] = {
+                "STOCK": 0,
+                "OPTION": 1,
+                "STOCK_AND_OPTION": 2,
+            }
+            expected_int = _ACC_TYPE_NAME_TO_INT.get(paper_acc_type.upper())
             if expected_int is not None:
                 before = len(accounts)
                 accounts = [
                     a
                     for a in accounts
                     if _matches_sim_acc_type(
-                        a.get("sim_acc_type"), expected_int, expected_str
+                        a.get("sim_acc_type"), expected_int, paper_acc_type
                     )
                 ]
                 if not accounts:
+                    available_types = {
+                        str(a.get("sim_acc_type", "?")) for a in accounts
+                    } if before > 0 else set()
                     self._log.warning(
                         f"No SIMULATE accounts with sim_acc_type "
-                        f"matching {expected_str or expected_int} "
+                        f"matching {paper_acc_type} "
                         f"for market {self._config.trd_market} "
-                        f"(filtered {before} accounts)"
+                        f"(available types: {available_types or 'none'}, "
+                        f"filtered {before} accounts)"
                     )
-                    self._fallback_to_env_account()
+                    self._handle_account_discovery_failure(
+                        f"no account with sim_acc_type={paper_acc_type}"
+                    )
                     return
+            else:
+                self._log.warning(
+                    f"Unknown paper_acc_type '{paper_acc_type}' — "
+                    f"skipping sim_acc_type filter. "
+                    f"Valid values: STOCK, OPTION, STOCK_AND_OPTION"
+                )
 
             self._register_venue_account_aliases(accounts)
         except Exception as e:
             self._log.exception(f"Account discovery failed: {e}", e)
-            self._fallback_to_env_account()
+            self._handle_account_discovery_failure(f"exception: {e}")
 
-    def _fallback_to_env_account(self) -> None:
-        """Fall back to ``FUTU_ACCOUNT_ID`` when discovery yields no match."""
-        futu_account_id = os.environ.get("FUTU_ACCOUNT_ID", "")
-        if futu_account_id:
-            acc_id = AccountId(f"FUTU-{futu_account_id}")
+    def _handle_account_discovery_failure(self, reason: str) -> None:
+        """Handle account discovery failure — check override, else fail fast.
+
+        1. ``FUTU_PAPER_ACCOUNT_ID`` env var (explicit paper trading override).
+        2. If neither available, log CRITICAL and keep the factory placeholder.
+           Orders will fail with a clear "invalid account ID" error rather
+           than silently using the wrong account.
+
+        ``FUTU_ACCOUNT_ID`` is the OpenD *login* account, not a trading
+        account — it is intentionally excluded from this fallback path.
+        """
+        paper_override = os.environ.get("FUTU_PAPER_ACCOUNT_ID", "")
+        if paper_override:
+            acc_id = AccountId(f"FUTU-{paper_override}")
             self._account_id = acc_id
             self._log.info(
-                f"Account discovery fallback: using FUTU_ACCOUNT_ID={futu_account_id} "
-                f"→ {acc_id}"
+                f"Account discovery: using FUTU_PAPER_ACCOUNT_ID={paper_override} "
+                f"(reason: {reason})"
             )
-        else:
-            self._log.warning(
-                "Account discovery fallback: FUTU_ACCOUNT_ID is not set; "
-                "orders may fail with invalid account ID"
-            )
+            return
+
+        self._log.error(
+            f"FUTU ACCOUNT DISCOVERY FAILED: {reason}. "
+            f"No paper trading account found for "
+            f"market={self._config.trd_market} "
+            f"sim_acc_type={self._config.paper_acc_type}. "
+            f"Create a paper trading account in Futubull first, "
+            f"or set FUTU_PAPER_ACCOUNT_ID to override. "
+            f"Orders WILL fail until this is resolved."
+        )
 
     def _register_venue_account_aliases(self, accounts: list[dict[str, Any]]) -> None:
         """Map Futu market codes to Nautilus venues and account IDs.

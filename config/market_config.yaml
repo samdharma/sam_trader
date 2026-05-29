@@ -1,33 +1,161 @@
-# Market Configuration — Per-market parameters for dynamic multi-market operations.
-# Loaded at startup by MarketConfig.from_yaml().
+# =============================================================================
+# Market Configuration — Per-market parameters for dynamic multi-market ops.
+# =============================================================================
+#
+# Loaded at startup by MarketConfig.from_yaml() when MARKET env var is set.
+# Each market entry defines timezone, trading hours, broker routing, account
+# discovery filters, and pipeline timing parameters.
+#
 # See: docs/user/DYNAMIC_MULTI_MARKET_PLAN.md §3.2
+#      docs/reference/ACCOUNT_DISCOVERY.md
+#
+# ── Schema ───────────────────────────────────────────────────────────────────
+#
+# Field                      Type        Required   Description
+# ─────────────────────────  ──────────  ────────   ────────────────────────────
+# futu_trd_market            str         YES         Futu TrdMarket code. One of:
+#                                                     US, HK, CN, SG, JP, AU,
+#                                                     CA, MY.  Determines which
+#                                                     market the Futu trade
+#                                                     context connects to.
+#
+# futu_paper_acc_type        str         YES         Expected sim_acc_type for
+#                                                     paper trading account
+#                                                     auto-discovery. One of:
+#                                                       STOCK              (0)
+#                                                       OPTION             (1)
+#                                                       STOCK_AND_OPTION   (2)
+#                                                     US markets typically use
+#                                                     STOCK_AND_OPTION. HK and
+#                                                     other markets typically
+#                                                     use STOCK.  If the wrong
+#                                                     type is configured,
+#                                                     account discovery will
+#                                                     fail and you must set
+#                                                     FUTU_PAPER_ACCOUNT_ID.
+#
+# futu_routing_venues        list[str]   YES         Exchange venue codes for
+#                                                     order routing. Must match
+#                                                     Nautilus venue constants
+#                                                     (e.g., NASDAQ, NYSE,
+#                                                     HKEX).  Determines which
+#                                                     venues orders are routed
+#                                                     to and which bundles are
+#                                                     compatible.
+#
+# ib_enabled                 bool        YES         Whether IBKR is enabled for
+#                                                     this market. IB is US-only
+#                                                     in the current deployment.
+#                                                     When false, ibapi is never
+#                                                     imported and no IB clients
+#                                                     are registered.
+#
+# session_timezone           str         YES         IANA timezone name (e.g.,
+#                                                     "America/New_York",
+#                                                     "Asia/Hong_Kong").  Used
+#                                                     for all time-based
+#                                                     scheduling: session open/
+#                                                     close, lunch breaks,
+#                                                     pipeline runs, readiness
+#                                                     checks, EOD reports.
+#                                                     Must be a valid zoneinfo
+#                                                     key.
+#
+# session_open               str         YES         Market open time in HH:MM
+#                                                     format (24h, market local
+#                                                     time).  Strategies begin
+#                                                     active trading at this
+#                                                     time.
+#
+# session_close              str         YES         Market close time in HH:MM
+#                                                     format (24h, market local
+#                                                     time).  Strategies stop
+#                                                     trading and the market-
+#                                                     switch gate is evaluated.
+#
+# lunch_start                str         NO          Lunch break start in HH:MM
+#                                                     (24h, market local time).
+#                                                     Empty string = no lunch
+#                                                     break.  Only applicable
+#                                                     to markets with a midday
+#                                                     pause (e.g., HK 12:00).
+#                                                     Strategies with
+#                                                     lunch_pause_enabled=true
+#                                                     will pause/resume.
+#
+# lunch_end                  str         NO          Lunch break end in HH:MM
+#                                                     (24h, market local time).
+#                                                     Empty string if no lunch.
+#                                                     Must be after lunch_start.
+#
+# premarket_pipeline_time    str         YES         When the pre-market pipeline
+#                                                     runs in HH:MM (24h, market
+#                                                     local time).  Pipeline
+#                                                     discovers gaps, runs AI
+#                                                     analysis, and publishes
+#                                                     bundles to Redis.
+#                                                     US: 08:30 ET (~20:30 HKT
+#                                                     summer, ~21:30 HKT winter)
+#                                                     HK: 07:30 HKT
+#
+# sod_readiness_time         str         YES         Start-of-day readiness check
+#                                                     time in HH:MM (24h, market
+#                                                     local time).  Verifies
+#                                                     broker connectivity,
+#                                                     bundle availability, DB
+#                                                     health before market open.
+#
+# eod_report_time            str         YES         End-of-day report generation
+#                                                     time in HH:MM (24h, market
+#                                                     local time).  Aggregates
+#                                                     P&L, fills, and health
+#                                                     metrics for the session.
+# =============================================================================
 
 markets:
+  # ── US Market ───────────────────────────────────────────────────────────
   US:
+    # --- Futu broker ---
     futu_trd_market: "US"
+    futu_paper_acc_type: "STOCK_AND_OPTION"
     futu_routing_venues:
       - "NASDAQ"
       - "NYSE"
+
+    # --- IBKR broker ---
     ib_enabled: true
+
+    # --- Session schedule (Eastern Time) ---
     session_timezone: "America/New_York"
     session_open: "09:30"
     session_close: "16:00"
-    lunch_start: ""                     # No lunch break for US markets
+    lunch_start: ""             # No lunch break for US markets
     lunch_end: ""
-    premarket_pipeline_time: "08:30"    # ET — 1 hour before US open
-    sod_readiness_time: "08:00"         # ET — 1.5 hours before US open
-    eod_report_time: "16:05"            # ET — 5 min after US close
 
+    # --- Pipeline & ops schedule (Eastern Time) ---
+    premarket_pipeline_time: "08:30"    # 1h before open
+    sod_readiness_time: "08:00"         # 1.5h before open
+    eod_report_time: "16:05"            # 5min after close
+
+  # ── HK Market ───────────────────────────────────────────────────────────
   HK:
+    # --- Futu broker ---
     futu_trd_market: "HK"
+    futu_paper_acc_type: "STOCK"
     futu_routing_venues:
       - "HKEX"
-    ib_enabled: false
+
+    # --- IBKR broker ---
+    ib_enabled: false           # IB is US-only in current deployment
+
+    # --- Session schedule (Hong Kong Time) ---
     session_timezone: "Asia/Hong_Kong"
     session_open: "09:30"
     session_close: "16:00"
-    lunch_start: "12:00"
+    lunch_start: "12:00"        # HK has a 1-hour midday break
     lunch_end: "13:00"
-    premarket_pipeline_time: "07:30"    # HKT — 2 hours before HK open
-    sod_readiness_time: "07:00"         # HKT — 2.5 hours before HK open
-    eod_report_time: "16:05"            # HKT — 5 min after HK close
+
+    # --- Pipeline & ops schedule (Hong Kong Time) ---
+    premarket_pipeline_time: "07:30"    # 2h before open
+    sod_readiness_time: "07:00"         # 2.5h before open
+    eod_report_time: "16:05"            # 5min after close

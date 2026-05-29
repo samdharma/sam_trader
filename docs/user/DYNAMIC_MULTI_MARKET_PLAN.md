@@ -360,6 +360,7 @@ P1-DM1 (9z3.2.2) ──► P1-DM2 (9z3.2.3) ──► P1-DM3 (9z3.2.4)
 | D8 | **US pre-market at 08:30 ET (~20:30/21:30 HKT)** | 1 hour before US open. DST-aware via `zoneinfo`. Pipeline time specified in ET, converted to HKT dynamically. |
 | D9 | **IB = US-only** | HK trading through IB is not in scope. IB Gateway container stays up but `main.py` skips IB client registration when `MARKET=HK`. |
 | D10 | **Maintenance window 04:00–07:00 HKT** | Natural gap between US close and HK open. MarketSchedulerActor publishes window events. All disruptive ops gated. |
+| D11 | **Paper account auto-discovery with config-driven sim_acc_type** | `market_config.yaml` defines expected `sim_acc_type` per market (STOCK for HK, STOCK_AND_OPTION for US). `FUTU_ACCOUNT_ID` is the OpenD login account only — never used as a paper trading fallback. `FUTU_PAPER_ACCOUNT_ID` provides explicit override when auto-discovery fails. See `docs/reference/ACCOUNT_DISCOVERY.md`. |
 
 ---
 
@@ -369,7 +370,8 @@ P1-DM1 (9z3.2.2) ──► P1-DM2 (9z3.2.3) ──► P1-DM3 (9z3.2.4)
 
 | File | Purpose |
 |------|---------|
-| `config/market_config.yaml` | Per-market configuration (US + HK entries) |
+| `config/market_config.yaml` | Per-market configuration (US + HK entries, including `futu_paper_acc_type`) |
+| `docs/reference/ACCOUNT_DISCOVERY.md` | Futu paper account auto-discovery reference |
 | `config/gap_scanner.yaml` | Dual-broker scanner config |
 | `src/sam_trader/market_config.py` | `MarketConfig` frozen dataclass with `from_yaml()` |
 | `src/sam_trader/actors/market_scheduler.py` | `MarketSchedulerActor` — Nautilus Actor |

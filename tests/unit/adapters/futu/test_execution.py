@@ -768,6 +768,7 @@ class TestAccountDiscovery:
             port=11111,
             trd_env="SIMULATE",
             trd_market="HK",
+            paper_acc_type="STOCK",
             client_id=1,
         )
         clock = LiveClock()
@@ -920,6 +921,7 @@ class TestAccountDiscovery:
             port=11111,
             trd_env="SIMULATE",
             trd_market="HK",
+            paper_acc_type="STOCK",
             client_id=1,
         )
         clock = LiveClock()
@@ -959,6 +961,7 @@ class TestAccountDiscovery:
             port=11111,
             trd_env="SIMULATE",
             trd_market="HK",
+            paper_acc_type="STOCK",
             client_id=1,
         )
         clock = LiveClock()
@@ -1022,6 +1025,7 @@ class TestAccountDiscovery:
             port=11111,
             trd_env="SIMULATE",
             trd_market="HK",
+            paper_acc_type="STOCK",
             client_id=1,
         )
         clock = LiveClock()
@@ -1089,13 +1093,14 @@ class TestAccountDiscovery:
         - acc_id 19064358:           SIMULATE, STOCK, [HK]
         - acc_id 19064361:           SIMULATE, OPTION, [HK]
 
-        HK + SIMULATE → selects acc_id 19064358 (STOCK, HK-authorised).
+        HK + SIMULATE + paper_acc_type=STOCK → selects acc_id 19064358 (STOCK, HK-authorised).
         """
         cfg = FutuExecClientConfig(
             host="test-host",
             port=11111,
             trd_env="SIMULATE",
             trd_market="HK",
+            paper_acc_type="STOCK",
             client_id=1,
         )
         clock = LiveClock()
@@ -1194,12 +1199,12 @@ class TestAccountDiscovery:
         # Account ID unchanged (stays at placeholder)
         assert client._account_id == placeholder
 
-    # ── Fallback tests ──
+    # ── Account discovery failure / fallback tests ──
 
-    def test_fallback_to_env_account_on_no_match(
+    def test_paper_account_id_override_on_no_match(
         self, event_loop, make_client, mock_trade_ctx
     ):
-        """When no paper account matches, fall back to FUTU_ACCOUNT_ID."""
+        """When no paper account matches, FUTU_PAPER_ACCOUNT_ID is used as override."""
         mock_trade_ctx.get_acc_list.return_value = (
             RET_OK,
             pd.DataFrame(
@@ -1216,6 +1221,7 @@ class TestAccountDiscovery:
             port=11111,
             trd_env="SIMULATE",
             trd_market="HK",
+            paper_acc_type="STOCK",
             client_id=1,
         )
         clock = LiveClock()
@@ -1232,13 +1238,65 @@ class TestAccountDiscovery:
             config=cfg,
         )
 
-        with patch.dict(os.environ, {"FUTU_ACCOUNT_ID": "fallback-123"}):
+        with patch.dict(os.environ, {"FUTU_PAPER_ACCOUNT_ID": "my-paper-456"}):
             event_loop.run_until_complete(client._discover_accounts())
 
-        assert client._account_id == AccountId("FUTU-fallback-123")
+        assert client._account_id == AccountId("FUTU-my-paper-456")
 
-    def test_fallback_warns_when_no_env(self, event_loop, make_client, mock_trade_ctx):
-        """No match and no FUTU_ACCOUNT_ID — placeholder kept, warning logged."""
+    def test_ignores_futu_account_id_on_no_match(
+        self, event_loop, make_client, mock_trade_ctx
+    ):
+        """FUTU_ACCOUNT_ID is NOT used as a trading account fallback.
+
+        FUTU_ACCOUNT_ID is the OpenD login account, not a trading
+        account.  When discovery fails and only FUTU_ACCOUNT_ID is
+        set (no FUTU_PAPER_ACCOUNT_ID), the placeholder is kept.
+        """
+        mock_trade_ctx.get_acc_list.return_value = (
+            RET_OK,
+            pd.DataFrame(
+                {
+                    "acc_id": [100, 200],
+                    "trd_env": ["SIMULATE", "SIMULATE"],
+                    "trdmarket_auth": [[1], [1]],
+                    "sim_acc_type": ["OPTION", "OPTION"],  # no STOCK for HK
+                }
+            ),
+        )
+        cfg = FutuExecClientConfig(
+            host="test-host",
+            port=11111,
+            trd_env="SIMULATE",
+            trd_market="HK",
+            paper_acc_type="STOCK",
+            client_id=1,
+        )
+        clock = LiveClock()
+        msgbus = TestComponentStubs.msgbus()
+        cache = TestComponentStubs.cache()
+        provider = MagicMock(spec=InstrumentProvider)
+        client = FutuLiveExecutionClient(
+            loop=event_loop,
+            client=mock_trade_ctx,
+            msgbus=msgbus,
+            cache=cache,
+            clock=clock,
+            instrument_provider=provider,
+            config=cfg,
+        )
+        placeholder = client._account_id
+
+        # Only FUTU_ACCOUNT_ID set — should NOT be used for trading
+        with patch.dict(os.environ, {"FUTU_ACCOUNT_ID": "281756477933385889"}):
+            event_loop.run_until_complete(client._discover_accounts())
+
+        # Placeholder kept — FUTU_ACCOUNT_ID is NOT used as trading account
+        assert client._account_id == placeholder
+
+    def test_discovery_failure_keeps_placeholder_no_env(
+        self, event_loop, make_client, mock_trade_ctx
+    ):
+        """No match and no FUTU_PAPER_ACCOUNT_ID — placeholder kept, CRITICAL logged."""
         mock_trade_ctx.get_acc_list.return_value = (
             RET_OK,
             pd.DataFrame(
@@ -1259,15 +1317,17 @@ class TestAccountDiscovery:
         assert client._account_id == placeholder
         assert client._venue_account_aliases == {}
 
-    def test_fallback_on_empty_response(self, event_loop, make_client, mock_trade_ctx):
-        """Empty get_acc_list response triggers fallback."""
+    def test_paper_account_id_override_on_empty_response(
+        self, event_loop, make_client, mock_trade_ctx
+    ):
+        """Empty get_acc_list response uses FUTU_PAPER_ACCOUNT_ID override."""
         mock_trade_ctx.get_acc_list.return_value = (RET_OK, pd.DataFrame())
         client = make_client()
 
-        with patch.dict(os.environ, {"FUTU_ACCOUNT_ID": "empty-fallback"}):
+        with patch.dict(os.environ, {"FUTU_PAPER_ACCOUNT_ID": "explicit-paper-789"}):
             event_loop.run_until_complete(client._discover_accounts())
 
-        assert client._account_id == AccountId("FUTU-empty-fallback")
+        assert client._account_id == AccountId("FUTU-explicit-paper-789")
 
 
 # ---------------------------------------------------------------------------

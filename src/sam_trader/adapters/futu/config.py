@@ -59,6 +59,10 @@ class FutuExecClientConfig(LiveExecClientConfig, frozen=True):
         The trading market code, e.g. 'US', 'HK', 'CN' (default: 'US').
     client_id : int
         The client identifier for this connection (default: 1).
+    paper_acc_type : str
+        Expected ``sim_acc_type`` for paper trading account discovery
+        (e.g., ``"STOCK"`` for HK, ``"STOCK_AND_OPTION"`` for US).
+        Used to filter ``get_acc_list()`` results in SIMULATE mode.
     unlock_pwd_md5 : str
         The MD5 hash of the trade unlock password (default: '').
         Required for REAL trading environment.
@@ -70,6 +74,7 @@ class FutuExecClientConfig(LiveExecClientConfig, frozen=True):
     trd_env: str = "SIMULATE"
     trd_market: str = "US"
     client_id: int = 1
+    paper_acc_type: str = "STOCK_AND_OPTION"
     unlock_pwd_md5: str = ""
 
     @property

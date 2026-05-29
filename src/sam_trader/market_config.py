@@ -29,6 +29,9 @@ class MarketConfig:
     ----------
     futu_trd_market : str
         Futu trade market identifier (e.g., "US", "HK").
+    futu_paper_acc_type : str
+        Expected ``sim_acc_type`` for paper trading account discovery
+        (e.g., ``"STOCK"`` for HK, ``"STOCK_AND_OPTION"`` for US).
     futu_routing_venues : list[str]
         Exchange venues for routing (e.g., ["NASDAQ", "NYSE"] for US).
     ib_enabled : bool
@@ -59,6 +62,7 @@ class MarketConfig:
     """
 
     futu_trd_market: str
+    futu_paper_acc_type: str = "STOCK_AND_OPTION"
     futu_routing_venues: list[str] = field(default_factory=list)
     ib_enabled: bool = False
     session_timezone: str = "America/New_York"
