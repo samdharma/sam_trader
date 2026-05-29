@@ -2944,6 +2944,307 @@ def switch_market(ctx: click.Context, market: str, timeout: int) -> None:
         raise click.ClickException(result["detail"])
 
 
+# ---------------------------------------------------------------------------
+# Backtest commands
+# ---------------------------------------------------------------------------
+
+
+def _safe_round(value: Any, ndigits: int = 2) -> float | None:
+    """Round a numeric value, returning None for non-numeric input."""
+    if isinstance(value, (int, float)):
+        return round(value, ndigits)
+    return None
+
+
+def _dict_get(d: Any, key: str) -> Any:
+    """Safely get a value from a dict, returning None for non-dict input."""
+    if isinstance(d, dict):
+        return d.get(key)
+    return None
+
+
+def _format_backtest_table(result: dict[str, Any]) -> str:
+    """Format backtest results as a human-readable table."""
+
+    def _fmt_float(value: Any, width: int, suffix: str = "") -> str:
+        """Format a float value, showing N/A for None."""
+        if value is None:
+            return f"{'N/A':>{width}}"
+        return f"{float(value):>{width}.{width - 3 - len(suffix)}f}{suffix}"
+
+    def _fmt_int(value: Any, width: int) -> str:
+        """Format an int value, showing N/A for None."""
+        if value is None:
+            return f"{'N/A':>{width}}"
+        return f"{int(value):>{width}}"
+
+    def _fmt_pct(value: Any, width: int) -> str:
+        """Format a percentage value, showing N/A for None."""
+        if value is None:
+            return f"{'N/A':>{width}}"
+        return f"{float(value):>{width - 1}.1%}"
+
+    lines: list[str] = []
+    lines.append("Backtest Results")
+    lines.append("=" * 72)
+
+    bundles = result.get("bundles", [])
+    if not bundles:
+        note = result.get("note", "No results — backtest produced no output.")
+        lines.append(note)
+        return "\n".join(lines)
+
+    lines.append(
+        f"{'Bundle':<24} {'Net P&L':>10} {'Sharpe':>8} "
+        f"{'Max DD':>8} {'Win Rate':>9} {'Trades':>7} {'Elapsed':>8}"
+    )
+    lines.append("-" * 72)
+
+    for b in bundles:
+        biz = b.get("bundle_id", b.get("strategy_id", "?"))
+        lines.append(
+            f"{str(biz)[:24]:<24} "
+            f"{_fmt_float(b.get('net_pnl'), 10)} "
+            f"{_fmt_float(b.get('sharpe'), 8)} "
+            f"{_fmt_pct(b.get('max_drawdown'), 8)} "
+            f"{_fmt_pct(b.get('win_rate'), 9)} "
+            f"{_fmt_int(b.get('total_trades'), 7)} "
+            f"{_fmt_float(b.get('elapsed'), 7, 's')}"
+        )
+
+    return "\n".join(lines)
+
+
+def _build_backtest_summary(
+    result_obj: Any,
+    bundle_id: str,
+    strategy_id: str | None = None,
+) -> dict[str, Any]:
+    """Extract summary metrics from a single BacktestResult.
+
+    Parameters
+    ----------
+    result_obj : BacktestResult
+        A Nautilus BacktestResult from a single strategy run.
+    bundle_id : str
+        The bundle identifier for display.
+    strategy_id : str | None
+        The Nautilus strategy_id from config (falls back to bundle_id).
+
+    Returns
+    -------
+    dict
+        Summary dict with keys: bundle_id, net_pnl, sharpe, max_drawdown,
+        win_rate, total_trades, elapsed.
+
+    """
+    display_id = strategy_id or bundle_id
+
+    # Extract P&L — use the first strategy's total_pnl from stats_pnls
+    net_pnl: float | None = None
+    stats_pnls = getattr(result_obj, "stats_pnls", {}) or {}
+    for _key, pnl_data in stats_pnls.items():
+        if isinstance(pnl_data, dict):
+            net_pnl = pnl_data.get("total_pnl")
+            if net_pnl is not None:
+                break
+
+    stats_returns = getattr(result_obj, "stats_returns", {}) or {}
+
+    sharpe = stats_returns.get("sharpe_ratio")
+    max_dd = stats_returns.get("max_drawdown")
+    win_rate = stats_returns.get("win_rate")
+    total_trades = getattr(result_obj, "total_orders", None)
+    elapsed = getattr(result_obj, "elapsed_time", None)
+
+    return {
+        "bundle_id": display_id,
+        "net_pnl": round(net_pnl, 2) if isinstance(net_pnl, (int, float)) else net_pnl,
+        "sharpe": round(sharpe, 4) if isinstance(sharpe, (int, float)) else sharpe,
+        "max_drawdown": (
+            round(max_dd, 4) if isinstance(max_dd, (int, float)) else max_dd
+        ),
+        "win_rate": (
+            round(win_rate, 4) if isinstance(win_rate, (int, float)) else win_rate
+        ),
+        "total_trades": int(total_trades) if total_trades is not None else None,
+        "elapsed": round(elapsed, 2) if isinstance(elapsed, (int, float)) else elapsed,
+    }
+
+
+@cli.command("backtest")
+@click.argument("bundle_id", required=False)
+@click.option(
+    "--bundles",
+    "bundles_path",
+    type=click.Path(path_type=Path),
+    default=str(DEFAULT_BUNDLES_PATH),
+    help="Path to bundles YAML file.",
+)
+@click.option(
+    "--start",
+    "start_date",
+    required=True,
+    help="Backtest start date (ISO format, e.g., 2024-01-01).",
+)
+@click.option(
+    "--end",
+    "end_date",
+    required=True,
+    help="Backtest end date (ISO format, e.g., 2024-06-30).",
+)
+@click.option(
+    "--catalog",
+    "catalog_path",
+    default="data/catalog",
+    help="Path to Parquet data catalog.",
+)
+@click.pass_context
+def backtest(
+    ctx: click.Context,
+    bundle_id: str | None,
+    bundles_path: Path,
+    start_date: str,
+    end_date: str,
+    catalog_path: str,
+) -> None:
+    """Run a backtest using NautilusTrader's BacktestNode.
+
+    BACKTEST_EXAMPLES:
+
+        sam backtest tsla-orb-15m-futu --start 2024-01-01 --end 2024-06-30
+
+        sam backtest --bundles config/bundles.yaml --start 2024-01-01 --end 2024-06-30
+
+    """
+    from sam_trader.bundle_loader import BundleLoaderError, load_bundles
+    from sam_trader.services.backtest.engine import (
+        BacktestEngineError,
+        BacktestEngineWrapper,
+    )
+
+    # Load bundles
+    if not bundles_path.exists():
+        raise click.ClickException(f"Bundles file not found: {bundles_path}")
+
+    try:
+        all_bundles = load_bundles(bundles_path)
+    except BundleLoaderError as exc:
+        raise click.ClickException(f"Failed to load bundles: {exc}")
+
+    if not all_bundles:
+        raise click.ClickException(
+            "No enabled bundles found. Check config/bundles.yaml."
+        )
+
+    # Filter to single bundle_id if provided
+    if bundle_id:
+        matching = [b for b in all_bundles if b.config.get("bundle_id") == bundle_id]
+        if not matching:
+            available = [b.config.get("bundle_id", "?") for b in all_bundles]
+            raise click.ClickException(
+                f"Bundle '{bundle_id}' not found. " f"Available: {', '.join(available)}"
+            )
+        strategies = matching
+    else:
+        strategies = all_bundles
+
+    # Extract instrument_ids and bar_types from strategy configs
+    instrument_ids: list[str] = []
+    bar_types: list[str] = []
+    for s in strategies:
+        cfg = s.config
+        iid = cfg.get("instrument_id")
+        if isinstance(iid, str) and iid not in instrument_ids:
+            instrument_ids.append(iid)
+        bt = cfg.get("bar_type")
+        if isinstance(bt, str) and bt not in bar_types:
+            bar_types.append(bt)
+
+    if not instrument_ids:
+        raise click.ClickException("No instrument_ids found in bundle configs")
+    if not bar_types:
+        raise click.ClickException("No bar_types found in bundle configs")
+
+    # Run backtest
+    wrapper = BacktestEngineWrapper(catalog_path=catalog_path)
+
+    try:
+        # Run all strategies in a single BacktestNode.
+        # If there's a single strategy, run() returns one result.
+        # For multi-strategy, run() handles them together.
+        raw_result = wrapper.run(
+            strategies=list(strategies),
+            instrument_ids=instrument_ids,
+            bar_types=bar_types,
+            start=start_date,
+            end=end_date,
+        )
+    except BacktestEngineError as exc:
+        raise click.ClickException(f"Backtest failed: {exc}")
+    except Exception as exc:
+        raise click.ClickException(f"Backtest error: {exc}")
+
+    # Build result summary — one entry per strategy
+    bundles_data: list[dict[str, Any]] = []
+    try:
+        stats_pnls = getattr(raw_result, "stats_pnls", {}) or {}
+        stats_returns = getattr(raw_result, "stats_returns", {}) or {}
+
+        if stats_pnls:
+            # BacktestRunConfig.run_analysis=True → per-strategy stats
+            for strategy_key in stats_pnls:
+                strategy_pnl = stats_pnls.get(strategy_key, {})
+                strategy_ret = stats_returns
+                if isinstance(stats_returns, dict) and strategy_key in stats_returns:
+                    strategy_ret = stats_returns[strategy_key]
+
+                entry: dict[str, Any] = {
+                    "bundle_id": strategy_key,
+                    "net_pnl": _safe_round(strategy_pnl.get("total_pnl"), 2),
+                    "sharpe": _safe_round(_dict_get(strategy_ret, "sharpe_ratio"), 4),
+                    "max_drawdown": _safe_round(
+                        _dict_get(strategy_ret, "max_drawdown"), 4
+                    ),
+                    "win_rate": _safe_round(_dict_get(strategy_ret, "win_rate"), 4),
+                }
+                bundles_data.append(entry)
+        else:
+            # Fallback: single top-level result (run_analysis=False or edge case)
+            entry = _build_backtest_summary(raw_result, bundle_id or "result")
+            bundles_data.append(entry)
+
+        # Add elapsed and total_trades at top level
+        elapsed = getattr(raw_result, "elapsed_time", None)
+        total_orders = getattr(raw_result, "total_orders", None)
+        for e in bundles_data:
+            if elapsed is not None and "elapsed" not in e:
+                e["elapsed"] = round(elapsed, 2)
+            if total_orders is not None and "total_trades" not in e:
+                e["total_trades"] = int(total_orders)
+
+    except Exception as exc:
+        # If stats extraction fails, provide a minimal result
+        bundles_data = [
+            {
+                "bundle_id": strategy_key if "strategy_key" in dir() else "result",
+                "note": f"Stats extraction error: {exc}",
+            }
+        ]
+
+    result_payload: dict[str, Any] = {
+        "command": "backtest",
+        "start": start_date,
+        "end": end_date,
+        "bundles": bundles_data,
+    }
+
+    if ctx.obj.get("json"):
+        _out(ctx, result_payload)
+    else:
+        click.echo(_format_backtest_table(result_payload))
+
+
 @cli.command("download-bars")
 @click.option(
     "--instrument",

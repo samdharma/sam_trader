@@ -8,6 +8,10 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from nautilus_trader.backtest.results import BacktestResult
+from nautilus_trader.trading.config import ImportableStrategyConfig
+
+from sam_trader.services.backtest.engine import BacktestEngineError
 from sam_trader.services.cli import SAM_TRADER_CONTAINER, main
 
 
@@ -2411,6 +2415,492 @@ class TestDownloadBarsCommand:
             "No enabled FUTU instruments" in captured.out
             or "No enabled FUTU instruments" in captured.err
         )
+
+
+class TestBacktestCommand:
+    """Tests for the 'sam backtest' command."""
+
+    @patch("sam_trader.services.backtest.engine.BacktestEngineWrapper")
+    @patch("sam_trader.bundle_loader.load_bundles")
+    def test_backtest_single_bundle_table_output(
+        self,
+        mock_load_bundles: Any,
+        mock_wrapper_cls: Any,
+        capsys: Any,
+        tmp_path: Any,
+    ) -> None:
+        """sam backtest <bundle-id> prints a result table."""
+        strategy = ImportableStrategyConfig(
+            strategy_path="sam_trader.strategies.orb:OrbStrategy",
+            config_path="sam_trader.strategies.orb:OrbStrategyConfig",
+            config={
+                "instrument_id": "TSLA.NASDAQ",
+                "bar_type": "TSLA.NASDAQ-15-MINUTE-LAST-EXTERNAL",
+                "bundle_id": "tsla-orb-15m-futu",
+                "venue": "FUTU",
+                "market": "US",
+            },
+        )
+        mock_load_bundles.return_value = [strategy]
+
+        now = datetime.now(timezone.utc)
+        now_ns = int(now.timestamp() * 1_000_000_000)
+        result = BacktestResult(
+            trader_id="BACKTEST-001",
+            machine_id="test",
+            run_config_id="config-1",
+            instance_id="inst-1",
+            run_id="run-1",
+            run_started=now_ns,
+            run_finished=now_ns,
+            backtest_start=now_ns,
+            backtest_end=now_ns,
+            elapsed_time=3.5,
+            iterations=100,
+            total_events=500,
+            total_orders=12,
+            total_positions=0,
+            stats_pnls={"OrbStrategy-001": {"total_pnl": 1250.50}},
+            stats_returns={
+                "sharpe_ratio": 1.85,
+                "max_drawdown": -0.12,
+                "win_rate": 0.55,
+            },
+        )
+
+        mock_wrapper = MagicMock()
+        mock_wrapper.run.return_value = result
+        mock_wrapper_cls.return_value = mock_wrapper
+
+        bundles_yaml = tmp_path / "bundles.yaml"
+        bundles_yaml.write_text("bundles: []")
+
+        rc = main(
+            [
+                "backtest",
+                "tsla-orb-15m-futu",
+                "--start",
+                "2024-01-01",
+                "--end",
+                "2024-06-30",
+                "--bundles",
+                str(bundles_yaml),
+            ]
+        )
+        captured = capsys.readouterr()
+        assert rc == 0
+        assert "Backtest Results" in captured.out
+        assert "Net P&L" in captured.out
+        assert "Sharpe" in captured.out
+        assert "Max DD" in captured.out
+        assert "Win Rate" in captured.out
+        assert "Trades" in captured.out
+        assert "Elapsed" in captured.out
+
+    @patch("sam_trader.services.backtest.engine.BacktestEngineWrapper")
+    @patch("sam_trader.bundle_loader.load_bundles")
+    def test_backtest_json_output(
+        self,
+        mock_load_bundles: Any,
+        mock_wrapper_cls: Any,
+        capsys: Any,
+        tmp_path: Any,
+    ) -> None:
+        """sam backtest --json prints structured JSON."""
+        strategy = ImportableStrategyConfig(
+            strategy_path="sam_trader.strategies.orb:OrbStrategy",
+            config_path="sam_trader.strategies.orb:OrbStrategyConfig",
+            config={
+                "instrument_id": "AAPL.NASDAQ",
+                "bar_type": "AAPL.NASDAQ-5-MINUTE-LAST-EXTERNAL",
+                "bundle_id": "aapl-momentum-5m",
+                "venue": "FUTU",
+                "market": "US",
+            },
+        )
+        mock_load_bundles.return_value = [strategy]
+
+        now = datetime.now(timezone.utc)
+        now_ns = int(now.timestamp() * 1_000_000_000)
+        result = BacktestResult(
+            trader_id="BACKTEST-001",
+            machine_id="test",
+            run_config_id="config-1",
+            instance_id="inst-1",
+            run_id="run-1",
+            run_started=now_ns,
+            run_finished=now_ns,
+            backtest_start=now_ns,
+            backtest_end=now_ns,
+            elapsed_time=2.0,
+            iterations=50,
+            total_events=200,
+            total_orders=5,
+            total_positions=0,
+            stats_pnls={"MomentumStrategy-001": {"total_pnl": 800.0}},
+            stats_returns={
+                "sharpe_ratio": 1.2,
+                "max_drawdown": -0.08,
+                "win_rate": 0.60,
+            },
+        )
+
+        mock_wrapper = MagicMock()
+        mock_wrapper.run.return_value = result
+        mock_wrapper_cls.return_value = mock_wrapper
+
+        bundles_yaml = tmp_path / "bundles.yaml"
+        bundles_yaml.write_text("bundles: []")
+
+        rc = main(
+            [
+                "--json",
+                "backtest",
+                "--bundles",
+                str(bundles_yaml),
+                "--start",
+                "2024-01-01",
+                "--end",
+                "2024-06-30",
+            ]
+        )
+        captured = capsys.readouterr()
+        assert rc == 0
+        data = json.loads(captured.out)
+        assert data["command"] == "backtest"
+        assert data["start"] == "2024-01-01"
+        assert data["end"] == "2024-06-30"
+        assert len(data["bundles"]) >= 1
+
+    @patch("sam_trader.services.backtest.engine.BacktestEngineWrapper")
+    @patch("sam_trader.bundle_loader.load_bundles")
+    def test_backtest_multi_bundle(
+        self,
+        mock_load_bundles: Any,
+        mock_wrapper_cls: Any,
+        capsys: Any,
+        tmp_path: Any,
+    ) -> None:
+        """sam backtest --bundles runs all enabled bundles."""
+        s1 = ImportableStrategyConfig(
+            strategy_path="sam_trader.strategies.orb:OrbStrategy",
+            config_path="sam_trader.strategies.orb:OrbStrategyConfig",
+            config={
+                "instrument_id": "TSLA.NASDAQ",
+                "bar_type": "TSLA.NASDAQ-15-MINUTE-LAST-EXTERNAL",
+                "bundle_id": "tsla-orb-15m",
+                "venue": "FUTU",
+            },
+        )
+        s2 = ImportableStrategyConfig(
+            strategy_path="sam_trader.strategies.momentum:MomentumStrategy",
+            config_path="sam_trader.strategies.momentum:MomentumStrategyConfig",
+            config={
+                "instrument_id": "AAPL.NASDAQ",
+                "bar_type": "AAPL.NASDAQ-5-MINUTE-LAST-EXTERNAL",
+                "bundle_id": "aapl-momentum-5m",
+                "venue": "FUTU",
+            },
+        )
+        mock_load_bundles.return_value = [s1, s2]
+
+        now = datetime.now(timezone.utc)
+        now_ns = int(now.timestamp() * 1_000_000_000)
+        result = BacktestResult(
+            trader_id="BACKTEST-001",
+            machine_id="test",
+            run_config_id="config-1",
+            instance_id="inst-1",
+            run_id="run-1",
+            run_started=now_ns,
+            run_finished=now_ns,
+            backtest_start=now_ns,
+            backtest_end=now_ns,
+            elapsed_time=4.0,
+            iterations=200,
+            total_events=1000,
+            total_orders=20,
+            total_positions=0,
+            stats_pnls={
+                "OrbStrategy-001": {"total_pnl": 1500.0},
+                "MomentumStrategy-001": {"total_pnl": 800.0},
+            },
+            stats_returns={
+                "sharpe_ratio": 1.6,
+                "max_drawdown": -0.10,
+                "win_rate": 0.52,
+            },
+        )
+
+        mock_wrapper = MagicMock()
+        mock_wrapper.run.return_value = result
+        mock_wrapper_cls.return_value = mock_wrapper
+
+        bundles_yaml = tmp_path / "bundles.yaml"
+        bundles_yaml.write_text("bundles: []")
+
+        rc = main(
+            [
+                "backtest",
+                "--bundles",
+                str(bundles_yaml),
+                "--start",
+                "2024-01-01",
+                "--end",
+                "2024-06-30",
+            ]
+        )
+        captured = capsys.readouterr()
+        assert rc == 0
+        assert "Backtest Results" in captured.out
+        mock_wrapper.run.assert_called_once()
+
+    @patch("sam_trader.bundle_loader.load_bundles")
+    def test_backtest_bundle_not_found(
+        self,
+        mock_load_bundles: Any,
+        capsys: Any,
+        tmp_path: Any,
+    ) -> None:
+        """Backtest with non-existent bundle_id fails with helpful message."""
+        strategy = ImportableStrategyConfig(
+            strategy_path="sam_trader.strategies.orb:OrbStrategy",
+            config_path="sam_trader.strategies.orb:OrbStrategyConfig",
+            config={
+                "instrument_id": "TSLA.NASDAQ",
+                "bar_type": "TSLA.NASDAQ-15-MINUTE-LAST-EXTERNAL",
+                "bundle_id": "tsla-orb-15m-futu",
+                "venue": "FUTU",
+            },
+        )
+        mock_load_bundles.return_value = [strategy]
+
+        bundles_yaml = tmp_path / "bundles.yaml"
+        bundles_yaml.write_text("bundles: []")
+
+        rc = main(
+            [
+                "backtest",
+                "nonexistent-bundle",
+                "--bundles",
+                str(bundles_yaml),
+                "--start",
+                "2024-01-01",
+                "--end",
+                "2024-06-30",
+            ]
+        )
+        captured = capsys.readouterr()
+        assert rc == 1
+        assert "not found" in captured.err or "not found" in captured.out
+
+    @patch("sam_trader.bundle_loader.load_bundles")
+    def test_backtest_no_enabled_bundles(
+        self,
+        mock_load_bundles: Any,
+        capsys: Any,
+        tmp_path: Any,
+    ) -> None:
+        """Backtest with no enabled bundles fails gracefully."""
+        mock_load_bundles.return_value = []
+
+        bundles_yaml = tmp_path / "bundles.yaml"
+        bundles_yaml.write_text("bundles: []")
+
+        rc = main(
+            [
+                "backtest",
+                "--bundles",
+                str(bundles_yaml),
+                "--start",
+                "2024-01-01",
+                "--end",
+                "2024-06-30",
+            ]
+        )
+        captured = capsys.readouterr()
+        assert rc == 1
+        assert (
+            "No enabled bundles" in captured.err or "No enabled bundles" in captured.out
+        )
+
+    @patch("sam_trader.services.backtest.engine.BacktestEngineWrapper")
+    @patch("sam_trader.bundle_loader.load_bundles")
+    def test_backtest_engine_error(
+        self,
+        mock_load_bundles: Any,
+        mock_wrapper_cls: Any,
+        capsys: Any,
+        tmp_path: Any,
+    ) -> None:
+        """Backtest engine failure returns non-zero exit code."""
+        strategy = ImportableStrategyConfig(
+            strategy_path="sam_trader.strategies.orb:OrbStrategy",
+            config_path="sam_trader.strategies.orb:OrbStrategyConfig",
+            config={
+                "instrument_id": "TSLA.NASDAQ",
+                "bar_type": "TSLA.NASDAQ-15-MINUTE-LAST-EXTERNAL",
+                "bundle_id": "tsla-orb-15m-futu",
+                "venue": "FUTU",
+            },
+        )
+        mock_load_bundles.return_value = [strategy]
+
+        mock_wrapper = MagicMock()
+        mock_wrapper.run.side_effect = BacktestEngineError("No data in catalog")
+        mock_wrapper_cls.return_value = mock_wrapper
+
+        bundles_yaml = tmp_path / "bundles.yaml"
+        bundles_yaml.write_text("bundles: []")
+
+        rc = main(
+            [
+                "backtest",
+                "tsla-orb-15m-futu",
+                "--bundles",
+                str(bundles_yaml),
+                "--start",
+                "2024-01-01",
+                "--end",
+                "2024-06-30",
+            ]
+        )
+        captured = capsys.readouterr()
+        assert rc == 1
+        assert "Backtest failed" in captured.err or "Backtest failed" in captured.out
+
+    @patch("sam_trader.services.backtest.engine.BacktestEngineWrapper")
+    @patch("sam_trader.bundle_loader.load_bundles")
+    def test_backtest_custom_catalog_path(
+        self,
+        mock_load_bundles: Any,
+        mock_wrapper_cls: Any,
+        capsys: Any,
+        tmp_path: Any,
+    ) -> None:
+        """--catalog flag propagates to BacktestEngineWrapper."""
+        strategy = ImportableStrategyConfig(
+            strategy_path="sam_trader.strategies.orb:OrbStrategy",
+            config_path="sam_trader.strategies.orb:OrbStrategyConfig",
+            config={
+                "instrument_id": "TSLA.NASDAQ",
+                "bar_type": "TSLA.NASDAQ-15-MINUTE-LAST-EXTERNAL",
+                "bundle_id": "tsla-orb-15m-futu",
+                "venue": "FUTU",
+            },
+        )
+        mock_load_bundles.return_value = [strategy]
+
+        now = datetime.now(timezone.utc)
+        now_ns = int(now.timestamp() * 1_000_000_000)
+        result = BacktestResult(
+            trader_id="BACKTEST-001",
+            machine_id="test",
+            run_config_id="config-1",
+            instance_id="inst-1",
+            run_id="run-1",
+            run_started=now_ns,
+            run_finished=now_ns,
+            backtest_start=now_ns,
+            backtest_end=now_ns,
+            elapsed_time=1.0,
+            iterations=10,
+            total_events=50,
+            total_orders=3,
+            total_positions=0,
+            stats_pnls={"OrbStrategy-001": {"total_pnl": 100.0}},
+            stats_returns={"sharpe_ratio": 0.5},
+        )
+
+        mock_wrapper = MagicMock()
+        mock_wrapper.run.return_value = result
+        mock_wrapper_cls.return_value = mock_wrapper
+
+        bundles_yaml = tmp_path / "bundles.yaml"
+        bundles_yaml.write_text("bundles: []")
+
+        rc = main(
+            [
+                "backtest",
+                "--bundles",
+                str(bundles_yaml),
+                "--start",
+                "2024-01-01",
+                "--end",
+                "2024-06-30",
+                "--catalog",
+                "/custom/catalog/path",
+            ]
+        )
+        _ = capsys.readouterr()
+        assert rc == 0
+        mock_wrapper_cls.assert_called_once_with(catalog_path="/custom/catalog/path")
+
+    @patch("sam_trader.services.backtest.engine.BacktestEngineWrapper")
+    @patch("sam_trader.bundle_loader.load_bundles")
+    def test_backtest_result_with_none_stats(
+        self,
+        mock_load_bundles: Any,
+        mock_wrapper_cls: Any,
+        capsys: Any,
+        tmp_path: Any,
+    ) -> None:
+        """Backtest result with None/empty stats still displays table."""
+        strategy = ImportableStrategyConfig(
+            strategy_path="sam_trader.strategies.orb:OrbStrategy",
+            config_path="sam_trader.strategies.orb:OrbStrategyConfig",
+            config={
+                "instrument_id": "TSLA.NASDAQ",
+                "bar_type": "TSLA.NASDAQ-15-MINUTE-LAST-EXTERNAL",
+                "bundle_id": "tsla-orb-15m-futu",
+                "venue": "FUTU",
+            },
+        )
+        mock_load_bundles.return_value = [strategy]
+
+        now = datetime.now(timezone.utc)
+        now_ns = int(now.timestamp() * 1_000_000_000)
+        result = BacktestResult(
+            trader_id="BACKTEST-001",
+            machine_id="test",
+            run_config_id="config-1",
+            instance_id="inst-1",
+            run_id="run-1",
+            run_started=now_ns,
+            run_finished=now_ns,
+            backtest_start=now_ns,
+            backtest_end=now_ns,
+            elapsed_time=0.5,
+            iterations=0,
+            total_events=0,
+            total_orders=0,
+            total_positions=0,
+            stats_pnls={},
+            stats_returns={},
+        )
+
+        mock_wrapper = MagicMock()
+        mock_wrapper.run.return_value = result
+        mock_wrapper_cls.return_value = mock_wrapper
+
+        bundles_yaml = tmp_path / "bundles.yaml"
+        bundles_yaml.write_text("bundles: []")
+
+        rc = main(
+            [
+                "backtest",
+                "--bundles",
+                str(bundles_yaml),
+                "--start",
+                "2024-01-01",
+                "--end",
+                "2024-06-30",
+            ]
+        )
+        captured = capsys.readouterr()
+        assert rc == 0
+        # Should still produce output without crashing
+        assert "Backtest Results" in captured.out
 
 
 class TestJsonGlobalFlag:

@@ -1,5 +1,14 @@
 > **Note: see first-entry Iteration 20 for Phase 2 config dataclasses.**
 
+## Iteration 134
+- **Task**: 12.1.3: sam backtest CLI — single run with table output
+- **Task ID**: sam_trader-9z3.13.1.3
+- **Status**: COMPLETE
+- **Decisions**: Added `sam backtest` CLI command to `cli.py`. Supports two modes: (1) `sam backtest <bundle-id> --start X --end Y` for single-bundle backtest, (2) `sam backtest --bundles <path> --start X --end Y` for multi-bundle backtest. Uses the existing `BacktestEngineWrapper` (from iteration 133) and `load_bundles()` from bundle_loader. Extracts instrument_ids and bar_types from bundle configs automatically. Result table shows: Bundle ID, Net P&L, Sharpe, Max DD, Win Rate, Total Trades, Elapsed. Supports --catalog flag for custom catalog path. Helper functions: `_safe_round()`, `_dict_get()` for safe numeric formatting; `_format_backtest_table()` for aligned column output with N/A for missing values; `_build_backtest_summary()` for extracting metrics from BacktestResult. JSON output via --json global flag. Exit code 0 on success, 1 on failure. 8 unit tests covering: single bundle table, JSON output, multi-bundle, bundle not found, no enabled bundles, engine error, custom catalog path, and None/empty stats.
+- **Files Changed**: `src/sam_trader/services/cli.py` (added backtest command + helpers), `tests/unit/services/test_cli.py` (added TestBacktestCommand with 8 tests)
+- **Validation Result**: PASS (RALPH_GATE_PASSED — 108/108 targeted tests, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Builds on BacktestEngineWrapper from iteration 133. Uses lazy imports inside the command function to avoid module-level Nautilus imports.
+
 ## Iteration 133
 - **Task**: 12.1.2: Backtest engine wrapper — BacktestNode + BacktestRunConfig integration
 - **Task ID**: sam_trader-9z3.13.1.2
