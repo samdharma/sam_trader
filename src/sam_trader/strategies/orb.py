@@ -9,7 +9,7 @@ from zoneinfo import ZoneInfo
 
 from nautilus_trader.model.data import Bar, BarType
 from nautilus_trader.model.enums import OrderSide, OrderType, TimeInForce
-from nautilus_trader.model.events import OrderAccepted, OrderFilled
+from nautilus_trader.model.events import OrderAccepted, OrderFilled, OrderRejected
 from nautilus_trader.model.identifiers import ClientOrderId, InstrumentId
 from nautilus_trader.model.instruments import Instrument
 from nautilus_trader.trading.strategy import Strategy, StrategyConfig
@@ -83,6 +83,10 @@ class OrbStrategyConfig(StrategyConfig, frozen=True):  # type: ignore[call-arg]
         Futu security code injected by the bundle loader.
     market : str, default "US"
         Target market (``"US"`` or ``"HK"``) injected by the bundle loader.
+    max_consecutive_rejections : int, default 10
+        Number of consecutive order rejections before the strategy
+        auto-disables.  Set to 0 to disable the circuit breaker.
+        Resets on the first accepted order.
     lunch_pause_enabled : bool, default False
         If ``True``, the strategy pauses during a lunch break window.
     lunch_start : str, default ""
@@ -118,6 +122,7 @@ class OrbStrategyConfig(StrategyConfig, frozen=True):  # type: ignore[call-arg]
     exchange: str = ""
     futu_code: str = ""
     market: str = "US"
+    max_consecutive_rejections: int = 10
     lunch_pause_enabled: bool = False
     lunch_start: str = ""
     lunch_end: str = ""
@@ -183,6 +188,10 @@ class OrbStrategy(Strategy):
 
         # Cached ATR
         self._cached_atr: float | None = None
+
+        # Order rejection circuit breaker
+        self._rejection_count: int = 0
+        self._rejection_disabled: bool = False
 
         # Lunch pause state
         self._lunch_start_time: time | None = self._parse_time(config.lunch_start)
@@ -387,6 +396,10 @@ class OrbStrategy(Strategy):
         if self.bar_type is None or bar.bar_type != self.bar_type:
             return
         if bar.is_single_price():
+            return
+
+        # Circuit breaker: skip all bar processing while disabled
+        if self._rejection_disabled:
             return
 
         # Session hard stop: close any open position
@@ -735,7 +748,18 @@ class OrbStrategy(Strategy):
         orders) are counted.  An order is recognised as an entry order
         when its ``client_order_id`` was recorded at submission time.
 
+        Also resets the rejection circuit breaker — a successful
+        acceptance clears the consecutive-rejection streak.
+
         """
+        # Reset rejection circuit breaker on any accepted order
+        if self._rejection_count > 0:
+            self.log.info(
+                f"Order accepted — resetting rejection counter "
+                f"(was {self._rejection_count})."
+            )
+        self._rejection_count = 0
+
         if event.client_order_id in self._pending_entry_order_ids:
             self._pending_entry_order_ids.discard(event.client_order_id)
             self._trades_today += 1
@@ -743,6 +767,36 @@ class OrbStrategy(Strategy):
                 f"Entry order accepted ({event.client_order_id}). "
                 f"Trades today: {self._trades_today}/"
                 f"{self.config.max_trades_per_day or '∞'}"
+            )
+
+    def on_order_rejected(self, event: OrderRejected) -> None:
+        """Track consecutive rejections and trip circuit breaker.
+
+        The counter increments on every rejection.  After
+        ``max_consecutive_rejections`` (default 10) consecutive failures,
+        the strategy auto-disables — ``on_bar`` is a no-op until a
+        manual restart or session reset.
+
+        Set ``max_consecutive_rejections`` to 0 to disable the breaker.
+
+        """
+        if self.config.max_consecutive_rejections <= 0:
+            return
+
+        self._rejection_count += 1
+        reason = getattr(event, "reason", "unknown")
+        self.log.warning(
+            f"Order rejected ({self._rejection_count}/"
+            f"{self.config.max_consecutive_rejections} consecutive): "
+            f"client_order_id={event.client_order_id}, reason={reason}"
+        )
+
+        if self._rejection_count >= self.config.max_consecutive_rejections:
+            self._rejection_disabled = True
+            self.log.error(
+                f"CIRCUIT BREAKER TRIPPED: {self.config.max_consecutive_rejections} "
+                f"consecutive order rejections. Strategy DISABLED for "
+                f"{self.config.instrument_id}. Manual restart required."
             )
 
     def on_order_filled(self, event: OrderFilled) -> None:
@@ -826,6 +880,8 @@ class OrbStrategy(Strategy):
         self._entry_order = None
         self._last_flat_time_ns = 0
         self._pending_entry_order_ids = set()
+        self._rejection_count = 0
+        self._rejection_disabled = False
 
     def on_save(self) -> dict[str, bytes]:
         """Actions to be performed when the strategy is saved."""
@@ -849,6 +905,8 @@ class OrbStrategy(Strategy):
                     "_trades_today": self._trades_today,
                     "_cached_atr": self._cached_atr,
                     "_last_flat_time_ns": self._last_flat_time_ns,
+                    "_rejection_count": self._rejection_count,
+                    "_rejection_disabled": self._rejection_disabled,
                 }
             )
         }
@@ -888,6 +946,14 @@ class OrbStrategy(Strategy):
         self._trades_today = data.get("_trades_today", 0)
         self._cached_atr = data.get("_cached_atr")
         self._last_flat_time_ns = data.get("_last_flat_time_ns", 0)
+        self._rejection_count = data.get("_rejection_count", 0)
+        self._rejection_disabled = data.get("_rejection_disabled", False)
+        if self._rejection_disabled:
+            self.log.warning(
+                f"Loaded state: rejection circuit breaker is ACTIVE "
+                f"({self._rejection_count} consecutive rejections). "
+                f"Bar processing is disabled until manual reset."
+            )
 
     def on_dispose(self) -> None:
         """Actions to be performed when the strategy is disposed."""

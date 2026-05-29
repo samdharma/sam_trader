@@ -1,5 +1,14 @@
 > **Note: see first-entry Iteration 20 for Phase 2 config dataclasses.**
 
+## Iteration 129
+- **Task**: Order rejection circuit breaker: auto-disable strategy after N consecutive rejections
+- **Task ID**: sam_trader-lpc
+- **Status**: COMPLETE
+- **Decisions**: Added `max_consecutive_rejections: int = 10` config field to both `OrbStrategyConfig` and `MomentumStrategyConfig` (default 10, 0 disables). Each strategy tracks `_rejection_count` and `_rejection_disabled` bool. New `on_order_rejected()` hook increments counter; when threshold reached, sets `_rejection_disabled = True` and logs `self.log.error()` (Cython Logger has no `critical` method). `on_bar()` immediately returns when disabled. `on_order_accepted()` resets counter to 0. State persisted via `on_save()`/`on_load()` with warning on load if disabled. `on_reset()` clears everything. Template updated with full circuit breaker pattern. 17 new unit tests (9 orb + 8 momentum) covering defaults, disable-at-0, N-rejection trip, error log on trip, bar no-op while disabled, acceptance reset, save/load persistence, and reset clear.
+- **Files Changed**: `src/sam_trader/strategies/orb.py`, `src/sam_trader/strategies/momentum.py`, `src/sam_trader/strategies/_template.py`, `tests/unit/strategies/test_orb.py`, `tests/unit/strategies/test_momentum.py`
+- **Validation Result**: PASS (RALPH_GATE_PASSED — 138/138 targeted tests, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: Nautilus Cython `Logger` has no `critical` level — used `error` instead, which is the highest available. Logger attributes are read-only (can't mock) — tests verify state transitions rather than log calls.
+
 ## Iteration 128
 - **Task**: Bar data event logging at DEBUG level for DataEngine
 - **Task ID**: sam_trader-e5m

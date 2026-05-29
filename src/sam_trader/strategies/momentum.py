@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo
 
 from nautilus_trader.model.data import Bar, BarType
 from nautilus_trader.model.enums import OrderSide, OrderType, TimeInForce
-from nautilus_trader.model.events import OrderFilled
+from nautilus_trader.model.events import OrderAccepted, OrderFilled, OrderRejected
 from nautilus_trader.model.identifiers import InstrumentId
 from nautilus_trader.model.instruments import Instrument
 from nautilus_trader.trading.strategy import Strategy, StrategyConfig
@@ -69,6 +69,10 @@ class MomentumStrategyConfig(StrategyConfig, frozen=True):  # type: ignore[call-
         Futu security code injected by the bundle loader.
     market : str, default "US"
         Target market (``"US"`` or ``"HK"``) injected by the bundle loader.
+    max_consecutive_rejections : int, default 10
+        Number of consecutive order rejections before the strategy
+        auto-disables.  Set to 0 to disable the circuit breaker.
+        Resets on the first accepted order.
     lunch_pause_enabled : bool, default False
         If ``True``, the strategy pauses during a lunch break window.
     lunch_start : str, default ""
@@ -99,6 +103,7 @@ class MomentumStrategyConfig(StrategyConfig, frozen=True):  # type: ignore[call-
     exchange: str = ""
     futu_code: str = ""
     market: str = "US"
+    max_consecutive_rejections: int = 10
     lunch_pause_enabled: bool = False
     lunch_start: str = ""
     lunch_end: str = ""
@@ -139,6 +144,10 @@ class MomentumStrategy(Strategy):
 
         # Trade counter
         self._trades_today: int = 0
+
+        # Order rejection circuit breaker
+        self._rejection_count: int = 0
+        self._rejection_disabled: bool = False
 
         # Lunch pause state
         self._lunch_start_time: time | None = self._parse_time(config.lunch_start)
@@ -281,6 +290,10 @@ class MomentumStrategy(Strategy):
         if self.bar_type is None or bar.bar_type != self.bar_type:
             return
         if bar.is_single_price():
+            return
+
+        # Circuit breaker: skip all bar processing while disabled
+        if self._rejection_disabled:
             return
 
         if not self._in_session():
@@ -473,6 +486,54 @@ class MomentumStrategy(Strategy):
         self.submit_order(tp_order)
 
     # ------------------------------------------------------------------
+    # Order event handling
+    # ------------------------------------------------------------------
+
+    def on_order_accepted(self, event: OrderAccepted) -> None:
+        """Reset the rejection circuit breaker on successful order acceptance.
+
+        A successful acceptance clears the consecutive-rejection streak.
+
+        """
+        # Reset rejection circuit breaker on any accepted order
+        if self._rejection_count > 0:
+            self.log.info(
+                f"Order accepted — resetting rejection counter "
+                f"(was {self._rejection_count})."
+            )
+        self._rejection_count = 0
+
+    def on_order_rejected(self, event: OrderRejected) -> None:
+        """Track consecutive rejections and trip circuit breaker.
+
+        The counter increments on every rejection.  After
+        ``max_consecutive_rejections`` (default 10) consecutive failures,
+        the strategy auto-disables — ``on_bar`` is a no-op until a
+        manual restart or session reset.
+
+        Set ``max_consecutive_rejections`` to 0 to disable the breaker.
+
+        """
+        if self.config.max_consecutive_rejections <= 0:
+            return
+
+        self._rejection_count += 1
+        reason = getattr(event, "reason", "unknown")
+        self.log.warning(
+            f"Order rejected ({self._rejection_count}/"
+            f"{self.config.max_consecutive_rejections} consecutive): "
+            f"client_order_id={event.client_order_id}, reason={reason}"
+        )
+
+        if self._rejection_count >= self.config.max_consecutive_rejections:
+            self._rejection_disabled = True
+            self.log.error(
+                f"CIRCUIT BREAKER TRIPPED: {self.config.max_consecutive_rejections} "
+                f"consecutive order rejections. Strategy DISABLED for "
+                f"{self.config.instrument_id}. Manual restart required."
+            )
+
+    # ------------------------------------------------------------------
     # Fill handling
     # ------------------------------------------------------------------
 
@@ -551,6 +612,8 @@ class MomentumStrategy(Strategy):
         self._position_avg_px = 0.0
         self._trades_today = 0
         self._entry_order = None
+        self._rejection_count = 0
+        self._rejection_disabled = False
 
     def on_save(self) -> dict[str, bytes]:
         """Actions to be performed when the strategy is saved."""
@@ -563,6 +626,8 @@ class MomentumStrategy(Strategy):
                     "_position_qty": self._position_qty,
                     "_position_avg_px": self._position_avg_px,
                     "_trades_today": self._trades_today,
+                    "_rejection_count": self._rejection_count,
+                    "_rejection_disabled": self._rejection_disabled,
                 }
             )
         }
@@ -593,6 +658,14 @@ class MomentumStrategy(Strategy):
         self._position_qty = data.get("_position_qty", 0.0)
         self._position_avg_px = data.get("_position_avg_px", 0.0)
         self._trades_today = data.get("_trades_today", 0)
+        self._rejection_count = data.get("_rejection_count", 0)
+        self._rejection_disabled = data.get("_rejection_disabled", False)
+        if self._rejection_disabled:
+            self.log.warning(
+                f"Loaded state: rejection circuit breaker is ACTIVE "
+                f"({self._rejection_count} consecutive rejections). "
+                f"Bar processing is disabled until manual reset."
+            )
 
     def on_dispose(self) -> None:
         """Actions to be performed when the strategy is disposed."""

@@ -20,7 +20,7 @@ from typing import Literal
 
 from nautilus_trader.model.data import Bar, BarType
 from nautilus_trader.model.enums import OrderSide, TimeInForce
-from nautilus_trader.model.events import OrderFilled
+from nautilus_trader.model.events import OrderAccepted, OrderFilled, OrderRejected
 from nautilus_trader.model.identifiers import InstrumentId
 from nautilus_trader.model.instruments import Instrument
 from nautilus_trader.trading.strategy import Strategy, StrategyConfig
@@ -73,6 +73,10 @@ class TemplateStrategyConfig(StrategyConfig, frozen=True):  # type: ignore[call-
         Futu security code injected by the bundle loader.
     market : str, default "US"
         Target market (``"US"`` or ``"HK"``) injected by the bundle loader.
+    max_consecutive_rejections : int, default 10
+        Number of consecutive order rejections before the strategy
+        auto-disables.  Set to 0 to disable the circuit breaker.
+        Resets on the first accepted order.
     lunch_pause_enabled : bool, default False
         If ``True``, the strategy pauses during a lunch break window.
     lunch_start : str, default ""
@@ -103,6 +107,7 @@ class TemplateStrategyConfig(StrategyConfig, frozen=True):  # type: ignore[call-
     exchange: str = ""
     futu_code: str = ""
     market: str = "US"
+    max_consecutive_rejections: int = 10
     lunch_pause_enabled: bool = False
     lunch_start: str = ""
     lunch_end: str = ""
@@ -146,6 +151,10 @@ class TemplateStrategy(Strategy):
         self._daily_loss: float = 0.0
         self._position_qty: float = 0.0
         self._position_avg_px: float = 0.0
+
+        # Order rejection circuit breaker
+        self._rejection_count: int = 0
+        self._rejection_disabled: bool = False
 
     # -------------------------------------------------------------------------
     # on_start
@@ -225,6 +234,11 @@ class TemplateStrategy(Strategy):
         # Guard against bars with no price range (e.g. pre-market idle bar).
         if bar.is_single_price():
             return
+
+        # Circuit breaker: skip all bar processing while disabled.
+        # Add this guard to every strategy's ``on_bar``.
+        # if self._rejection_disabled:
+        #     return
 
         # -- Session time guards -----------------------------------------------
         # If your strategy accumulates data before trading (e.g. an opening
@@ -445,6 +459,43 @@ class TemplateStrategy(Strategy):
         return False
 
     # -------------------------------------------------------------------------
+    # Order event handling
+    # -------------------------------------------------------------------------
+    # ``on_order_accepted`` and ``on_order_rejected`` implement the
+    # rejection circuit breaker.  Copy these methods verbatim.
+    # -------------------------------------------------------------------------
+
+    def on_order_accepted(self, event: OrderAccepted) -> None:
+        """Reset the rejection circuit breaker on successful order acceptance."""
+        if self._rejection_count > 0:
+            self.log.info(
+                f"Order accepted — resetting rejection counter "
+                f"(was {self._rejection_count})."
+            )
+        self._rejection_count = 0
+
+    def on_order_rejected(self, event: OrderRejected) -> None:
+        """Track consecutive rejections and trip circuit breaker."""
+        if self.config.max_consecutive_rejections <= 0:
+            return
+
+        self._rejection_count += 1
+        reason = getattr(event, "reason", "unknown")
+        self.log.warning(
+            f"Order rejected ({self._rejection_count}/"
+            f"{self.config.max_consecutive_rejections} consecutive): "
+            f"client_order_id={event.client_order_id}, reason={reason}"
+        )
+
+        if self._rejection_count >= self.config.max_consecutive_rejections:
+            self._rejection_disabled = True
+            self.log.error(
+                f"CIRCUIT BREAKER TRIPPED: {self.config.max_consecutive_rejections} "
+                f"consecutive order rejections. Strategy DISABLED for "
+                f"{self.config.instrument_id}. Manual restart required."
+            )
+
+    # -------------------------------------------------------------------------
     # Fill handling
     # -------------------------------------------------------------------------
     # ``on_order_filled`` is called for every ``OrderFilled`` event that
@@ -516,6 +567,8 @@ class TemplateStrategy(Strategy):
         self._daily_loss = 0.0
         self._position_qty = 0.0
         self._position_avg_px = 0.0
+        self._rejection_count = 0
+        self._rejection_disabled = False
 
     def on_save(self) -> dict[str, bytes]:
         """Actions to be performed when the strategy is saved.
@@ -530,6 +583,8 @@ class TemplateStrategy(Strategy):
                     "_daily_loss": self._daily_loss,
                     "_position_qty": self._position_qty,
                     "_position_avg_px": self._position_avg_px,
+                    "_rejection_count": self._rejection_count,
+                    "_rejection_disabled": self._rejection_disabled,
                 }
             )
         }
@@ -548,6 +603,14 @@ class TemplateStrategy(Strategy):
         self._daily_loss = data.get("_daily_loss", 0.0)
         self._position_qty = data.get("_position_qty", 0.0)
         self._position_avg_px = data.get("_position_avg_px", 0.0)
+        self._rejection_count = data.get("_rejection_count", 0)
+        self._rejection_disabled = data.get("_rejection_disabled", False)
+        if self._rejection_disabled:
+            self.log.warning(
+                f"Loaded state: rejection circuit breaker is ACTIVE "
+                f"({self._rejection_count} consecutive rejections). "
+                f"Bar processing is disabled until manual reset."
+            )
 
     def on_dispose(self) -> None:
         """Actions to be performed when the strategy is disposed.

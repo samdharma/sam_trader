@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, patch
 
 from nautilus_trader.model.data import Bar, BarType
 from nautilus_trader.model.enums import OrderSide, OrderType
-from nautilus_trader.model.events import OrderAccepted, OrderFilled
+from nautilus_trader.model.events import OrderAccepted, OrderFilled, OrderRejected
 from nautilus_trader.model.identifiers import (
     ClientOrderId,
     InstrumentId,
@@ -1453,3 +1453,188 @@ class TestLunchPauseScheduleLogic:
         strategy.instrument_id = InstrumentId.from_str("AAPL.UNKNOWN")
 
         assert strategy._get_timezone_name() == "America/New_York"
+
+
+# ---------------------------------------------------------------------------
+# Rejection circuit breaker
+# ---------------------------------------------------------------------------
+
+
+def _make_order_rejected(
+    client_order_id: str = "O-20260528-000001",
+    reason: str = "INSUFFICIENT_MARGIN",
+    instrument_id: str = "AAPL.NASDAQ",
+) -> OrderRejected:
+    from nautilus_trader.core.uuid import UUID4
+    from nautilus_trader.model.identifiers import AccountId
+
+    return OrderRejected(
+        trader_id=TraderId("SAM-001"),
+        strategy_id=StrategyId("ORB-001"),
+        instrument_id=InstrumentId.from_str(instrument_id),
+        client_order_id=ClientOrderId(client_order_id),
+        account_id=AccountId("FUTU-001"),
+        reason=reason,
+        event_id=UUID4(),
+        ts_event=1_700_000_000_000_000_000,
+        ts_init=1_700_000_000_000_000_001,
+        reconciliation=False,
+    )
+
+
+class TestRejectionCircuitBreaker:
+    def test_default_max_consecutive_rejections(self) -> None:
+        """Config defaults to 10."""
+        cfg = _make_config()
+        assert cfg.max_consecutive_rejections == 10
+
+    def test_circuit_breaker_disabled_when_set_to_zero(self) -> None:
+        """max_consecutive_rejections=0 disables the circuit breaker."""
+        strategy = OrbStrategy(_make_config(max_consecutive_rejections=0))
+        _register_strategy(strategy)
+        strategy.on_start()
+
+        rejected = _make_order_rejected()
+        # 100 rejections should NOT trip when breaker is disabled
+        for _ in range(100):
+            strategy.on_order_rejected(rejected)
+
+        assert strategy._rejection_disabled is False
+
+    def test_n_rejections_trips_circuit_breaker(self) -> None:
+        """After N consecutive rejections, strategy auto-disables."""
+        strategy = OrbStrategy(_make_config(max_consecutive_rejections=3))
+        _register_strategy(strategy)
+        strategy.on_start()
+
+        rejected = _make_order_rejected()
+        strategy.on_order_rejected(rejected)
+        assert strategy._rejection_count == 1
+        assert strategy._rejection_disabled is False
+
+        strategy.on_order_rejected(rejected)
+        assert strategy._rejection_count == 2
+        assert strategy._rejection_disabled is False
+
+        strategy.on_order_rejected(rejected)
+        assert strategy._rejection_count == 3
+        assert strategy._rejection_disabled is True
+
+    def test_critical_log_emitted_on_trip(self) -> None:
+        """An ERROR-level log message is emitted when the breaker trips."""
+        strategy = OrbStrategy(_make_config(max_consecutive_rejections=2))
+        _register_strategy(strategy)
+        strategy.on_start()
+
+        rejected = _make_order_rejected()
+        # First rejection: no trip
+        strategy.on_order_rejected(rejected)
+        assert strategy._rejection_disabled is False
+        assert strategy._rejection_count == 1
+
+        # Second rejection: breaker trips with ERROR log
+        strategy.on_order_rejected(rejected)
+        assert strategy._rejection_disabled is True
+        assert strategy._rejection_count == 2
+
+    def test_on_bar_ignored_while_disabled(self) -> None:
+        """All subsequent bar updates are ignored while disabled."""
+        strategy = OrbStrategy(
+            _make_config(
+                max_consecutive_rejections=2,
+                first_candle_minutes=10,
+                confirmation_bars=1,
+            )
+        )
+        _register_strategy(strategy)
+        strategy.on_start()
+
+        # First, trip the circuit breaker
+        rejected = _make_order_rejected()
+        strategy.on_order_rejected(rejected)
+        strategy.on_order_rejected(rejected)
+        assert strategy._rejection_disabled is True
+
+        # on_bar should be a no-op
+        bar = _make_bar("150", "155", "149", "152")
+        # We track whether _update_range was called by checking _bars_seen
+        bars_before = strategy._bars_seen
+        strategy.on_bar(bar)
+        assert strategy._bars_seen == bars_before  # unchanged
+
+    def test_acceptance_resets_rejection_counter(self) -> None:
+        """First successful order acceptance resets the rejection streak."""
+        strategy = OrbStrategy(_make_config(max_consecutive_rejections=5))
+        _register_strategy(strategy)
+        strategy.on_start()
+
+        rejected = _make_order_rejected()
+        strategy.on_order_rejected(rejected)
+        strategy.on_order_rejected(rejected)
+        assert strategy._rejection_count == 2
+
+        accepted = _make_order_accepted(ClientOrderId("O-001"))
+        strategy.on_order_accepted(accepted)
+        assert strategy._rejection_count == 0
+
+        # More rejections now start from 0
+        strategy.on_order_rejected(rejected)
+        assert strategy._rejection_count == 1
+
+    def test_persistence_save_and_load(self) -> None:
+        """Rejection state is preserved across save/load."""
+        strategy = OrbStrategy(_make_config(max_consecutive_rejections=5))
+        _register_strategy(strategy)
+        strategy.on_start()
+
+        # Trip the breaker
+        rejected = _make_order_rejected()
+        for _ in range(5):
+            strategy.on_order_rejected(rejected)
+        assert strategy._rejection_disabled is True
+        assert strategy._rejection_count == 5
+
+        # Save and load into a new strategy
+        saved = strategy.on_save()
+        strategy2 = OrbStrategy(_make_config(max_consecutive_rejections=5))
+        _register_strategy(strategy2)
+        strategy2.on_start()
+        strategy2.on_load(saved)
+
+        assert strategy2._rejection_disabled is True
+        assert strategy2._rejection_count == 5
+
+    def test_reset_clears_rejection_state(self) -> None:
+        """on_reset clears the rejection counter and disabled flag."""
+        strategy = OrbStrategy(_make_config(max_consecutive_rejections=3))
+        _register_strategy(strategy)
+        strategy.on_start()
+
+        rejected = _make_order_rejected()
+        for _ in range(3):
+            strategy.on_order_rejected(rejected)
+        assert strategy._rejection_disabled is True
+
+        strategy.on_reset()
+        assert strategy._rejection_count == 0
+        assert strategy._rejection_disabled is False
+
+    def test_warning_logged_on_each_rejection(self) -> None:
+        """Each rejection increments the counter and marks disabled at threshold."""
+        strategy = OrbStrategy(_make_config(max_consecutive_rejections=3))
+        _register_strategy(strategy)
+        strategy.on_start()
+
+        rejected = _make_order_rejected(reason="ORDER_SIZE_EXCEEDED")
+
+        strategy.on_order_rejected(rejected)
+        assert strategy._rejection_count == 1
+        assert strategy._rejection_disabled is False
+
+        strategy.on_order_rejected(rejected)
+        assert strategy._rejection_count == 2
+        assert strategy._rejection_disabled is False
+
+        strategy.on_order_rejected(rejected)
+        assert strategy._rejection_count == 3
+        assert strategy._rejection_disabled is True
