@@ -1,5 +1,20 @@
 > **Note: see first-entry Iteration 20 for Phase 2 config dataclasses.**
 
+## Iteration 142
+- **Task**: 12.1.9: Unit + integration tests — bar downloader, engine, sweep, walk-forward, dashboard
+- **Task ID**: sam_trader-9z3.13.1.9
+- **Status**: COMPLETE
+- **Decisions**: Created `tests/integration/test_backtest_e2e.py` with 19 integration tests covering the full backtesting pipeline across 5 test classes:
+  - **TestBarDownloaderToEnginePipeline** (2 tests): download→engine config flow, unsupported bar type error
+  - **TestEngineSweepWalkForwardPipeline** (5 tests): sweep with ranked results, walk-forward pipeline, empty grid rejection, 10+ combo grid generation, format table output
+  - **TestResultStorePipeline** (3 tests): serialization pipeline (NaN→None), save+retrieve mocked PG round-trip, query by family and date range
+  - **TestCrossComponentDataFlow** (8 tests): sweep flag parsing→typed grid, config non-mutation, engine error messages, walk-forward format report, empty grid convention, venue derivation, engine config defaults
+  - **TestFullPipelineE2E** (1 test): complete pipeline download→backtest→sweep→walk-forward→store/query with all external deps mocked
+- **Existing tests all pass**: test_bar_downloader.py (12 tests), test_engine.py (22), test_sweep.py (29), test_walk_forward.py (38), test_dashboard_api.py (35), test_results.py (18) = 154 unit tests
+- **Files Changed**: `tests/integration/test_backtest_e2e.py` (new, +810 lines)
+- **Validation Result**: PASS (RALPH_GATE_PASSED — 19/19 new integration tests, 154/154 existing backtest unit tests, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: All external deps (Futu OpenD, Nautilus BacktestNode Cython, asyncpg) are mocked. The existing dashboard tests (67 tests in test_dashboard.py, 35 in test_dashboard_api.py) were unchanged and continue to cover dashboard functionality from iterations 138/140. Ready for sam_trader-9z3.13.1.10 (Phase 12 exit gate).
+
 ## Iteration 141
 - **Task**: Futu: trdmarket_auth list contains string market codes, int() conversion fails
 - **Task ID**: sam_trader-e7d
