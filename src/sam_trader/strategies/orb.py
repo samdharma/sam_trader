@@ -7,6 +7,7 @@ from datetime import time, timedelta
 from typing import Literal
 from zoneinfo import ZoneInfo
 
+import msgspec
 from nautilus_trader.model.data import Bar, BarType
 from nautilus_trader.model.enums import OrderSide, OrderType, TimeInForce
 from nautilus_trader.model.events import OrderAccepted, OrderFilled, OrderRejected
@@ -143,6 +144,13 @@ class OrbStrategy(Strategy):
     """
 
     def __init__(self, config: OrbStrategyConfig) -> None:
+        # Nautilus v1.227.0 Cython bug: Strategy.__init__ passes
+        # config.strategy_id (StrategyId) to Logger(name=...), which
+        # expects str. Workaround: convert to plain str first.
+        if config.strategy_id is not None:
+            config = msgspec.structs.replace(
+                config, strategy_id=str(config.strategy_id)
+            )
         super().__init__(config)
 
         self.instrument: Instrument | None = None
