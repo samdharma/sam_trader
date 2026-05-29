@@ -204,23 +204,56 @@ class FutuLiveExecutionClient(LiveExecutionClient):
     # -----------------------------------------------------------------------
 
     async def _discover_accounts(self) -> None:
-        """Discover accounts via ``get_acc_list`` and register venue aliases."""
+        """Discover SIMULATE paper trading accounts and register venue aliases.
+
+        Calls ``get_acc_list(trd_env=TrdEnv.SIMULATE)`` to retrieve only
+        paper trading accounts. Filters by ``sim_acc_type`` based on
+        the configured market: STOCK (0) for HK, STOCK_AND_OPTION (2) for US.
+        """
         if self._trade_ctx is None:
             return
 
+        # Map trd_market string to expected sim_acc_type for paper trading
+        _SIM_ACC_TYPE_STOCK = 0
+        _SIM_ACC_TYPE_STOCK_AND_OPTION = 2
+        _EXPECTED_SIM_ACC_TYPE: dict[str, int] = {
+            "HK": _SIM_ACC_TYPE_STOCK,
+            "US": _SIM_ACC_TYPE_STOCK_AND_OPTION,
+        }
+
         try:
-            ret, data = self._trade_ctx.get_acc_list()
+            ret, data = self._trade_ctx.get_acc_list(trd_env=TrdEnv.SIMULATE)
             if ret != RET_OK or data is None or data.empty:
-                self._log.warning("Account discovery returned no accounts")
+                self._log.warning("Account discovery returned no SIMULATE accounts")
                 return
 
             accounts: list[dict[str, Any]] = data.to_dict("records")
+
+            # Filter by sim_acc_type for the configured market
+            expected_type = _EXPECTED_SIM_ACC_TYPE.get(self._config.trd_market)
+            if expected_type is not None:
+                before = len(accounts)
+                accounts = [
+                    a for a in accounts if a.get("sim_acc_type") == expected_type
+                ]
+                if not accounts:
+                    self._log.warning(
+                        f"No SIMULATE accounts with sim_acc_type={expected_type} "
+                        f"for market {self._config.trd_market} "
+                        f"(filtered {before} accounts)"
+                    )
+                    return
+
             self._register_venue_account_aliases(accounts)
         except Exception as e:
             self._log.exception(f"Account discovery failed: {e}", e)
 
     def _register_venue_account_aliases(self, accounts: list[dict[str, Any]]) -> None:
         """Map Futu market codes to Nautilus venues and account IDs.
+
+        Uses the ``trdmarket_auth`` response field (list of TrdMarket
+        integers) from ``get_acc_list``.  Each account may be authorised
+        for multiple markets.
 
         Parameters
         ----------
@@ -230,17 +263,33 @@ class FutuLiveExecutionClient(LiveExecutionClient):
         """
         for acc in accounts:
             acc_id_val = acc.get("acc_id")
-            market = acc.get("trdMarket")
-            if acc_id_val is None or market is None:
+            trdmarket_auth = acc.get("trdmarket_auth")
+            if acc_id_val is None or trdmarket_auth is None:
+                continue
+
+            # ``trdmarket_auth`` may be a list of ints or a
+            # comma-separated string (depending on SDK serialisation).
+            if isinstance(trdmarket_auth, str):
+                market_codes = [
+                    int(m.strip()) for m in trdmarket_auth.split(",") if m.strip()
+                ]
+            elif isinstance(trdmarket_auth, (list, tuple)):
+                market_codes = [int(m) for m in trdmarket_auth]
+            else:
+                self._log.warning(
+                    f"Unexpected trdmarket_auth type in account {acc_id_val}: "
+                    f"{type(trdmarket_auth)}"
+                )
                 continue
 
             acc_id = AccountId(f"FUTU-{acc_id_val}")
-            venue = FUTU_TRD_MARKET_TO_VENUE.get(market)
-            if venue is not None:
-                self._venue_account_aliases[venue] = acc_id
-                self._log.info(
-                    f"Registered venue alias: {venue} -> {acc_id}",
-                )
+            for market_code in market_codes:
+                venue = FUTU_TRD_MARKET_TO_VENUE.get(market_code)
+                if venue is not None:
+                    self._venue_account_aliases[venue] = acc_id
+                    self._log.info(
+                        f"Registered venue alias: {venue} -> {acc_id}",
+                    )
 
             # Use the first discovered account as the default
             # Compare against the factory-provided account ID (handles both
@@ -269,8 +318,10 @@ class FutuLiveExecutionClient(LiveExecutionClient):
             trd_env = (
                 TrdEnv.SIMULATE if self._config.trd_env == "SIMULATE" else TrdEnv.REAL
             )
+            acc_id = int(self._account_id.get_id())
             ret, data = self._trade_ctx.position_list_query(
                 trd_env=trd_env,
+                acc_id=acc_id,
             )
             if ret != RET_OK or data is None or data.empty:
                 return
@@ -366,7 +417,7 @@ class FutuLiveExecutionClient(LiveExecutionClient):
                 order_type=order_type,
                 time_in_force=tif,
                 trd_env=trd_env,
-                acc_id=int(account_id.get_id()) if account_id.get_id() else 0,
+                acc_id=int(account_id.get_id()),
             )
         except Exception as e:
             self.generate_order_rejected(
@@ -459,7 +510,7 @@ class FutuLiveExecutionClient(LiveExecutionClient):
                 qty=qty,
                 price=price,
                 trd_env=trd_env,
-                acc_id=int(account_id.get_id()) if account_id.get_id() else 0,
+                acc_id=int(account_id.get_id()),
             )
         except Exception as e:
             self.generate_order_modify_rejected(
@@ -524,7 +575,7 @@ class FutuLiveExecutionClient(LiveExecutionClient):
                 qty="0",
                 price="0",
                 trd_env=trd_env,
-                acc_id=int(account_id.get_id()) if account_id.get_id() else 0,
+                acc_id=int(account_id.get_id()),
             )
         except Exception as e:
             self.generate_order_cancel_rejected(
@@ -586,7 +637,7 @@ class FutuLiveExecutionClient(LiveExecutionClient):
 
         reports: list[OrderStatusReport] = []
         trd_env = TrdEnv.SIMULATE if self._config.trd_env == "SIMULATE" else TrdEnv.REAL
-        acc_id = int(self._account_id.get_id()) if self._account_id.get_id() else 0
+        acc_id = int(self._account_id.get_id())
 
         code = ""
         if command.instrument_id is not None:
@@ -640,7 +691,7 @@ class FutuLiveExecutionClient(LiveExecutionClient):
 
         reports: list[FillReport] = []
         trd_env = TrdEnv.SIMULATE if self._config.trd_env == "SIMULATE" else TrdEnv.REAL
-        acc_id = int(self._account_id.get_id()) if self._account_id.get_id() else 0
+        acc_id = int(self._account_id.get_id())
 
         code = ""
         if command.instrument_id is not None:
@@ -694,7 +745,7 @@ class FutuLiveExecutionClient(LiveExecutionClient):
 
         reports: list[PositionStatusReport] = []
         trd_env = TrdEnv.SIMULATE if self._config.trd_env == "SIMULATE" else TrdEnv.REAL
-        acc_id = int(self._account_id.get_id()) if self._account_id.get_id() else 0
+        acc_id = int(self._account_id.get_id())
 
         code = ""
         if command.instrument_id is not None:

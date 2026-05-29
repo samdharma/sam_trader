@@ -477,22 +477,141 @@ class TestAccountDiscovery:
     def test_discover_accounts_registers_aliases(
         self, event_loop, make_client, mock_trade_ctx
     ):
+        """Accounts with trdmarket_auth lists are mapped to venues.
+
+        For US config (default), only sim_acc_type=2 (STOCK_AND_OPTION)
+        accounts pass the filter.
+        """
         mock_trade_ctx.get_acc_list.return_value = (
             RET_OK,
             pd.DataFrame(
                 {
                     "acc_id": [123, 456],
-                    "trdMarket": [2, 1],  # US, HK
+                    "trdmarket_auth": [[2], [2, 1]],  # US-only, US+HK
+                    "sim_acc_type": [2, 2],  # both STOCK_AND_OPTION
+                }
+            ),
+        )
+        client = make_client()  # trd_market="US"
+        event_loop.run_until_complete(client._discover_accounts())
+
+        # Account 456 authorised for both markets — last registration wins per venue
+        # (both 123 and 456 are authorised for NASDAQ; 456 is processed second)
+        assert client._venue_account_aliases[Venue("NASDAQ")] == AccountId("FUTU-456")
+        # Account 456: also authorised for HKEX (1)
+        assert client._venue_account_aliases[Venue("HKEX")] == AccountId("FUTU-456")
+        # First account (123) sets default _account_id
+        assert client._account_id == AccountId("FUTU-123")
+
+    def test_discover_accounts_filters_by_sim_acc_type(
+        self, event_loop, make_client, mock_trade_ctx
+    ):
+        """Account discovery filters by sim_acc_type per market config.
+
+        US config expects STOCK_AND_OPTION (2); non-matching accounts
+        (e.g., sim_acc_type=1 for OPTION-only) should be excluded.
+        """
+        mock_trade_ctx.get_acc_list.return_value = (
+            RET_OK,
+            pd.DataFrame(
+                {
+                    "acc_id": [100, 200],
+                    "trdmarket_auth": [[2], [2]],
+                    "sim_acc_type": [1, 2],  # OPTION, STOCK_AND_OPTION
+                }
+            ),
+        )
+        client = make_client()  # trd_market="US" → expects sim_acc_type=2
+        event_loop.run_until_complete(client._discover_accounts())
+
+        # Only account 200 (sim_acc_type=2) should be registered
+        assert Venue("NASDAQ") in client._venue_account_aliases
+        assert client._venue_account_aliases[Venue("NASDAQ")] == AccountId("FUTU-200")
+
+    def test_discover_accounts_hk_filters_stock_only(self, event_loop, mock_trade_ctx):
+        """HK config expects STOCK (0); non-matching rejected."""
+        cfg = FutuExecClientConfig(
+            host="test-host",
+            port=11111,
+            trd_env="SIMULATE",
+            trd_market="HK",
+            client_id=1,
+        )
+        clock = LiveClock()
+        msgbus = TestComponentStubs.msgbus()
+        cache = TestComponentStubs.cache()
+        provider = MagicMock(spec=InstrumentProvider)
+        client = FutuLiveExecutionClient(
+            loop=event_loop,
+            client=mock_trade_ctx,
+            msgbus=msgbus,
+            cache=cache,
+            clock=clock,
+            instrument_provider=provider,
+            config=cfg,
+        )
+
+        mock_trade_ctx.get_acc_list.return_value = (
+            RET_OK,
+            pd.DataFrame(
+                {
+                    "acc_id": [300, 400],
+                    "trdmarket_auth": [[1], [1]],
+                    "sim_acc_type": [2, 0],  # STOCK_AND_OPTION, STOCK
+                }
+            ),
+        )
+        event_loop.run_until_complete(client._discover_accounts())
+
+        # Only account 400 (sim_acc_type=0) should be registered for HK
+        assert Venue("HKEX") in client._venue_account_aliases
+        assert client._venue_account_aliases[Venue("HKEX")] == AccountId("FUTU-400")
+
+    def test_discover_accounts_passes_trd_env_simulate(
+        self, event_loop, make_client, mock_trade_ctx
+    ):
+        """_discover_accounts calls get_acc_list with trd_env=TrdEnv.SIMULATE."""
+        mock_trade_ctx.get_acc_list.return_value = (
+            RET_OK,
+            pd.DataFrame(
+                {
+                    "acc_id": [999],
+                    "trdmarket_auth": [[2]],
+                    "sim_acc_type": [2],
                 }
             ),
         )
         client = make_client()
         event_loop.run_until_complete(client._discover_accounts())
 
-        assert Venue("NASDAQ") in client._venue_account_aliases
-        assert Venue("HKEX") in client._venue_account_aliases
-        assert client._venue_account_aliases[Venue("NASDAQ")] == AccountId("FUTU-123")
-        assert client._venue_account_aliases[Venue("HKEX")] == AccountId("FUTU-456")
+        mock_trade_ctx.get_acc_list.assert_called_once()
+        from futu import TrdEnv
+
+        assert (
+            mock_trade_ctx.get_acc_list.call_args.kwargs.get("trd_env")
+            == TrdEnv.SIMULATE
+        )
+
+    def test_discover_accounts_handles_string_trdmarket_auth(
+        self, event_loop, make_client, mock_trade_ctx
+    ):
+        """trdmarket_auth as comma-separated string is parsed correctly."""
+        mock_trade_ctx.get_acc_list.return_value = (
+            RET_OK,
+            pd.DataFrame(
+                {
+                    "acc_id": [777],
+                    "trdmarket_auth": ["1,2"],  # CSV string
+                    "sim_acc_type": [2],
+                }
+            ),
+        )
+        client = make_client()
+        event_loop.run_until_complete(client._discover_accounts())
+
+        # Both HKEX (1) and NASDAQ (2) should be registered
+        assert client._venue_account_aliases[Venue("HKEX")] == AccountId("FUTU-777")
+        assert client._venue_account_aliases[Venue("NASDAQ")] == AccountId("FUTU-777")
 
     def test_resolve_account_id_uses_alias(self, event_loop, make_client):
         client = make_client()
@@ -522,22 +641,17 @@ class TestAccountDiscovery:
         assert client._initial_account_id == AccountId("FUTU-1")
 
         accounts = [
-            {"acc_id": 234387941, "trdMarket": 1},  # HK
+            {"acc_id": 234387941, "trdmarket_auth": [1]},  # HK
         ]
         client._register_venue_account_aliases(accounts)
 
         # Should have updated from FUTU-1 (client_id default) to discovered account
         assert client._account_id == AccountId("FUTU-234387941")
 
-    def test_register_aliases_preserves_env_var_account(
+    def test_register_aliases_updates_placeholder_account(
         self, event_loop, mock_trade_ctx
     ):
-        """Account discovery should update even when account_id was set via env.
-
-        When FUTU_ACCOUNT_ID is set from env, the factory provides the real
-        account ID. Discovery should still register venue aliases and
-        potentially update if the discovered ID differs.
-        """
+        """Discovery updates placeholder account ID (FUTU-1) to discovered acc_id."""
         cfg = FutuExecClientConfig(
             host="test-host",
             port=11111,
@@ -557,19 +671,21 @@ class TestAccountDiscovery:
             clock=clock,
             instrument_provider=provider,
             config=cfg,
-            account_id=AccountId("FUTU-234387941"),
         )
 
-        assert client._account_id == AccountId("FUTU-234387941")
-        assert client._initial_account_id == AccountId("FUTU-234387941")
+        assert client._account_id == AccountId("FUTU-1")
+        assert client._initial_account_id == AccountId("FUTU-1")
 
         accounts = [
-            {"acc_id": 234387941, "trdMarket": 1},  # HK
+            {"acc_id": 234387941, "trdmarket_auth": [1]},  # HK
         ]
         client._register_venue_account_aliases(accounts)
 
-        # Discovery matches the factory-provided ID — still updates (idempotent)
+        # Discovery replaces the placeholder
         assert client._account_id == AccountId("FUTU-234387941")
+        assert client._venue_account_aliases[Venue("HKEX")] == AccountId(
+            "FUTU-234387941"
+        )
 
 
 # ---------------------------------------------------------------------------

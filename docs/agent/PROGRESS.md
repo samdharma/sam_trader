@@ -1,5 +1,14 @@
 > **Note: see first-entry Iteration 20 for Phase 2 config dataclasses.**
 
+## Iteration 130
+- **Task**: BUG: Paper trading account discovery — get_acc_list not filtering SIMULATE
+- **Task ID**: sam_trader-awz
+- **Status**: COMPLETE
+- **Decisions**: Six root causes fixed: (1) `_discover_accounts()` now calls `get_acc_list(trd_env=TrdEnv.SIMULATE)` to retrieve only paper trading accounts. (2) Added `sim_acc_type` filtering — STOCK (0) for HK, STOCK_AND_OPTION (2) for US — so OPTION-only or REAL accounts don't leak into paper trading. (3) `factories.py` no longer reads `FUTU_ACCOUNT_ID` env var for trading AccountId; uses `config.client_id` placeholder that gets replaced by discovered paper acc_id during discovery. `FUTU_ACCOUNT_ID` remains in `config.py` as the OpenD login account (separate concern). (4) `_register_venue_account_aliases()` uses `trdmarket_auth` response field (list of ints or CSV string) instead of wrong `trdMarket` — handles both list and string formats. (5) `_reconcile_positions()` now passes `acc_id` to `position_list_query`. (6) Removed all `acc_id=0` fallbacks from place_order, modify_order, cancel_order, generate_order_status_reports, generate_fill_reports, and generate_position_status_reports — paper trading accounts always have valid acc_id after discovery.
+- **Files Changed**: `src/sam_trader/adapters/futu/execution.py`, `src/sam_trader/adapters/futu/factories.py`, `tests/unit/adapters/futu/test_execution.py`, `tests/unit/adapters/futu/test_factories.py`
+- **Validation Result**: PASS (RALPH_GATE_PASSED — 53/53 targeted tests, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Manual verification requires live Futu OpenD with paper trading accounts — operator should deploy with MARKET=HK and MARKET=US to verify paper orders submit successfully.
+
 ## Iteration 129
 - **Task**: Order rejection circuit breaker: auto-disable strategy after N consecutive rejections
 - **Task ID**: sam_trader-lpc
