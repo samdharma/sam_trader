@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import os
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pandas as pd
 import pytest
@@ -83,6 +83,13 @@ def make_client(event_loop, mock_trade_ctx):
             clock=clock,
             instrument_provider=provider,
             config=cfg,
+        )
+        # Mock _await_account_registered to avoid 30s timeout in tests —
+        # requires a live Portfolio on the message bus which isn't
+        # available in unit tests.  generate_account_state() still runs
+        # so we can verify it is called.
+        client._await_account_registered = AsyncMock(  # type: ignore[method-assign]
+            return_value=None
         )
         return client
 
@@ -792,6 +799,7 @@ class TestAccountDiscovery:
             instrument_provider=provider,
             config=cfg,
         )
+        client._await_account_registered = AsyncMock(return_value=None)
 
         mock_trade_ctx.get_acc_list.return_value = (
             RET_OK,
@@ -985,6 +993,7 @@ class TestAccountDiscovery:
             instrument_provider=provider,
             config=cfg,
         )
+        client._await_account_registered = AsyncMock(return_value=None)
 
         mock_trade_ctx.get_acc_list.return_value = (
             RET_OK,
@@ -1049,6 +1058,7 @@ class TestAccountDiscovery:
             instrument_provider=provider,
             config=cfg,
         )
+        client._await_account_registered = AsyncMock(return_value=None)
 
         mock_trade_ctx.get_acc_list.return_value = (
             RET_OK,
@@ -1125,6 +1135,7 @@ class TestAccountDiscovery:
             instrument_provider=provider,
             config=cfg,
         )
+        client._await_account_registered = AsyncMock(return_value=None)
 
         mock_trade_ctx.get_acc_list.return_value = (
             RET_OK,
@@ -1170,6 +1181,7 @@ class TestAccountDiscovery:
             instrument_provider=provider,
             config=cfg,
         )
+        client._await_account_registered = AsyncMock(return_value=None)
 
         with patch.dict(os.environ, {"FUTU_ACCOUNT_ID": "999888777"}):
             event_loop.run_until_complete(client._discover_accounts())
@@ -1200,6 +1212,7 @@ class TestAccountDiscovery:
             instrument_provider=provider,
             config=cfg,
         )
+        client._await_account_registered = AsyncMock(return_value=None)
         placeholder = client._account_id
 
         with patch.dict(os.environ, {}, clear=True):
@@ -1246,6 +1259,7 @@ class TestAccountDiscovery:
             instrument_provider=provider,
             config=cfg,
         )
+        client._await_account_registered = AsyncMock(return_value=None)
 
         with patch.dict(os.environ, {"FUTU_PAPER_ACCOUNT_ID": "my-paper-456"}):
             event_loop.run_until_complete(client._discover_accounts())
@@ -1293,6 +1307,7 @@ class TestAccountDiscovery:
             instrument_provider=provider,
             config=cfg,
         )
+        client._await_account_registered = AsyncMock(return_value=None)
         placeholder = client._account_id
 
         # Only FUTU_ACCOUNT_ID set — should NOT be used for trading
@@ -1337,6 +1352,176 @@ class TestAccountDiscovery:
             event_loop.run_until_complete(client._discover_accounts())
 
         assert client._account_id == AccountId("FUTU-explicit-paper-789")
+
+    def test_registers_account_with_portfolio_after_discovery(
+        self, event_loop, make_client, mock_trade_ctx
+    ):
+        """Account discovery registers the discovered account with Portfolio.
+
+        After successful account discovery via ``_discover_accounts()``,
+        the Nautilus Portfolio must be notified via ``generate_account_state()``
+        so it can track orders, positions, and P&L for the discovered account.
+        Without this step, the Portfolio rejects order events with:
+        "Cannot update order: no account registered for FUTU-XXXXX".
+
+        Acceptance Criterion (AC #4):
+        Unit test — mock account discovery → verify generate_account_state()
+        called with correct balance containing the discovered AccountId.
+        """
+        mock_trade_ctx.get_acc_list.return_value = (
+            RET_OK,
+            pd.DataFrame(
+                {
+                    "acc_id": [19064357],
+                    "trd_env": [0],
+                    "trdmarket_auth": [[2]],
+                    "sim_acc_type": [2],
+                }
+            ),
+        )
+        client = make_client()
+        # Mock generate_account_state so we can verify it is called.
+        # (_await_account_registered is already mocked by make_client.)
+        client.generate_account_state = MagicMock()  # type: ignore[method-assign]
+
+        event_loop.run_until_complete(client._discover_accounts())
+
+        # Verify generate_account_state was called (registers with Portfolio)
+        assert (
+            client.generate_account_state.called
+        ), "generate_account_state must be called after account discovery"
+        call_kwargs = client.generate_account_state.call_args.kwargs
+        assert len(call_kwargs["balances"]) == 1
+        balance = call_kwargs["balances"][0]
+        assert str(balance.total) == "1000000.00 USD"
+        assert str(balance.free) == "1000000.00 USD"
+        assert call_kwargs["margins"] == []
+        assert call_kwargs["reported"] is True
+
+    def test_no_portfolio_registration_when_discovery_fails(
+        self, event_loop, make_client, mock_trade_ctx
+    ):
+        """Portfolio registration skipped when discovery fails and no override.
+
+        When account discovery finds no matching accounts and no override
+        env var is set, the placeholder account ID is kept and the Portfolio
+        is NOT notified (no generate_account_state call).
+        """
+        mock_trade_ctx.get_acc_list.return_value = (
+            RET_OK,
+            pd.DataFrame(
+                {
+                    "acc_id": [100],
+                    "trd_env": ["REAL"],  # all REAL, no SIMULATE
+                    "trdmarket_auth": [[2]],
+                    "sim_acc_type": [2],
+                }
+            ),
+        )
+        client = make_client()
+        client.generate_account_state = MagicMock()  # type: ignore[method-assign]
+
+        with patch.dict(os.environ, {}, clear=True):
+            event_loop.run_until_complete(client._discover_accounts())
+
+        # Placeholder kept — no Portfolio registration needed
+        assert client._account_id == client._initial_account_id
+        assert (
+            not client.generate_account_state.called
+        ), "generate_account_state must NOT be called when no account discovered"
+
+    def test_registers_account_with_portfolio_on_paper_override(
+        self, event_loop, make_client, mock_trade_ctx
+    ):
+        """Portfolio is notified when FUTU_PAPER_ACCOUNT_ID override is used.
+
+        When discovery fails but FUTU_PAPER_ACCOUNT_ID is set, the override
+        account must be registered with the Portfolio.
+        """
+        mock_trade_ctx.get_acc_list.return_value = (RET_OK, pd.DataFrame())
+        client = make_client()
+        client.generate_account_state = MagicMock()  # type: ignore[method-assign]
+
+        with patch.dict(os.environ, {"FUTU_PAPER_ACCOUNT_ID": "override-789"}):
+            event_loop.run_until_complete(client._discover_accounts())
+
+        assert client._account_id == AccountId("FUTU-override-789")
+        assert (
+            client.generate_account_state.called
+        ), "generate_account_state must be called when override account is used"
+
+    def test_real_mode_registers_account_with_portfolio(
+        self, event_loop, make_client, mock_trade_ctx
+    ):
+        """REAL mode registers account with Portfolio when FUTU_ACCOUNT_ID is set."""
+        cfg = FutuExecClientConfig(
+            host="test-host",
+            port=11111,
+            trd_env="REAL",
+            trd_market="HK",
+            client_id=1,
+        )
+        clock = LiveClock()
+        msgbus = TestComponentStubs.msgbus()
+        cache = TestComponentStubs.cache()
+        provider = MagicMock(spec=InstrumentProvider)
+        client = FutuLiveExecutionClient(
+            loop=event_loop,
+            client=mock_trade_ctx,
+            msgbus=msgbus,
+            cache=cache,
+            clock=clock,
+            instrument_provider=provider,
+            config=cfg,
+        )
+        client._await_account_registered = AsyncMock(return_value=None)
+        client.generate_account_state = MagicMock()  # type: ignore[method-assign]
+
+        with patch.dict(os.environ, {"FUTU_ACCOUNT_ID": "999888777"}):
+            event_loop.run_until_complete(client._discover_accounts())
+
+        assert client._account_id == AccountId("FUTU-999888777")
+        assert (
+            client.generate_account_state.called
+        ), "generate_account_state must be called in REAL mode"
+
+    def test_multi_venue_accounts_all_registered(
+        self, event_loop, make_client, mock_trade_ctx
+    ):
+        """All discovered venue aliases share one Portfolio account registration.
+
+        When a single trading account is authorised for multiple markets
+        (e.g., US authorised for both NASDAQ and NYSE), the Portfolio is
+        registered once for the single underlying account.
+        """
+        mock_trade_ctx.get_acc_list.return_value = (
+            RET_OK,
+            pd.DataFrame(
+                {
+                    "acc_id": [19064357],
+                    "trd_env": [0],
+                    "trdmarket_auth": [[1, 2]],  # HK + US (multi-market)
+                    "sim_acc_type": [2],
+                }
+            ),
+        )
+        client = make_client()
+        client.generate_account_state = MagicMock()  # type: ignore[method-assign]
+
+        event_loop.run_until_complete(client._discover_accounts())
+
+        # Both venues mapped to the same account
+        assert Venue("HKEX") in client._venue_account_aliases
+        assert Venue("NASDAQ") in client._venue_account_aliases
+        assert Venue("NYSE") in client._venue_account_aliases
+        assert client._venue_account_aliases[Venue("NASDAQ")] == AccountId(
+            "FUTU-19064357"
+        )
+
+        # Portfolio registered once (single generate_account_state call)
+        assert (
+            client.generate_account_state.call_count == 1
+        ), "Only one Portfolio registration per account discovery"
 
 
 # ---------------------------------------------------------------------------

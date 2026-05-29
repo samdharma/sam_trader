@@ -1,5 +1,14 @@
 > **Note: see first-entry Iteration 20 for Phase 2 config dataclasses.**
 
+## Iteration 149
+- **Task**: Portfolio account registration: discovered acc_id not registered
+- **Task ID**: sam_trader-9z3.4.13
+- **Status**: COMPLETE
+- **Decisions**: After account discovery in `_discover_accounts()`, the discovered account(s) must be registered with the Nautilus Portfolio so it can track orders, positions, and P&L. Without this, the Portfolio rejects order events with "Cannot update order: no account registered for FUTU-XXXXX". Implemented via `_register_discovered_accounts_with_portfolio()` — sends an `AccountState` event via `generate_account_state()` with a $1M initial balance, then awaits `_await_account_registered()` for Portfolio confirmation. Called from all paths in `_discover_accounts()`: REAL mode with FUTU_ACCOUNT_ID, SIMULATE success, and SIMULATE failure with FUTU_PAPER_ACCOUNT_ID override. No-op when no account was discovered (placeholder unchanged). Also added `_set_account_id()` call in REAL path (previously missing). Portfolio registration failure is caught and logged as warning — not fatal.
+- **Files Changed**: `src/sam_trader/adapters/futu/execution.py` (+70 lines: `_register_discovered_accounts_with_portfolio()` method, imports, REAL path fix), `tests/unit/adapters/futu/test_execution.py` (+160 lines: 5 new tests in TestAccountDiscovery, `_await_account_registered` mock in make_client + 8 direct construction sites)
+- **Validation Result**: PASS (RALPH_GATE_PASSED — 115/115 targeted tests, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: The pre-existing `_PortfolioErrorFilter` in main.py remains as defense-in-depth for race conditions during startup. Initial balance ($1M) is a reasonable default for paper trading; operators can customize by overriding `generate_account_state` if needed. `_await_account_registered()` mocked in tests to avoid 30s timeout (no live Portfolio on unit test message bus).
+
 ## Iteration 148
 - **Task**: Rate-limit order submission: throttle to Futu 15/30s limit
 - **Task ID**: sam_trader-9z3.4.12

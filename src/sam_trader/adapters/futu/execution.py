@@ -50,7 +50,13 @@ from nautilus_trader.model.identifiers import (
     Venue,
     VenueOrderId,
 )
-from nautilus_trader.model.objects import Currency, Price, Quantity
+from nautilus_trader.model.objects import (
+    AccountBalance,
+    Currency,
+    Money,
+    Price,
+    Quantity,
+)
 from nautilus_trader.model.orders import (
     LimitOrder,
     MarketOrder,
@@ -392,10 +398,12 @@ class FutuLiveExecutionClient(LiveExecutionClient):
             if futu_account_id:
                 acc_id = AccountId(f"FUTU-{futu_account_id}")
                 self._account_id = acc_id
+                self._set_account_id(acc_id)
                 self._log.info(
                     f"REAL trading: using configured account {acc_id} "
                     f"(FUTU_ACCOUNT_ID={futu_account_id})"
                 )
+                await self._register_discovered_accounts_with_portfolio()
             else:
                 self._log.warning(
                     "REAL trading environment but FUTU_ACCOUNT_ID is not set; "
@@ -421,6 +429,7 @@ class FutuLiveExecutionClient(LiveExecutionClient):
                 self._handle_account_discovery_failure(
                     "get_acc_list returned empty/no data"
                 )
+                await self._register_discovered_accounts_with_portfolio()
                 return
 
             accounts: list[dict[str, Any]] = data.to_dict("records")
@@ -439,6 +448,7 @@ class FutuLiveExecutionClient(LiveExecutionClient):
                 self._handle_account_discovery_failure(
                     "no SIMULATE accounts in response"
                 )
+                await self._register_discovered_accounts_with_portfolio()
                 return
 
             # Filter by sim_acc_type from config (market_config.yaml).
@@ -475,6 +485,7 @@ class FutuLiveExecutionClient(LiveExecutionClient):
                     self._handle_account_discovery_failure(
                         f"no account with sim_acc_type={paper_acc_type}"
                     )
+                    await self._register_discovered_accounts_with_portfolio()
                     return
             else:
                 self._log.warning(
@@ -484,9 +495,11 @@ class FutuLiveExecutionClient(LiveExecutionClient):
                 )
 
             self._register_venue_account_aliases(accounts)
+            await self._register_discovered_accounts_with_portfolio()
         except Exception as e:
             self._log.exception(f"Account discovery failed: {e}", e)
             self._handle_account_discovery_failure(f"exception: {e}")
+            await self._register_discovered_accounts_with_portfolio()
 
     def _handle_account_discovery_failure(self, reason: str) -> None:
         """Handle account discovery failure — check override, else fail fast.
@@ -1117,6 +1130,60 @@ class FutuLiveExecutionClient(LiveExecutionClient):
             self._log.exception(f"Failed to generate position status reports: {e}", e)
 
         return reports
+
+    # -----------------------------------------------------------------------
+    # Portfolio account registration
+    # -----------------------------------------------------------------------
+
+    async def _register_discovered_accounts_with_portfolio(self) -> None:
+        """Register discovered trading accounts with the Nautilus Portfolio.
+
+        After account discovery updates ``self._account_id`` (and venue
+        aliases), the Portfolio must be notified so it can track orders,
+        positions, and P&L for those accounts.  Without this step the
+        Portfolio rejects order events with:
+
+            Cannot update order: no account registered for FUTU-XXXXX
+
+        This method sends an :class:`AccountState` event with an initial
+        balance via :meth:`generate_account_state` and waits for the
+        Portfolio to acknowledge registration via
+        :meth:`_await_account_registered`.
+
+        It is a no-op when no account was discovered (i.e. the factory
+        placeholder ``FUTU-{client_id}`` is still in effect).
+        """
+        # Nothing to register — discovery did not change the account ID
+        if self._account_id == self._initial_account_id:
+            return
+
+        self._log.info(f"Registering account {self._account_id} with Portfolio")
+
+        try:
+            account_balance = AccountBalance(
+                total=Money.from_str("1000000.00 USD"),
+                locked=Money.from_str("0.00 USD"),
+                free=Money.from_str("1000000.00 USD"),
+            )
+
+            self.generate_account_state(
+                balances=[account_balance],
+                margins=[],
+                reported=True,
+                ts_event=self._clock.timestamp_ns(),
+            )
+
+            await self._await_account_registered()
+
+            self._log.info(
+                f"Portfolio confirmed registration for account {self._account_id}"
+            )
+        except Exception as e:
+            self._log.warning(
+                f"Portfolio registration failed for account "
+                f"{self._account_id}: {e}. "
+                f"Orders may be rejected until the account is registered."
+            )
 
     # -----------------------------------------------------------------------
     # Helpers
