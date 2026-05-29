@@ -1,5 +1,14 @@
 > **Note: see first-entry Iteration 20 for Phase 2 config dataclasses.**
 
+## Iteration 132
+- **Task**: ORB strategy: TypeError on super().__init__(config) — StrategyId passed where str expected
+- **Task ID**: sam_trader-0y8
+- **Status**: COMPLETE
+- **Decisions**: Root cause: bundle loader sets config["strategy_id"] as plain str, but StrategyFactory.create() round-trips through JSON encoding/decoding which converts it to StrategyId via msgspec_decoding_hook. Strategy.__init__ then passes this StrategyId to Logger(name=...), which expects str — causing TypeError. Fix: In both OrbStrategy.__init__ and MomentumStrategy.__init__, use msgspec.structs.replace(config, strategy_id=str(config.strategy_id)) to convert StrategyId back to str before super().__init__(). This is a defensive fix at the strategy level that preserves market-aware state isolation.
+- **Files Changed**: src/sam_trader/strategies/orb.py, src/sam_trader/strategies/momentum.py
+- **Validation Result**: PASS (RALPH_GATE_PASSED — 162/162 targeted tests, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None.
+
 ## Iteration 131
 - **Task**: Unit tests for paper trading account discovery
 - **Task ID**: sam_trader-byh
