@@ -1125,3 +1125,131 @@ class TestRejectionCircuitBreaker:
         strategy.on_reset()
         assert strategy._rejection_count == 0
         assert strategy._rejection_disabled is False
+
+
+# ---------------------------------------------------------------------------
+# time_in_force resolution — scenario 4, 5
+# ---------------------------------------------------------------------------
+
+
+class TestTimeInForceResolution:
+    """Scenario 4-5: time_in_force resolution for MomentumStrategy.
+
+    Verifies:
+      - Strategy-level override (scenario 4)
+      - DEFAULT_TIME_IN_FORCE env var fallback (scenario 5)
+      - SIMULATE forces GTC → DAY (scenario 2 integration)
+    """
+
+    def test_explicit_config_override(self) -> None:
+        """When config.time_in_force is set, use it directly."""
+        from nautilus_trader.model.enums import TimeInForce
+
+        config = _make_config(time_in_force="IOC")
+        result = MomentumStrategy._resolve_time_in_force(config)
+        assert result == TimeInForce.IOC
+
+    def test_defaults_to_day(self, monkeypatch) -> None:
+        """When nothing is configured, fall back to DAY."""
+        from nautilus_trader.model.enums import TimeInForce
+
+        monkeypatch.delenv("DEFAULT_TIME_IN_FORCE", raising=False)
+        monkeypatch.delenv("FUTU_TRD_ENV", raising=False)
+        monkeypatch.setenv("FUTU_TRD_ENV", "REAL")
+        config = _make_config(time_in_force=None)
+        result = MomentumStrategy._resolve_time_in_force(config)
+        assert result == TimeInForce.DAY
+
+    def test_strategy_uses_resolved_tif(self, monkeypatch) -> None:
+        """MomentumStrategy.__init__ stores resolved TIF as self._time_in_force."""
+        from nautilus_trader.model.enums import TimeInForce
+
+        monkeypatch.delenv("DEFAULT_TIME_IN_FORCE", raising=False)
+        monkeypatch.setenv("FUTU_TRD_ENV", "REAL")
+        strategy = MomentumStrategy(_make_config(time_in_force="DAY"))
+        assert strategy._time_in_force == TimeInForce.DAY
+
+    def test_simulate_forces_day_from_gtc(self, monkeypatch) -> None:
+        """When FUTU_TRD_ENV=SIMULATE and resolved TIF=GTC, force DAY."""
+        from nautilus_trader.model.enums import TimeInForce
+
+        monkeypatch.delenv("DEFAULT_TIME_IN_FORCE", raising=False)
+        monkeypatch.setenv("FUTU_TRD_ENV", "SIMULATE")
+        strategy = MomentumStrategy(_make_config(time_in_force="GTC"))
+        assert strategy._time_in_force == TimeInForce.DAY
+
+    def test_simulate_does_not_force_day_from_ioc(self, monkeypatch) -> None:
+        """When FUTU_TRD_ENV=SIMULATE and resolved TIF=IOC, keep IOC."""
+        from nautilus_trader.model.enums import TimeInForce
+
+        monkeypatch.delenv("DEFAULT_TIME_IN_FORCE", raising=False)
+        monkeypatch.setenv("FUTU_TRD_ENV", "SIMULATE")
+        strategy = MomentumStrategy(_make_config(time_in_force="IOC"))
+        assert strategy._time_in_force == TimeInForce.IOC
+
+    def test_general_default_via_env_var(self, monkeypatch) -> None:
+        """Scenario 5: DEFAULT_TIME_IN_FORCE env var works as fallback."""
+        from nautilus_trader.model.enums import TimeInForce
+
+        monkeypatch.setenv("DEFAULT_TIME_IN_FORCE", "IOC")
+        monkeypatch.delenv("FUTU_TRD_ENV", raising=False)
+        monkeypatch.setenv("FUTU_TRD_ENV", "REAL")
+        config = _make_config(time_in_force=None)
+        result = MomentumStrategy._resolve_time_in_force(config)
+        assert result == TimeInForce.IOC
+
+    def test_strategy_override_beats_env_var(self, monkeypatch) -> None:
+        """Scenario 4: strategy-level time_in_force overrides env var default."""
+        from nautilus_trader.model.enums import TimeInForce
+
+        monkeypatch.setenv("DEFAULT_TIME_IN_FORCE", "IOC")
+        monkeypatch.delenv("FUTU_TRD_ENV", raising=False)
+        monkeypatch.setenv("FUTU_TRD_ENV", "REAL")
+        config = _make_config(time_in_force="DAY")
+        result = MomentumStrategy._resolve_time_in_force(config)
+        # Strategy says DAY, env says IOC → strategy wins
+        assert result == TimeInForce.DAY
+
+
+# ---------------------------------------------------------------------------
+# TIF circuit breaker safety — scenario 6
+# ---------------------------------------------------------------------------
+
+
+class TestTIFCircuitBreakerSafety:
+    """Scenario 6: GTC auto-correction prevents circuit breaker trip.
+
+    When FUTU_TRD_ENV=SIMULATE, the strategy resolves GTC→DAY at init
+    time.  Subsequent order submissions use DAY, so no GTC rejections
+    occur — the circuit breaker never trips for TIF reasons.
+    """
+
+    def test_simulate_gtc_resolves_day_strategy_uses_day(self, monkeypatch) -> None:
+        """Strategy in SIMULATE with GTC config resolves to DAY in __init__."""
+        from nautilus_trader.model.enums import TimeInForce
+
+        monkeypatch.delenv("DEFAULT_TIME_IN_FORCE", raising=False)
+        monkeypatch.setenv("FUTU_TRD_ENV", "SIMULATE")
+        strategy = MomentumStrategy(_make_config(time_in_force="GTC"))
+        _register_strategy(strategy)
+        strategy.on_start()
+
+        # Strategy resolved TIF to DAY — circuit breaker safe
+        assert strategy._time_in_force == TimeInForce.DAY
+        # Circuit breaker starts clean
+        assert strategy._rejection_count == 0
+        assert strategy._rejection_disabled is False
+
+    def test_day_config_never_trips_circuit_breaker(self, monkeypatch) -> None:
+        """DAY config in SIMULATE: no TIF conversion needed, no rejections."""
+        from nautilus_trader.model.enums import TimeInForce
+
+        monkeypatch.delenv("DEFAULT_TIME_IN_FORCE", raising=False)
+        monkeypatch.setenv("FUTU_TRD_ENV", "SIMULATE")
+        strategy = MomentumStrategy(_make_config(time_in_force="DAY"))
+        _register_strategy(strategy)
+        strategy.on_start()
+
+        assert strategy._time_in_force == TimeInForce.DAY
+        assert strategy._rejection_count == 0
+        assert strategy._rejection_disabled is False

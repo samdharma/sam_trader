@@ -1725,3 +1725,81 @@ class TestTimeInForceResolution:
         monkeypatch.setenv("FUTU_TRD_ENV", "SIMULATE")
         strategy = OrbStrategy(_make_config(time_in_force="GTC"))
         assert strategy._time_in_force == TimeInForce.DAY
+
+
+# ---------------------------------------------------------------------------
+# TIF circuit breaker safety — scenario 6
+# ---------------------------------------------------------------------------
+
+
+class TestTIFCircuitBreakerSafety:
+    """Scenario 6: GTC auto-correction prevents circuit breaker trip.
+
+    When FUTU_TRD_ENV=SIMULATE, the strategy resolves GTC→DAY at init
+    time.  Subsequent order submissions use DAY, so no GTC rejections
+    occur — the circuit breaker never trips for TIF reasons.
+
+    Combined with the execution-level defense-in-depth in
+    ``FutuLiveExecutionClient._submit_order``, this creates a two-layer
+    safety net against paper trading GTC rejections.
+    """
+
+    def test_simulate_gtc_resolves_day_strategy_uses_day(self, monkeypatch) -> None:
+        """Strategy in SIMULATE with GTC config resolves to DAY in __init__."""
+        from nautilus_trader.model.enums import TimeInForce
+
+        monkeypatch.delenv("DEFAULT_TIME_IN_FORCE", raising=False)
+        monkeypatch.setenv("FUTU_TRD_ENV", "SIMULATE")
+        strategy = OrbStrategy(_make_config(time_in_force="GTC"))
+        _register_strategy(strategy)
+        strategy.on_start()
+
+        # Strategy resolved TIF to DAY — circuit breaker safe
+        assert strategy._time_in_force == TimeInForce.DAY
+        # Circuit breaker starts clean
+        assert strategy._rejection_count == 0
+        assert strategy._rejection_disabled is False
+
+    def test_day_config_never_trips_circuit_breaker(self, monkeypatch) -> None:
+        """DAY config in SIMULATE: no TIF conversion needed, no rejections."""
+        from nautilus_trader.model.enums import TimeInForce
+
+        monkeypatch.delenv("DEFAULT_TIME_IN_FORCE", raising=False)
+        monkeypatch.setenv("FUTU_TRD_ENV", "SIMULATE")
+        strategy = OrbStrategy(_make_config(time_in_force="DAY"))
+        _register_strategy(strategy)
+        strategy.on_start()
+
+        assert strategy._time_in_force == TimeInForce.DAY
+        assert strategy._rejection_count == 0
+        assert strategy._rejection_disabled is False
+
+    def test_strategy_override_day_beats_gtc_env(self, monkeypatch) -> None:
+        """Scenario 4b: Strategy DAY override beats env-var GTC."""
+        from nautilus_trader.model.enums import TimeInForce
+
+        monkeypatch.setenv("DEFAULT_TIME_IN_FORCE", "GTC")
+        monkeypatch.delenv("FUTU_TRD_ENV", raising=False)
+        monkeypatch.setenv("FUTU_TRD_ENV", "REAL")
+        strategy = OrbStrategy(_make_config(time_in_force="DAY"))
+        _register_strategy(strategy)
+        strategy.on_start()
+
+        # Strategy-level DAY beats env-var GTC
+        assert strategy._time_in_force == TimeInForce.DAY
+
+    def test_general_default_day_beats_gtc_market_config(self, monkeypatch) -> None:
+        """Scenario 5: General default_time_in_force=DAY env var works as fallback.
+
+        Even if GTC is configured in market_config.yaml, the env var
+        DEFAULT_TIME_IN_FORCE=DAY takes priority because env vars are
+        checked before market config in the fallback chain.
+        """
+        from nautilus_trader.model.enums import TimeInForce
+
+        monkeypatch.setenv("DEFAULT_TIME_IN_FORCE", "DAY")
+        monkeypatch.delenv("FUTU_TRD_ENV", raising=False)
+        monkeypatch.setenv("FUTU_TRD_ENV", "REAL")
+        config = _make_config(time_in_force=None)
+        result = OrbStrategy._resolve_time_in_force(config)
+        assert result == TimeInForce.DAY

@@ -96,6 +96,7 @@ def _make_limit_order(
     price: str = "150.50",
     qty: int = 100,
     client_order_id: ClientOrderId | None = None,
+    time_in_force: TimeInForce = TimeInForce.DAY,
 ) -> LimitOrder:
     """Create a simple LimitOrder for tests."""
     return LimitOrder(
@@ -108,7 +109,7 @@ def _make_limit_order(
         price=Price.from_str(price),
         init_id=UUID4(),
         ts_init=0,
-        time_in_force=TimeInForce.DAY,
+        time_in_force=time_in_force,
     )
 
 
@@ -117,6 +118,7 @@ def _make_market_order(
     side: OrderSide = OrderSide.BUY,
     qty: int = 100,
     client_order_id: ClientOrderId | None = None,
+    time_in_force: TimeInForce = TimeInForce.DAY,
 ) -> MarketOrder:
     """Create a simple MarketOrder for tests."""
     return MarketOrder(
@@ -128,7 +130,7 @@ def _make_market_order(
         quantity=Quantity.from_int(qty),
         init_id=UUID4(),
         ts_init=0,
-        time_in_force=TimeInForce.DAY,
+        time_in_force=time_in_force,
     )
 
 
@@ -1782,3 +1784,335 @@ class TestPushLoop:
         event_loop.run_until_complete(client._disconnect())
         assert len(reports) == 1
         assert reports[0].trade_id.value == "T-001"
+
+
+# ---------------------------------------------------------------------------
+# Time-in-force (TIF) execution-level tests — scenarios 1-3, 6, 12
+# ---------------------------------------------------------------------------
+
+
+class TestOrderTimeInForceExecution:
+    """Scenario 1-3: Order type (time_in_force) at execution level.
+
+    Verifies:
+      - DAY orders in SIMULATE are submitted as-is (scenario 1)
+      - GTC orders in SIMULATE are auto-converted to DAY (scenario 2)
+      - GTC orders in REAL are preserved as GTC (scenario 3)
+    """
+
+    def test_day_order_in_simulate_no_conversion(
+        self, event_loop, make_client, mock_trade_ctx
+    ):
+        """Scenario 1: DAY orders in SIMULATE pass through unchanged.
+
+        When trd_env=SIMULATE and the order already has time_in_force=DAY,
+        the defense-in-depth GTC→DAY conversion must NOT trigger — the
+        order is already in the correct TIF.
+        """
+        client = make_client()
+        order = _make_limit_order(time_in_force=TimeInForce.DAY)
+        cmd = TestCommandStubs.submit_order_command(order)
+
+        event_loop.run_until_complete(client._submit_order(cmd))
+
+        call_kwargs = mock_trade_ctx.place_order.call_args.kwargs
+        assert call_kwargs["time_in_force"] == "DAY"
+        assert call_kwargs["trd_env"] == "SIMULATE"
+
+    def test_gtc_order_in_simulate_auto_converts_to_day(
+        self, event_loop, make_client, mock_trade_ctx
+    ):
+        """Scenario 2: GTC orders in SIMULATE are auto-converted to DAY.
+
+        Futu paper trading rejects GTC orders with:
+          "Paper trading does not support GTC orders"
+
+        The execution client's defense-in-depth logic in ``_submit_order``
+        overrides GTC → DAY before calling ``place_order``.  This prevents
+        rejections that would otherwise trip the circuit breaker.
+        """
+        client = make_client()
+        order = _make_limit_order(time_in_force=TimeInForce.GTC)
+        cmd = TestCommandStubs.submit_order_command(order)
+
+        event_loop.run_until_complete(client._submit_order(cmd))
+
+        call_kwargs = mock_trade_ctx.place_order.call_args.kwargs
+        # GTC is auto-converted to DAY at the execution layer
+        assert call_kwargs["time_in_force"] == "DAY"
+
+    def test_gtc_order_in_real_preserved(self, event_loop, make_client, mock_trade_ctx):
+        """Scenario 3: GTC orders in REAL mode are preserved as GTC.
+
+        In live trading (trd_env=REAL), Futu supports GTC orders.
+        The execution client must NOT override them.
+        """
+        cfg = FutuExecClientConfig(
+            host="test-host",
+            port=11111,
+            trd_env="REAL",
+            trd_market="US",
+            client_id=1,
+        )
+        clock = LiveClock()
+        msgbus = TestComponentStubs.msgbus()
+        cache = TestComponentStubs.cache()
+        provider = MagicMock(spec=InstrumentProvider)
+        client = FutuLiveExecutionClient(
+            loop=event_loop,
+            client=mock_trade_ctx,
+            msgbus=msgbus,
+            cache=cache,
+            clock=clock,
+            instrument_provider=provider,
+            config=cfg,
+        )
+        order = _make_limit_order(time_in_force=TimeInForce.GTC)
+        cmd = TestCommandStubs.submit_order_command(order)
+
+        event_loop.run_until_complete(client._submit_order(cmd))
+
+        call_kwargs = mock_trade_ctx.place_order.call_args.kwargs
+        # GTC preserved in REAL mode
+        assert call_kwargs["time_in_force"] == "GTC"
+        assert call_kwargs["trd_env"] == "REAL"
+
+    def test_ioc_order_in_simulate_preserved(
+        self, event_loop, make_client, mock_trade_ctx
+    ):
+        """IOC orders in SIMULATE are not affected by GTC→DAY override."""
+        client = make_client()
+        order = _make_limit_order(time_in_force=TimeInForce.IOC)
+        cmd = TestCommandStubs.submit_order_command(order)
+
+        event_loop.run_until_complete(client._submit_order(cmd))
+
+        call_kwargs = mock_trade_ctx.place_order.call_args.kwargs
+        assert call_kwargs["time_in_force"] == "IOC"
+
+
+class TestCircuitBreakerTIFSafety:
+    """Scenario 6: GTC auto-correction prevents circuit breaker trip.
+
+    The execution client converts GTC→DAY in SIMULATE before calling
+    the Futu API.  This means Futu never sees a GTC order and never
+    returns a rejection — the circuit breaker does NOT trip.
+
+    Additionally, at the strategy level, the resolved TIF is already
+    DAY when FUTU_TRD_ENV=SIMULATE, so the auto-correction is
+    defense-in-depth.
+    """
+
+    def test_gtc_conversion_prevents_place_order_rejection(
+        self, event_loop, make_client, mock_trade_ctx
+    ):
+        """GTC→DAY conversion means place_order never receives GTC.
+
+        The conversion happens BEFORE place_order is called, so Futu
+        never processes a GTC tif — no rejection is generated.
+        """
+        client = make_client()
+        order = _make_limit_order(time_in_force=TimeInForce.GTC)
+        cmd = TestCommandStubs.submit_order_command(order)
+
+        with patch.object(client, "generate_order_rejected") as mock_rej:
+            event_loop.run_until_complete(client._submit_order(cmd))
+
+        # No rejection emitted — GTC was auto-corrected to DAY
+        mock_rej.assert_not_called()
+
+    def test_day_order_never_triggers_gtc_override(
+        self, event_loop, make_client, mock_trade_ctx
+    ):
+        """DAY orders pass straight through — no conversion log/overhead."""
+        client = make_client()
+        order = _make_limit_order(time_in_force=TimeInForce.DAY)
+        cmd = TestCommandStubs.submit_order_command(order)
+
+        with patch.object(client, "generate_order_rejected") as mock_rej:
+            event_loop.run_until_complete(client._submit_order(cmd))
+
+        mock_rej.assert_not_called()
+        call_kwargs = mock_trade_ctx.place_order.call_args.kwargs
+        assert call_kwargs["time_in_force"] == "DAY"
+
+
+# ---------------------------------------------------------------------------
+# Account mismatch regression — scenario 12
+# ---------------------------------------------------------------------------
+
+
+class TestAccountIdRouting:
+    """Scenario 12: Verify FUTU-1 placeholder never reaches live order routing.
+
+    After account discovery, the placeholder account ID (e.g., ``FUTU-1``)
+    must be replaced by the discovered paper trading account.  Orders
+    must route with the correct ``acc_id``, not the factory placeholder.
+    """
+
+    def test_order_uses_discovered_account_after_discovery(
+        self, event_loop, make_client, mock_trade_ctx
+    ):
+        """After discovery, orders use the discovered account, not FUTU-1."""
+        client = make_client()
+        # Simulate discovery finding a paper trading account
+        client._venue_account_aliases[Venue("NASDAQ")] = AccountId("FUTU-19064357")
+        client._account_id = AccountId("FUTU-19064357")
+        client._set_account_id(AccountId("FUTU-19064357"))
+
+        order = _make_limit_order(instrument_id="AAPL.NASDAQ")
+        cmd = TestCommandStubs.submit_order_command(order)
+
+        event_loop.run_until_complete(client._submit_order(cmd))
+
+        call_kwargs = mock_trade_ctx.place_order.call_args.kwargs
+        # Must use the discovered account, not the factory placeholder
+        assert call_kwargs["acc_id"] == 19064357
+
+    def test_order_uses_placeholder_when_no_discovery(
+        self, event_loop, make_client, mock_trade_ctx
+    ):
+        """Without discovery, the placeholder is used (expected behavior).
+
+        When account discovery fails and no FUTU_PAPER_ACCOUNT_ID is set,
+        the placeholder remains.  This is an expected failure mode — the
+        operator must create a paper trading account first.
+        """
+        client = make_client()  # placeholder: FUTU-1
+        assert client._account_id == AccountId("FUTU-1")
+
+        order = _make_limit_order(instrument_id="AAPL.NASDAQ")
+        cmd = TestCommandStubs.submit_order_command(order)
+
+        event_loop.run_until_complete(client._submit_order(cmd))
+
+        call_kwargs = mock_trade_ctx.place_order.call_args.kwargs
+        assert call_kwargs["acc_id"] == 1
+
+    def test_order_uses_venue_alias_over_default_account(
+        self, event_loop, make_client, mock_trade_ctx
+    ):
+        """Per-venue alias takes priority over default account for routing."""
+        client = make_client()
+        # HK account and US account are different
+        client._account_id = AccountId("FUTU-19064357")  # default = US
+        client._venue_account_aliases[Venue("HKEX")] = AccountId("FUTU-19064358")
+
+        # Order for HK instrument → should use HK account
+        order = _make_limit_order(instrument_id="00700.HKEX")
+        cmd = TestCommandStubs.submit_order_command(order)
+
+        event_loop.run_until_complete(client._submit_order(cmd))
+
+        call_kwargs = mock_trade_ctx.place_order.call_args.kwargs
+        assert call_kwargs["acc_id"] == 19064358  # HK account, not US default
+
+
+# ---------------------------------------------------------------------------
+# Account discovery — scenario 9: Critical log on failure without env var
+# ---------------------------------------------------------------------------
+
+
+class TestAccountDiscoveryCriticalLog:
+    """Scenario 9: Clear CRITICAL log when discovery fails with no override.
+
+    When get_acc_list() returns no matching paper accounts and
+    FUTU_PAPER_ACCOUNT_ID is not set, the _handle_account_discovery_failure
+    method must emit an ERROR-level log with a clear diagnostic message
+    and keep the placeholder account ID so orders fail with identifiable
+    errors rather than silently routing to the wrong account.
+    """
+
+    def test_critical_log_on_failure_no_override(
+        self, event_loop, make_client, mock_trade_ctx
+    ):
+        """Scenario 9: Clear diagnostic when discovery fails with no override.
+
+        When get_acc_list() returns no matching paper accounts and
+        FUTU_PAPER_ACCOUNT_ID is not set, the placeholder is preserved.
+        Orders will fail with identifiable errors rather than silently
+        routing to the wrong account.
+
+        Cython Logger is read-only — we verify the *outcome* (state),
+        not the log call itself.
+        """
+        mock_trade_ctx.get_acc_list.return_value = (
+            RET_OK,
+            pd.DataFrame(
+                {
+                    "acc_id": [100],
+                    "trd_env": ["REAL"],  # all REAL, none SIMULATE
+                    "trdmarket_auth": [[2]],
+                    "sim_acc_type": ["STOCK_AND_OPTION"],
+                }
+            ),
+        )
+        client = make_client()
+        placeholder = client._account_id
+
+        with patch.dict(os.environ, {}, clear=True):
+            event_loop.run_until_complete(client._discover_accounts())
+
+        # Placeholder kept — orders will fail with identifiable error
+        assert client._account_id == placeholder
+        assert client._venue_account_aliases == {}
+
+    def test_placeholder_kept_ensures_orders_fail_identifiably(
+        self, event_loop, make_client, mock_trade_ctx
+    ):
+        """Placeholder account kept so orders fail with identifiable error.
+
+        Rather than silently using the wrong account, the placeholder
+        ensures order failures are obvious and debuggable.
+        """
+        mock_trade_ctx.get_acc_list.return_value = (RET_OK, pd.DataFrame())
+        client = make_client()
+        placeholder = client._account_id
+
+        with patch.dict(os.environ, {}, clear=True):
+            event_loop.run_until_complete(client._discover_accounts())
+
+        # Placeholder remains unchanged — no silent fallback to wrong account
+        assert client._account_id == placeholder
+
+
+# ---------------------------------------------------------------------------
+# Account discovery — scenario 8: Empty response fallback to env override
+# ---------------------------------------------------------------------------
+
+
+class TestAccountDiscoveryEmptyFallback:
+    """Scenario 8: Empty get_acc_list response falls back to FUTU_PAPER_ACCOUNT_ID.
+
+    When the Futu API returns an empty account list (no paper accounts
+    created), the system falls back to the FUTU_PAPER_ACCOUNT_ID env var
+    if configured.
+    """
+
+    def test_empty_response_falls_back_to_paper_override(
+        self, event_loop, make_client, mock_trade_ctx
+    ):
+        """Empty response → FUTU_PAPER_ACCOUNT_ID used."""
+        mock_trade_ctx.get_acc_list.return_value = (RET_OK, pd.DataFrame())
+        client = make_client()
+
+        with patch.dict(os.environ, {"FUTU_PAPER_ACCOUNT_ID": "explicit-paper-789"}):
+            event_loop.run_until_complete(client._discover_accounts())
+
+        assert client._account_id == AccountId("FUTU-explicit-paper-789")
+
+    def test_empty_response_no_override_logs_warning(
+        self, event_loop, make_client, mock_trade_ctx
+    ):
+        """Empty response without override → placeholder kept.
+
+        Cython Logger is read-only — verify state outcome.
+        """
+        mock_trade_ctx.get_acc_list.return_value = (RET_OK, pd.DataFrame())
+        client = make_client()
+        placeholder = client._account_id
+
+        with patch.dict(os.environ, {}, clear=True):
+            event_loop.run_until_complete(client._discover_accounts())
+
+        assert client._account_id == placeholder

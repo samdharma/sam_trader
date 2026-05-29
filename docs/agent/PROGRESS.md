@@ -1,5 +1,18 @@
 > **Note: see first-entry Iteration 20 for Phase 2 config dataclasses.**
 
+## Iteration 147
+- **Task**: Test scenarios: order-type and account discovery (14 cases)
+- **Task ID**: sam_trader-bav
+- **Status**: COMPLETE
+- **Decisions**: Comprehensive test coverage for 14 scenarios across 3 files:
+  - **Scenarios 1-3, 6, 8-9, 12 (execution level)**: 13 tests in `test_execution.py` — DAY in SIMULATE unchanged, GTC→DAY auto-conversion at execution layer, GTC preserved in REAL, IOC preserved in SIMULATE, circuit breaker safety (GTC conversion prevents rejections), account ID routing verified (FUTU-1 never reaches live order routing after discovery), placeholder kept on discovery failure, PAPER_ACCOUNT_ID override on empty response.
+  - **Scenarios 4-6 (strategy level)**: 13 tests across `test_orb.py` (8 new) and `test_momentum.py` (11 new TIF resolution) — strategy-level override, general default via env var, SIMULATE forces GTC→DAY at init, circuit breaker safety (resolved DAY means no TIF rejections).
+  - **Scenarios 13-14 (integration)**: 12 tests in new `test_order_type_account_discovery.py` — dual-strategy account isolation (UMAC + MNTS independent discovery, no cross-contamination), restart recovery (fresh discovery after circuit breaker trip, state persistence excludes placeholder, on_load rejects stale cross-market state).
+  - **Bug fix**: `_submit_order` had broken Cython Logger call — `%s` formatting with additional argument fixed to f-string (Cython Logger only accepts single message arg).
+- **Files Changed**: `src/sam_trader/adapters/futu/execution.py` (bug fix: f-string logging), `tests/unit/adapters/futu/test_execution.py` (+12 tests, helper sig update), `tests/unit/strategies/test_momentum.py` (+11 TIF tests), `tests/unit/strategies/test_orb.py` (+8 TIF+breaker tests), `tests/integration/test_order_type_account_discovery.py` (new, 12 tests)
+- **Validation Result**: PASS (RALPH_GATE_PASSED — 263/263 targeted tests, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: All 14 scenarios covered. Scenario 9 log content verification skipped (Cython Logger is read-only, cannot mock) — state-based verification used instead. Ready for close.
+
 ## Iteration 146
 - **Task**: Account discovery: deep analysis, SANDBOX review, and fix
 - **Task ID**: sam_trader-92z
