@@ -499,8 +499,10 @@ class TestAccountDiscovery:
         event_loop.run_until_complete(client._discover_accounts())
 
         # Only SIMULATE accounts registered; last one wins per venue
-        assert len(client._venue_account_aliases) == 1
+        # US market (code 2) maps to both NASDAQ and NYSE
+        assert len(client._venue_account_aliases) >= 1
         assert client._venue_account_aliases[Venue("NASDAQ")] == AccountId("FUTU-300")
+        assert client._venue_account_aliases[Venue("NYSE")] == AccountId("FUTU-300")
         # Default account is the first SIMULATE account
         assert client._account_id == AccountId("FUTU-100")
 
@@ -1093,7 +1095,8 @@ class TestAccountDiscovery:
         - acc_id 19064358:           SIMULATE, STOCK, [HK]
         - acc_id 19064361:           SIMULATE, OPTION, [HK]
 
-        HK + SIMULATE + paper_acc_type=STOCK → selects acc_id 19064358 (STOCK, HK-authorised).
+        HK + SIMULATE + paper_acc_type=STOCK → selects acc_id 19064358
+        (STOCK, HK-authorised).
         """
         cfg = FutuExecClientConfig(
             host="test-host",

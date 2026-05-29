@@ -1,5 +1,20 @@
 > **Note: see first-entry Iteration 20 for Phase 2 config dataclasses.**
 
+## Iteration 146
+- **Task**: Account discovery: deep analysis, SANDBOX review, and fix
+- **Task ID**: sam_trader-92z
+- **Status**: COMPLETE
+- **Decisions**: Root cause: `_set_account_id()` is called once in `__init__` with the factory placeholder `FUTU-1`, but NEVER called again after account discovery updates `self._account_id` to the discovered paper trading account (e.g., `FUTU-19064357`). The Cython `ExecutionClient.account_id` property (read-only from Python) is what Nautilus uses internally for `generate_order_submitted()`, `generate_order_accepted()`, and all other order event generators — none of which accept an explicit account_id parameter. Result: orders are submitted to Futu with the correct `acc_id` (via `_resolve_account_id()` reading Python `self._account_id`), but Nautilus internal events use `FUTU-1`, causing portfolio reconciliation failures. Fix:
+  1. Added `self._set_account_id(acc_id)` in `_register_venue_account_aliases()` after the discovered account replaces the factory placeholder.
+  2. Added `self._set_account_id(acc_id)` in `_handle_account_discovery_failure()` when `FUTU_PAPER_ACCOUNT_ID` override is used.
+  3. Added NYSE venue alias when US market (TrdMarket 2) is registered — `FUTU_TRD_MARKET_TO_VENUE` maps US → NASDAQ only, but US instruments may have NYSE venue. Both venues now route to the same account.
+  4. Added `FUTU_PAPER_ACCOUNT_ID` to `.env` as an optional paper trading override (operator sets it if auto-discovery fails).
+  Merge decision on `7059b58` WIP: ADOPT. The WIP is already merged in HEAD — it correctly removes `FUTU_ACCOUNT_ID` fallback for paper trading, introduces `paper_acc_type` from `market_config.yaml`, and adds `FUTU_PAPER_ACCOUNT_ID` override. The missing `_set_account_id()` calls were the only bug.
+  Deep analysis documented in `docs/user/ACCOUNT_DISCOVERY_FIX_29MAY.md`.
+- **Files Changed**: `src/sam_trader/adapters/futu/execution.py` (+21/-3 lines: 2x `_set_account_id()` calls, NYSE alias, imports), `tests/unit/adapters/futu/test_execution.py` (+5/-2 lines: updated assertions for NYSE alias, fixed long line), `.env` (+5 lines: FUTU_PAPER_ACCOUNT_ID), `docs/user/ACCOUNT_DISCOVERY_FIX_29MAY.md` (new)
+- **Validation Result**: PASS (RALPH_GATE_PASSED — 79/79 targeted execution tests, black/isort/flake8/mypy all green; 4 pre-existing test_main.py failures unrelated)
+- **Blockers / Notes**: `FUTU_PAPER_ACCOUNT_ID` is left empty in `.env` — operator must set it for the sandbox if auto-discovery is unreliable. The fix eliminates the `FUTU-1` placeholder after discovery, so manual restart after circuit breaker trip should no longer be needed for account issues.
+
 ## Iteration 145
 - **Task**: 12.1.12: Dashboard _extract_result_stats reads total_pnl from wrong BacktestResult field
 - **Task ID**: sam_trader-9z3.13.1.12

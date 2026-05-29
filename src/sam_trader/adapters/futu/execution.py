@@ -64,7 +64,9 @@ from sam_trader.adapters.futu.connection import (
 from sam_trader.adapters.futu.constants import (
     FUTU_TRD_MARKET_NAME_TO_INT,
     FUTU_TRD_MARKET_TO_VENUE,
+    FUTU_TRD_MARKET_US,
     FUTU_VENUE,
+    NYSE_VENUE,
     nautilus_order_side_to_futu,
     nautilus_order_type_to_futu,
 )
@@ -356,9 +358,11 @@ class FutuLiveExecutionClient(LiveExecutionClient):
                     )
                 ]
                 if not accounts:
-                    available_types = {
-                        str(a.get("sim_acc_type", "?")) for a in accounts
-                    } if before > 0 else set()
+                    available_types = (
+                        {str(a.get("sim_acc_type", "?")) for a in accounts}
+                        if before > 0
+                        else set()
+                    )
                     self._log.warning(
                         f"No SIMULATE accounts with sim_acc_type "
                         f"matching {paper_acc_type} "
@@ -397,6 +401,9 @@ class FutuLiveExecutionClient(LiveExecutionClient):
         if paper_override:
             acc_id = AccountId(f"FUTU-{paper_override}")
             self._account_id = acc_id
+            # Update the Cython ExecutionClient.account_id property
+            # so Nautilus order events carry the correct account ID.
+            self._set_account_id(acc_id)
             self._log.info(
                 f"Account discovery: using FUTU_PAPER_ACCOUNT_ID={paper_override} "
                 f"(reason: {reason})"
@@ -482,6 +489,14 @@ class FutuLiveExecutionClient(LiveExecutionClient):
                     self._log.info(
                         f"Registered venue alias: {venue} -> {acc_id}",
                     )
+                    # US market (TrdMarket 2) maps to NASDAQ in the constants,
+                    # but US instruments may also use NYSE venue. Add both.
+                    if market_code == FUTU_TRD_MARKET_US:
+                        self._venue_account_aliases[NYSE_VENUE] = acc_id
+                        venues.append(str(NYSE_VENUE))
+                        self._log.info(
+                            f"Registered venue alias: {NYSE_VENUE} -> {acc_id}",
+                        )
 
             registered_count += 1
 
@@ -490,6 +505,9 @@ class FutuLiveExecutionClient(LiveExecutionClient):
             # client_id-based defaults like FUTU-1 and env-var overrides)
             if self._account_id == self._initial_account_id:
                 self._account_id = acc_id
+                # Update the Cython ExecutionClient.account_id property
+                # so Nautilus order events carry the correct account ID.
+                self._set_account_id(acc_id)
                 self._log.info(
                     f"Account discovery: selected {acc_id} "
                     f"(sim_acc_type={sim_acc_type}, "
