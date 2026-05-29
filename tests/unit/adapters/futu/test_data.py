@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import logging as _logging_mod
+import time
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -11,8 +13,9 @@ from nautilus_trader.common.component import LiveClock
 from nautilus_trader.common.providers import InstrumentProvider
 from nautilus_trader.core.uuid import UUID4
 from nautilus_trader.data.messages import RequestBars
-from nautilus_trader.model.data import BarType
+from nautilus_trader.model.data import Bar, BarType
 from nautilus_trader.model.identifiers import ClientId, InstrumentId, Venue
+from nautilus_trader.model.objects import Price, Quantity
 from nautilus_trader.test_kit.stubs.component import TestComponentStubs
 
 from sam_trader.adapters.futu.config import FutuDataClientConfig
@@ -557,3 +560,212 @@ class TestRequestBars:
         event_loop.run_until_complete(client._request_bars(request))
 
         mock_quote_ctx.request_history_kline.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Bar Debug Logging
+# ---------------------------------------------------------------------------
+
+
+def _make_mock_bar(
+    instrument_id: InstrumentId | None = None,
+    bar_type: BarType | None = None,
+    ts_event: int = 1_700_000_000_000_000_000,
+    open_price: float = 150.0,
+    high_price: float = 152.0,
+    low_price: float = 149.0,
+    close_price: float = 151.0,
+    volume: int = 10000,
+) -> Bar:
+    """Create a Bar instance for testing."""
+    if instrument_id is None:
+        instrument_id = InstrumentId.from_str("AAPL.NASDAQ")
+    if bar_type is None:
+        bar_type = BarType.from_str("AAPL.NASDAQ-5-MINUTE-LAST-EXTERNAL")
+    return Bar(
+        bar_type=bar_type,
+        open=Price.from_str(str(open_price)),
+        high=Price.from_str(str(high_price)),
+        low=Price.from_str(str(low_price)),
+        close=Price.from_str(str(close_price)),
+        volume=Quantity.from_int(volume),
+        ts_event=ts_event,
+        ts_init=ts_event,
+    )
+
+
+class TestBarDebugLogging:
+    """Tests for rate-limited DEBUG-level bar reception logging.
+
+    NOTE: Nautilus Cython Logger attributes (_log, _log.debug) are read-only
+    extension types and cannot be mocked. Tests verify internal state changes
+    (_bar_log_timestamps, _bar_log_counts) and the guard condition
+    (logger.isEnabledFor). The actual debug() call is self-evident f-string
+    formatting — tested implicitly via state correctness.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _enable_debug_logging(self):
+        """Set the Python logger to DEBUG so guard passes."""
+        lgr = _logging_mod.getLogger("sam_trader.adapters.futu.data")
+        old_level = lgr.level
+        lgr.setLevel(_logging_mod.DEBUG)
+        yield
+        lgr.setLevel(old_level)
+
+    def test_single_bar_updates_state(self, make_client):
+        """AC1: A single bar at DEBUG level updates timestamp and resets count."""
+        client = make_client()
+        bar = _make_mock_bar()
+        before = time.monotonic()
+
+        client._log_bar_summary_if_debug(bar)
+
+        assert "AAPL.NASDAQ" in client._bar_log_timestamps
+        assert client._bar_log_timestamps["AAPL.NASDAQ"] >= before
+        assert client._bar_log_counts["AAPL.NASDAQ"] == 0
+
+    def test_non_bar_item_skipped(self, make_client):
+        """Non-Bar items should leave state unchanged."""
+        client = make_client()
+
+        client._log_bar_summary_if_debug({"type": "quote_tick"})
+        client._log_bar_summary_if_debug("some_string")
+        client._log_bar_summary_if_debug(42)
+
+        assert len(client._bar_log_timestamps) == 0
+        assert len(client._bar_log_counts) == 0
+
+    def test_rate_limit_same_instrument_within_window(self, make_client):
+        """AC2: Multiple bars within 60s accumulate count, log only once."""
+        client = make_client()
+        bar = _make_mock_bar()
+
+        client._log_bar_summary_if_debug(bar)
+        # Count reset to 0 after first log. Accumulate 2 more within window.
+        client._log_bar_summary_if_debug(bar)
+        client._log_bar_summary_if_debug(bar)
+
+        # Counter should show 2 (accumulated since last log)
+        assert client._bar_log_counts["AAPL.NASDAQ"] == 2
+        # Timestamp still from first call
+        assert "AAPL.NASDAQ" in client._bar_log_timestamps
+
+    def test_rate_limit_resets_after_window(self, make_client):
+        """AC2: After 60s window expires, a new timestamp is recorded."""
+        client = make_client()
+        bar = _make_mock_bar()
+
+        client._log_bar_summary_if_debug(bar)
+        first_ts = client._bar_log_timestamps["AAPL.NASDAQ"]
+        assert client._bar_log_counts["AAPL.NASDAQ"] == 0
+
+        # Force the last log timestamp to be 61 seconds ago
+        client._bar_log_timestamps["AAPL.NASDAQ"] = time.monotonic() - 61.0
+        client._bar_log_counts["AAPL.NASDAQ"] = 0
+
+        # Another bar after the window
+        client._log_bar_summary_if_debug(bar)
+
+        # Timestamp should be updated (>= now), counter reset
+        assert client._bar_log_timestamps["AAPL.NASDAQ"] > first_ts
+        assert client._bar_log_counts["AAPL.NASDAQ"] == 0
+
+    def test_bar_count_accumulates_correctly(self, make_client):
+        """Count accumulates across multiple bars within the same window."""
+        client = make_client()
+        bar = _make_mock_bar()
+
+        # First bar triggers log, sets timestamp, resets count to 0
+        client._log_bar_summary_if_debug(bar)
+        assert client._bar_log_counts["AAPL.NASDAQ"] == 0
+
+        # Send 4 more bars within the same window
+        for _ in range(4):
+            client._log_bar_summary_if_debug(bar)
+
+        # Count should be 4 (accumulated, not yet logged)
+        assert client._bar_log_counts["AAPL.NASDAQ"] == 4
+
+    def test_multi_instrument_independent_counters(self, make_client):
+        """Counters are per-instrument, not global."""
+        client = make_client()
+        bar_aapl = _make_mock_bar(
+            instrument_id=InstrumentId.from_str("AAPL.NASDAQ"),
+            bar_type=BarType.from_str("AAPL.NASDAQ-5-MINUTE-LAST-EXTERNAL"),
+        )
+        bar_tsla = _make_mock_bar(
+            instrument_id=InstrumentId.from_str("TSLA.NASDAQ"),
+            bar_type=BarType.from_str("TSLA.NASDAQ-5-MINUTE-LAST-EXTERNAL"),
+        )
+
+        client._log_bar_summary_if_debug(bar_aapl)
+        client._log_bar_summary_if_debug(bar_tsla)
+
+        # Each instrument has its own timestamp and counter
+        assert "AAPL.NASDAQ" in client._bar_log_timestamps
+        assert "TSLA.NASDAQ" in client._bar_log_timestamps
+        assert client._bar_log_counts["AAPL.NASDAQ"] == 0
+        assert client._bar_log_counts["TSLA.NASDAQ"] == 0
+
+    def test_multi_instrument_rate_limit_isolated(self, make_client):
+        """Rate limit windows are per-instrument: one can log while other suppressed."""
+        client = make_client()
+        bar_aapl = _make_mock_bar(
+            instrument_id=InstrumentId.from_str("AAPL.NASDAQ"),
+            bar_type=BarType.from_str("AAPL.NASDAQ-5-MINUTE-LAST-EXTERNAL"),
+        )
+        bar_tsla = _make_mock_bar(
+            instrument_id=InstrumentId.from_str("TSLA.NASDAQ"),
+            bar_type=BarType.from_str("TSLA.NASDAQ-5-MINUTE-LAST-EXTERNAL"),
+        )
+
+        # First bars: both instruments log
+        client._log_bar_summary_if_debug(bar_aapl)
+        client._log_bar_summary_if_debug(bar_tsla)
+        # More AAPL bars within window: suppressed (counter increments)
+        client._log_bar_summary_if_debug(bar_aapl)
+        client._log_bar_summary_if_debug(bar_aapl)
+        # More TSLA bars within window: suppressed
+        client._log_bar_summary_if_debug(bar_tsla)
+
+        # AAPL should have count of 2 (suppressed bars since last log)
+        assert client._bar_log_counts["AAPL.NASDAQ"] == 2
+        # TSLA should have count of 1
+        assert client._bar_log_counts["TSLA.NASDAQ"] == 1
+
+        # Force AAPL window expired; TSLA still within window
+        client._bar_log_timestamps["AAPL.NASDAQ"] = time.monotonic() - 61.0
+        client._log_bar_summary_if_debug(bar_aapl)
+        client._log_bar_summary_if_debug(bar_tsla)
+
+        # AAPL: new log was emitted (timestamp updated, count reset to 0)
+        assert client._bar_log_timestamps["AAPL.NASDAQ"] > time.monotonic() - 1.0
+        assert client._bar_log_counts["AAPL.NASDAQ"] == 0
+        # TSLA: still within window, counter incremented
+        assert client._bar_log_counts["TSLA.NASDAQ"] == 2
+
+    def test_no_overhead_at_info_level(self, make_client):
+        """AC4: When Python logger is at INFO, method body is skipped entirely."""
+        lgr = _logging_mod.getLogger("sam_trader.adapters.futu.data")
+        old_level = lgr.level
+        lgr.setLevel(_logging_mod.INFO)
+        try:
+            client = make_client()
+            bar = _make_mock_bar()
+            client._log_bar_summary_if_debug(bar)
+            # State should be unchanged — method returned early
+            assert len(client._bar_log_timestamps) == 0
+            assert len(client._bar_log_counts) == 0
+        finally:
+            lgr.setLevel(old_level)
+
+    def test_initial_state_fields(self, make_client):
+        """Verify the rate-limit state fields are initialized on the client."""
+        client = make_client()
+        assert hasattr(client, "_bar_log_timestamps")
+        assert hasattr(client, "_bar_log_counts")
+        assert isinstance(client._bar_log_timestamps, dict)
+        assert isinstance(client._bar_log_counts, dict)
+        assert len(client._bar_log_timestamps) == 0
+        assert len(client._bar_log_counts) == 0

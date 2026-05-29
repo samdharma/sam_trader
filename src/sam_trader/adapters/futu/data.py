@@ -27,7 +27,7 @@ from nautilus_trader.data.messages import (
     UnsubscribeTradeTicks,
 )
 from nautilus_trader.live.data_client import LiveMarketDataClient
-from nautilus_trader.model.data import BarType
+from nautilus_trader.model.data import Bar, BarType
 from nautilus_trader.model.enums import BarAggregation
 from nautilus_trader.model.identifiers import ClientId, InstrumentId
 
@@ -139,6 +139,10 @@ class FutuLiveDataClient(LiveMarketDataClient):
         self._disconnect_time: float | None = None
         self._disconnect_reason: str | None = None
 
+        # Bar debug logging rate-limit state
+        self._bar_log_timestamps: dict[str, float] = {}
+        self._bar_log_counts: dict[str, int] = {}
+
     # -----------------------------------------------------------------------
     # Connection lifecycle
     # -----------------------------------------------------------------------
@@ -233,6 +237,7 @@ class FutuLiveDataClient(LiveMarketDataClient):
         try:
             while True:
                 item = await self._queue.get()
+                self._log_bar_summary_if_debug(item)
                 self._handle_data(item)
         except asyncio.CancelledError:
             self._log.debug("Push loop cancelled")
@@ -580,6 +585,44 @@ class FutuLiveDataClient(LiveMarketDataClient):
             f"futu_disconnect event=client_disconnect reason={reason} "
             f"connection_duration_seconds={duration_seconds:.3f}"
         )
+
+    # -----------------------------------------------------------------------
+    # Bar Debug Logging
+    # -----------------------------------------------------------------------
+
+    def _log_bar_summary_if_debug(self, item: object) -> None:
+        """Log a rate-limited bar summary at DEBUG level.
+
+        When LOG_LEVEL=DEBUG, logs one summary per instrument per 60 seconds
+        containing the instrument ID, bar type, bar count in the window,
+        and latest OHLCV values. No overhead at INFO and above.
+
+        Uses Cython-safe f-string formatting (Nautilus Logger.debug accepts
+        exactly 2 positional args: self + msg).
+        """
+        if not logger.isEnabledFor(logging.DEBUG):
+            return
+        if not isinstance(item, Bar):
+            return
+
+        instrument_id = item.bar_type.instrument_id
+        instr_key = instrument_id.value
+        now = time.monotonic()
+        last_log = self._bar_log_timestamps.get(instr_key, 0.0)
+
+        if now - last_log >= 60.0:
+            count = self._bar_log_counts.get(instr_key, 0) + 1
+            self._log.debug(
+                f"Bar received: instrument={instrument_id} "
+                f"bar_type={item.bar_type} "
+                f"latest_ts={item.ts_event} "
+                f"O={item.open} H={item.high} L={item.low} C={item.close} "
+                f"V={item.volume} bar_count_last_minute={count}"
+            )
+            self._bar_log_timestamps[instr_key] = now
+            self._bar_log_counts[instr_key] = 0
+        else:
+            self._bar_log_counts[instr_key] = self._bar_log_counts.get(instr_key, 0) + 1
 
     # -----------------------------------------------------------------------
     # Helpers

@@ -1,5 +1,14 @@
 > **Note: see first-entry Iteration 20 for Phase 2 config dataclasses.**
 
+## Iteration 128
+- **Task**: Bar data event logging at DEBUG level for DataEngine
+- **Task ID**: sam_trader-e5m
+- **Status**: COMPLETE
+- **Decisions**: Added `_log_bar_summary_if_debug()` to `FutuLiveDataClient._run_push_loop()` with rate-limited DEBUG logging (1 summary per instrument per 60s). Uses Python `logger.isEnabledFor(logging.DEBUG)` guard for zero overhead at INFO+. Nautilus Cython `Logger.debug` only accepts 2 positional args (self + msg), so f-string formatting is used inside the guard. Internal state tracked via `_bar_log_timestamps` and `_bar_log_counts` dicts keyed by instrument ID. Tests verify state changes directly (Cython Logger is read-only, cannot be mocked).
+- **Files Changed**: `src/sam_trader/adapters/futu/data.py`, `tests/unit/adapters/futu/test_data.py`
+- **Validation Result**: PASS (RALPH_GATE_PASSED — 34/34 tests, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Subscription confirmations already logged at INFO level (pre-existing).
+
 ## Iteration 127
 - **Task**: Market-aware state isolation: prevent cross-market state corruption when switching between HK/US sessions
 - **Task ID**: sam_trader-jy2
