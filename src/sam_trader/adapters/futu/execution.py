@@ -62,6 +62,7 @@ from sam_trader.adapters.futu.connection import (
     unlock_futu_trade,
 )
 from sam_trader.adapters.futu.constants import (
+    FUTU_TRD_MARKET_NAME_TO_INT,
     FUTU_TRD_MARKET_TO_VENUE,
     FUTU_VENUE,
     nautilus_order_side_to_futu,
@@ -81,6 +82,31 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Module-level helpers
 # ---------------------------------------------------------------------------
+
+
+def _parse_market_code(value: Any) -> int | None:
+    """Parse a Futu market code from int, numeric string, or market name.
+
+    The Futu SDK may return ``trdmarket_auth`` elements as:
+      - ``int``:  ``1``  (SDK <v10.6)
+      - ``str``:  ``"HK"``  (SDK v10.6+ name serialisation)
+      - ``str``:  ``"1"``  (numeric string)
+
+    Returns the ``TrdMarket`` integer constant, or ``None`` if the
+    value cannot be recognised.
+    """
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        stripped = value.strip()
+        # Try numeric string first (e.g. "1")
+        try:
+            return int(stripped)
+        except ValueError:
+            pass
+        # Try market name lookup (e.g. "HK", "HKFUND")
+        return FUTU_TRD_MARKET_NAME_TO_INT.get(stripped.upper())
+    return None
 
 
 def _is_simulate_trd_env(value: Any) -> bool:
@@ -388,14 +414,18 @@ class FutuLiveExecutionClient(LiveExecutionClient):
                 skipped_real_count += 1
                 continue
 
-            # ``trdmarket_auth`` may be a list of ints or a
-            # comma-separated string (depending on SDK serialisation).
+            # ``trdmarket_auth`` may be:
+            #   - list of ints:          [1, 2]        (SDK <v10.6)
+            #   - list of strings:       ['HK', 'US']  (SDK v10.6+ name serialisation)
+            #   - comma-separated string: "1,2"         (rare serialisation variant)
             if isinstance(trdmarket_auth, str):
                 market_codes = [
-                    int(m.strip()) for m in trdmarket_auth.split(",") if m.strip()
+                    _parse_market_code(m)
+                    for m in trdmarket_auth.split(",")
+                    if m.strip()
                 ]
             elif isinstance(trdmarket_auth, (list, tuple)):
-                market_codes = [int(m) for m in trdmarket_auth]
+                market_codes = [_parse_market_code(m) for m in trdmarket_auth]
             else:
                 self._log.warning(
                     f"Unexpected trdmarket_auth type in account {acc_id_val}: "
@@ -403,12 +433,18 @@ class FutuLiveExecutionClient(LiveExecutionClient):
                 )
                 continue
 
+            # Filter out codes that could not be parsed
+            parsed_codes: list[int] = []
+            for c in market_codes:
+                if c is not None:
+                    parsed_codes.append(c)
+
             acc_id = AccountId(f"FUTU-{acc_id_val}")
 
             # Gather auth info for logging rationale
             sim_acc_type = acc.get("sim_acc_type", "N/A")
             venues: list[str] = []
-            for market_code in market_codes:
+            for market_code in parsed_codes:
                 venue = FUTU_TRD_MARKET_TO_VENUE.get(market_code)
                 if venue is not None:
                     self._venue_account_aliases[venue] = acc_id

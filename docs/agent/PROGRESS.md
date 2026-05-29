@@ -1,5 +1,14 @@
 > **Note: see first-entry Iteration 20 for Phase 2 config dataclasses.**
 
+## Iteration 141
+- **Task**: Futu: trdmarket_auth list contains string market codes, int() conversion fails
+- **Task ID**: sam_trader-e7d
+- **Status**: COMPLETE
+- **Decisions**: Futu SDK v10.6+ returns `trdmarket_auth` as a list of string market names (`['HK', 'US', ...]`) instead of integers (`[1, 2, ...]`). Added `FUTU_TRD_MARKET_NAME_TO_INT` mapping in `constants.py` and `_parse_market_code()` helper in `execution.py` that handles int, numeric string, and market name string formats. The `_register_venue_account_aliases()` now uses `_parse_market_code()` for all trdmarket_auth elements, with None filtering for unrecognized codes.
+- **Files Changed**: `src/sam_trader/adapters/futu/constants.py` (+20 lines), `src/sam_trader/adapters/futu/execution.py` (+41/-5 lines), `tests/unit/adapters/futu/test_execution.py` (+117 lines)
+- **Validation Result**: PASS (78/78 targeted tests, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. The fix handles string `'HK'`, integer `1`, numeric string `"3"`, and mixed-lists. Fund markets (HKFUND, USFUND, JPFUND) parse correctly via the name→int map but won't create venue aliases since they're not in FUTU_TRD_MARKET_TO_VENUE — that's by design (no Nautilus venue for fund markets).
+
 ## Iteration 140
 - **Task**: 12.1.8: Backtest dashboard UI — runner, results viewer, equity curves
 - **Task ID**: sam_trader-9z3.13.1.8

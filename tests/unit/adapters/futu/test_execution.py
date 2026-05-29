@@ -616,6 +616,71 @@ class TestAccountDiscovery:
         # Only the SIMULATE account (100) should be registered
         assert client._venue_account_aliases[Venue("NASDAQ")] == AccountId("FUTU-100")
 
+    def test_register_venue_aliases_string_market_codes(self, event_loop, make_client):
+        """trdmarket_auth list of string market names (SDK v10.6+) is parsed.
+
+        Bug: int(m) crashed on 'HK', 'US' etc.
+        """
+        client = make_client()
+        accounts = [
+            {
+                "acc_id": 19064358,
+                "trd_env": 0,
+                "trdmarket_auth": ["HK", "US", "HKCC", "SG", "HKFUND", "USFUND", "JP"],
+                "sim_acc_type": 0,  # STOCK
+            },
+        ]
+        client._register_venue_account_aliases(accounts)
+
+        # Known venues should be registered
+        acc = AccountId("FUTU-19064358")
+        assert client._venue_account_aliases[Venue("HKEX")] == acc
+        assert client._venue_account_aliases[Venue("NASDAQ")] == acc
+        assert client._venue_account_aliases[Venue("SGX")] == acc
+        # Fund markets are not in FUTU_TRD_MARKET_TO_VENUE (no venue mapping)
+        assert Venue("HKEX") in client._venue_account_aliases
+        assert Venue("NASDAQ") in client._venue_account_aliases
+
+    def test_register_venue_aliases_mixed_int_str_codes(self, event_loop, make_client):
+        """Mixed int and string market codes in trdmarket_auth list."""
+        client = make_client()
+        accounts = [
+            {
+                "acc_id": 500,
+                "trd_env": 0,
+                "trdmarket_auth": [1, "US", "3"],  # int, name, numeric string
+                "sim_acc_type": 0,
+            },
+        ]
+        client._register_venue_account_aliases(accounts)
+
+        # All three codes (HK=1, US=2, CN=3) should be parsed
+        assert client._venue_account_aliases[Venue("HKEX")] == AccountId("FUTU-500")
+        assert client._venue_account_aliases[Venue("NASDAQ")] == AccountId("FUTU-500")
+        assert client._venue_account_aliases[Venue("SSE")] == AccountId("FUTU-500")
+
+    def test_register_venue_aliases_unknown_code_filtered(
+        self,
+        event_loop,
+        make_client,
+    ):
+        """Unknown market codes are filtered out (None), not crashing."""
+        client = make_client()
+        accounts = [
+            {
+                "acc_id": 500,
+                "trd_env": 0,
+                "trdmarket_auth": ["HK", "UNKNOWN_MARKET", None, ""],
+                "sim_acc_type": 0,
+            },
+        ]
+        # Should not raise
+        client._register_venue_account_aliases(accounts)
+
+        # Only HK (1) should be registered
+        assert client._venue_account_aliases[Venue("HKEX")] == AccountId("FUTU-500")
+        assert len(client._venue_account_aliases) == 1
+
     def test_resolve_account_id_per_market(self, event_loop, make_client):
         """HK instrument → HK paper acc_id, US → US, unknown → default."""
         client = make_client()
@@ -1277,6 +1342,58 @@ class TestModuleHelpers:
         from sam_trader.adapters.futu.execution import _matches_sim_acc_type
 
         assert _matches_sim_acc_type(None, 0, "STOCK") is False
+
+    # ------------------------------------------------------------------
+    # _parse_market_code
+    # ------------------------------------------------------------------
+
+    def test_parse_market_code_int(self):
+        from sam_trader.adapters.futu.execution import _parse_market_code
+
+        assert _parse_market_code(1) == 1
+        assert _parse_market_code(2) == 2
+        assert _parse_market_code(15) == 15  # JP
+
+    def test_parse_market_code_numeric_string(self):
+        from sam_trader.adapters.futu.execution import _parse_market_code
+
+        assert _parse_market_code("1") == 1
+        assert _parse_market_code("2") == 2
+
+    def test_parse_market_code_market_name_upper(self):
+        from sam_trader.adapters.futu.execution import _parse_market_code
+
+        assert _parse_market_code("HK") == 1
+        assert _parse_market_code("US") == 2
+        assert _parse_market_code("SG") == 6
+        assert _parse_market_code("JP") == 15
+        assert _parse_market_code("HKCC") == 4
+
+    def test_parse_market_code_market_name_lower(self):
+        from sam_trader.adapters.futu.execution import _parse_market_code
+
+        assert _parse_market_code("hk") == 1
+        assert _parse_market_code("us") == 2
+
+    def test_parse_market_code_fund_markets(self):
+        from sam_trader.adapters.futu.execution import _parse_market_code
+
+        assert _parse_market_code("HKFUND") == 113
+        assert _parse_market_code("USFUND") == 123
+        assert _parse_market_code("JPFUND") == 126
+
+    def test_parse_market_code_unknown_returns_none(self):
+        from sam_trader.adapters.futu.execution import _parse_market_code
+
+        assert _parse_market_code("UNKNOWN") is None
+        assert _parse_market_code("") is None
+
+    def test_parse_market_code_non_str_non_int(self):
+        from sam_trader.adapters.futu.execution import _parse_market_code
+
+        assert _parse_market_code(None) is None
+        assert _parse_market_code(3.14) is None
+        assert _parse_market_code([]) is None
 
 
 # ---------------------------------------------------------------------------
