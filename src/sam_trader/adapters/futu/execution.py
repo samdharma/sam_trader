@@ -9,6 +9,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import time
+from collections import deque
 from typing import Any
 
 from futu import (
@@ -79,6 +81,100 @@ from sam_trader.adapters.futu.parsing.orders import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Default rate limit: 10 orders per 30 seconds (Futu max is 15/30s)
+_DEFAULT_MAX_ORDERS = 10
+_DEFAULT_WINDOW_SECONDS = 30.0
+_MAX_THROTTLE_DELAY = 5.0  # seconds
+
+
+def _parse_order_rate_limit(env_value: str | None) -> tuple[int, float]:
+    """Parse ``FUTU_ORDER_RATE_LIMIT`` env var in ``count/seconds`` format.
+
+    Returns ``(max_orders, window_seconds)``.  Falls back to defaults
+    (10 / 30.0) if the env var is unset or unparseable.
+    """
+    if not env_value:
+        return (_DEFAULT_MAX_ORDERS, _DEFAULT_WINDOW_SECONDS)
+    try:
+        parts = env_value.strip().split("/")
+        if len(parts) != 2:
+            raise ValueError(f"expected 'count/seconds', got {env_value!r}")
+        max_orders = int(parts[0])
+        window_seconds = float(parts[1])
+        if max_orders < 1 or window_seconds <= 0:
+            raise ValueError(f"invalid values: {max_orders}/{window_seconds}")
+        return (max_orders, window_seconds)
+    except (ValueError, TypeError) as e:
+        logger.warning(
+            f"FUTU_ORDER_RATE_LIMIT parse failed ({e}); "
+            f"using default {_DEFAULT_MAX_ORDERS}/{_DEFAULT_WINDOW_SECONDS}s"
+        )
+        return (_DEFAULT_MAX_ORDERS, _DEFAULT_WINDOW_SECONDS)
+
+
+class OrderRateLimiter:
+    """Sliding-window rate limiter for Futu order submission.
+
+    Tracks submission timestamps and delays orders when the configured
+    per-window limit would be exceeded.  Throttles rather than rejecting.
+
+    Parameters
+    ----------
+    max_orders : int
+        Maximum orders allowed within ``window_seconds``.
+    window_seconds : float
+        Sliding window duration in seconds.
+
+    """
+
+    def __init__(self, max_orders: int, window_seconds: float) -> None:
+        self.max_orders = max_orders
+        self.window_seconds = window_seconds
+        self._timestamps: deque[float] = deque()
+        # Statistics
+        self.total_delayed: int = 0
+        self.total_submitted: int = 0
+
+    async def acquire(self) -> tuple[bool, float]:
+        """Wait until a rate-limit slot is available.
+
+        Returns ``(was_delayed, delay_seconds)``.  If the limit has not
+        been reached the call returns immediately with ``(False, 0)``.
+        Otherwise the caller sleeps (max ``_MAX_THROTTLE_DELAY`` s)
+        and returns ``(True, actual_delay)``.
+        """
+        now = time.monotonic()
+        cutoff = now - self.window_seconds
+
+        # Expire timestamps outside the window
+        while self._timestamps and self._timestamps[0] < cutoff:
+            self._timestamps.popleft()
+
+        self.total_submitted += 1
+
+        if len(self._timestamps) < self.max_orders:
+            self._timestamps.append(now)
+            return (False, 0.0)
+
+        # Rate limit reached — wait for oldest slot to expire
+        oldest = self._timestamps[0]
+        wait_until = oldest + self.window_seconds
+        delay = max(0.0, wait_until - now)
+        delay = min(delay, _MAX_THROTTLE_DELAY)
+
+        if delay > 0:
+            self.total_delayed += 1
+            await asyncio.sleep(delay)
+
+        # Recompute after sleep
+        now2 = time.monotonic()
+        cutoff2 = now2 - self.window_seconds
+        while self._timestamps and self._timestamps[0] < cutoff2:
+            self._timestamps.popleft()
+        self._timestamps.append(now2)
+
+        return (delay > 0, delay)
 
 
 # ---------------------------------------------------------------------------
@@ -196,6 +292,12 @@ class FutuLiveExecutionClient(LiveExecutionClient):
         self._trade_ctx = client
         self._queue: asyncio.Queue[Any] = asyncio.Queue()
         self._push_task: asyncio.Task | None = None
+
+        # Order rate limiter (parsed from FUTU_ORDER_RATE_LIMIT env var)
+        rate_limit_count, rate_limit_window = _parse_order_rate_limit(
+            os.environ.get("FUTU_ORDER_RATE_LIMIT")
+        )
+        self._order_rate_limiter = OrderRateLimiter(rate_limit_count, rate_limit_window)
 
         # Venue → AccountId mapping for multi-market accounts
         self._venue_account_aliases: dict[Venue, AccountId] = {}
@@ -610,6 +712,18 @@ class FutuLiveExecutionClient(LiveExecutionClient):
         order = command.order
         instrument_id = order.instrument_id
         account_id = self._resolve_account_id(instrument_id)
+
+        # ── Rate-limit throttle ──────────────────────────
+        was_delayed, delay = await self._order_rate_limiter.acquire()
+        if was_delayed:
+            self._log.warning(
+                f"Order rate limit reached "
+                f"({self._order_rate_limiter.max_orders}/"
+                f"{self._order_rate_limiter.window_seconds}s); "
+                f"throttled order {order.client_order_id} by {delay:.2f}s "
+                f"(delayed {self._order_rate_limiter.total_delayed}/"
+                f"{self._order_rate_limiter.total_submitted} total)"
+            )
 
         code = instrument_id_to_futu_security(instrument_id)
         price = self._order_price_to_futu(order)

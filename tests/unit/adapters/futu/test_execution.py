@@ -28,7 +28,11 @@ from nautilus_trader.test_kit.stubs.commands import TestCommandStubs
 from nautilus_trader.test_kit.stubs.component import TestComponentStubs
 
 from sam_trader.adapters.futu.config import FutuExecClientConfig
-from sam_trader.adapters.futu.execution import FutuLiveExecutionClient
+from sam_trader.adapters.futu.execution import (
+    FutuLiveExecutionClient,
+    OrderRateLimiter,
+    _parse_order_rate_limit,
+)
 
 
 @pytest.fixture
@@ -2116,3 +2120,226 @@ class TestAccountDiscoveryEmptyFallback:
             event_loop.run_until_complete(client._discover_accounts())
 
         assert client._account_id == placeholder
+
+
+# ---------------------------------------------------------------------------
+# Rate limiter — env var parsing
+# ---------------------------------------------------------------------------
+
+
+class TestParseOrderRateLimit:
+    """Tests for ``_parse_order_rate_limit`` env-var parser."""
+
+    def test_default_when_none(self):
+        max_orders, window = _parse_order_rate_limit(None)
+        assert max_orders == 10
+        assert window == 30.0
+
+    def test_default_when_empty_string(self):
+        max_orders, window = _parse_order_rate_limit("")
+        assert max_orders == 10
+        assert window == 30.0
+
+    def test_valid_count_per_seconds(self):
+        max_orders, window = _parse_order_rate_limit("5/60")
+        assert max_orders == 5
+        assert window == 60.0
+
+    def test_valid_float_window(self):
+        max_orders, window = _parse_order_rate_limit("15/30.5")
+        assert max_orders == 15
+        assert window == 30.5
+
+    def test_wrong_format_returns_default(self):
+        max_orders, window = _parse_order_rate_limit("abc")
+        assert max_orders == 10
+        assert window == 30.0
+
+    def test_negative_count_returns_default(self):
+        max_orders, window = _parse_order_rate_limit("-1/30")
+        assert max_orders == 10
+        assert window == 30.0
+
+    def test_zero_window_returns_default(self):
+        max_orders, window = _parse_order_rate_limit("10/0")
+        assert max_orders == 10
+        assert window == 30.0
+
+    def test_negative_window_returns_default(self):
+        max_orders, window = _parse_order_rate_limit("10/-5")
+        assert max_orders == 10
+        assert window == 30.0
+
+    def test_extra_slashes_returns_default(self):
+        max_orders, window = _parse_order_rate_limit("10/30/extra")
+        assert max_orders == 10
+        assert window == 30.0
+
+
+# ---------------------------------------------------------------------------
+# Rate limiter — core logic
+# ---------------------------------------------------------------------------
+
+
+class TestOrderRateLimiter:
+    """Tests for ``OrderRateLimiter`` sliding-window throttle."""
+
+    def test_under_limit_passes_immediately(self, event_loop):
+        """Orders under the limit are not delayed."""
+        limiter = OrderRateLimiter(max_orders=5, window_seconds=30.0)
+
+        for _ in range(5):
+            was_delayed, delay = event_loop.run_until_complete(limiter.acquire())
+            assert was_delayed is False
+            assert delay == 0.0
+
+        assert limiter.total_submitted == 5
+        assert limiter.total_delayed == 0
+
+    def test_exceeds_limit_is_delayed(self, event_loop):
+        """Beyond the limit, acquire() returns was_delayed=True."""
+        limiter = OrderRateLimiter(max_orders=3, window_seconds=0.3)
+
+        # First 3 pass immediately
+        for _ in range(3):
+            was_delayed, _ = event_loop.run_until_complete(limiter.acquire())
+            assert was_delayed is False
+
+        # 4th should be delayed
+        was_delayed, delay = event_loop.run_until_complete(limiter.acquire())
+        assert was_delayed is True
+        assert delay > 0
+        assert limiter.total_delayed >= 1
+
+    def test_delay_capped_at_max(self, event_loop):
+        """Delay is capped at 5 seconds even if window is large."""
+        limiter = OrderRateLimiter(max_orders=1, window_seconds=999.0)
+
+        # First order passes immediately
+        event_loop.run_until_complete(limiter.acquire())
+
+        # Second must wait, but capped at 5s
+        was_delayed, delay = event_loop.run_until_complete(limiter.acquire())
+        assert was_delayed is True
+        # Capped at 5.0 with tolerance for scheduling
+        assert delay <= 5.0 + 0.5
+
+    def test_small_window_allows_recovery(self, event_loop):
+        """With a very small window, orders recover after waiting."""
+        limiter = OrderRateLimiter(max_orders=2, window_seconds=0.1)
+
+        # Fill up
+        event_loop.run_until_complete(limiter.acquire())
+        event_loop.run_until_complete(limiter.acquire())
+
+        # This should be delayed for ~0.1s (the window)
+        was_delayed, _ = event_loop.run_until_complete(limiter.acquire())
+        assert was_delayed is True
+
+    def test_statistics_accumulate(self, event_loop):
+        """total_submitted and total_delayed track across calls."""
+        limiter = OrderRateLimiter(max_orders=2, window_seconds=0.2)
+
+        event_loop.run_until_complete(limiter.acquire())
+        event_loop.run_until_complete(limiter.acquire())
+        event_loop.run_until_complete(
+            limiter.acquire()
+        )  # at least 1 of the next 2 is delayed
+        event_loop.run_until_complete(limiter.acquire())
+
+        assert limiter.total_submitted == 4
+        assert limiter.total_delayed >= 1
+
+
+# ---------------------------------------------------------------------------
+# Rate limiter — integration with FutuLiveExecutionClient
+# ---------------------------------------------------------------------------
+
+
+class TestSubmitOrderRateLimit:
+    """Tests that ``_submit_order`` is throttled by the rate limiter."""
+
+    def test_rate_limiter_created_with_defaults(self, event_loop, make_client):
+        """Client creates a rate limiter with default values when env is unset."""
+        with patch.dict(os.environ, {}, clear=True):
+            client = make_client()
+
+        assert client._order_rate_limiter is not None
+        assert client._order_rate_limiter.max_orders == 10
+        assert client._order_rate_limiter.window_seconds == 30.0
+
+    def test_rate_limiter_respects_env_var(self, event_loop, make_client):
+        """FUTU_ORDER_RATE_LIMIT is parsed and used."""
+        with patch.dict(os.environ, {"FUTU_ORDER_RATE_LIMIT": "5/60"}):
+            client = make_client()
+
+        assert client._order_rate_limiter.max_orders == 5
+        assert client._order_rate_limiter.window_seconds == 60.0
+
+    def test_rapid_submissions_are_throttled(
+        self, event_loop, make_client, mock_trade_ctx
+    ):
+        """6 submissions with max_orders=3, small window → some delayed."""
+        with patch.dict(os.environ, {"FUTU_ORDER_RATE_LIMIT": "10/30"}):
+            client = make_client()
+
+        # Tiny window and small limit for fast test
+        client._order_rate_limiter.max_orders = 3
+        client._order_rate_limiter.window_seconds = 0.3
+
+        async def _submit_n_orders(n: int):
+            for i in range(n):
+                order = _make_limit_order(
+                    client_order_id=ClientOrderId(f"O-RL-{i:03d}"),
+                )
+                cmd = TestCommandStubs.submit_order_command(order)
+                await client._submit_order(cmd)
+
+        event_loop.run_until_complete(_submit_n_orders(6))
+
+        # At least some orders should have been delayed
+        assert client._order_rate_limiter.total_submitted == 6
+        assert client._order_rate_limiter.total_delayed >= 1
+        assert mock_trade_ctx.place_order.call_count == 6
+
+    def test_submit_order_list_throttled_per_order(
+        self, event_loop, make_client, mock_trade_ctx
+    ):
+        """Each order in a bracket list goes through the rate limiter."""
+        from nautilus_trader.model.identifiers import OrderListId
+        from nautilus_trader.model.orders.list import OrderList
+
+        with patch.dict(os.environ, {"FUTU_ORDER_RATE_LIMIT": "2/30"}):
+            client = make_client()
+
+        # Tiny window for test speed
+        client._order_rate_limiter.max_orders = 2
+        client._order_rate_limiter.window_seconds = 0.2
+
+        entry = _make_limit_order(client_order_id=ClientOrderId("O-ENTRY"))
+        sl = _make_limit_order(
+            client_order_id=ClientOrderId("O-SL"),
+            side=OrderSide.SELL,
+            price="149.00",
+        )
+        tp = _make_limit_order(
+            client_order_id=ClientOrderId("O-TP"),
+            side=OrderSide.SELL,
+            price="160.00",
+        )
+
+        order_list = OrderList(
+            order_list_id=OrderListId("OL-001"),
+            orders=[entry, sl, tp],
+        )
+
+        event_loop.run_until_complete(
+            client._submit_order_list(
+                TestCommandStubs.submit_order_list_command(order_list)
+            )
+        )
+
+        # All 3 orders submitted; at least 1 was delayed (window size 2)
+        assert client._order_rate_limiter.total_submitted == 3
+        assert client._order_rate_limiter.total_delayed >= 1
+        assert mock_trade_ctx.place_order.call_count == 3

@@ -1,5 +1,21 @@
 > **Note: see first-entry Iteration 20 for Phase 2 config dataclasses.**
 
+## Iteration 148
+- **Task**: Rate-limit order submission: throttle to Futu 15/30s limit
+- **Task ID**: sam_trader-9z3.4.12
+- **Status**: COMPLETE
+- **Decisions**: Implemented sliding-window rate limiter in `FutuLiveExecutionClient._submit_order()`. Uses `collections.deque` tracking `time.monotonic()` timestamps. Key design choices:
+  - Configurable via `FUTU_ORDER_RATE_LIMIT` env var in `count/seconds` format (default `10/30`)
+  - Throttles with `asyncio.sleep()`, capped at 5s max delay (not rejection)
+  - Per-session reset (deque created in `__init__`)
+  - WARNING-level log when throttling activates, with stats (delayed/total)
+  - Module-level `_parse_order_rate_limit()` helper for env var parsing with graceful fallback
+  - `OrderRateLimiter` class is reusable and independently testable
+  - No changes to broker API layer — pure Python throttling
+- **Files Changed**: `src/sam_trader/adapters/futu/execution.py` (+88 lines: rate limiter class, parser, wiring), `tests/unit/adapters/futu/test_execution.py` (+169 lines: 14 new tests across 3 test classes)
+- **Validation Result**: PASS (RALPH_GATE_PASSED — 110/110 targeted tests, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for live SIMULATE test to confirm no "high frequency" rejections.
+
 ## Iteration 147
 - **Task**: Test scenarios: order-type and account discovery (14 cases)
 - **Task ID**: sam_trader-bav
