@@ -2076,3 +2076,12 @@
 - **Files Changed**: `src/sam_trader/services/dashboard_analytics.py`, `src/sam_trader/services/dashboard.py`, `tests/unit/services/test_dashboard_analytics.py`, `tests/unit/services/test_dashboard.py`
 - **Validation Result**: PASS (RALPH_GATE_PASSED — 81/81 tests, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ready for next Tier 2 batch (asset allocation, trade distribution, exposure) or indicator work.
+
+## Iteration 132
+- **Task**: Document paper trading account discovery in BUILD_PHASE_3.md
+- **Task ID**: sam_trader-woe
+- **Status**: COMPLETE
+- **Decisions**: Added comprehensive §11 (Paper Trading Account Discovery) to BUILD_PHASE_3.md. Documents: (1) Two-layer Futu auth model (OpenD login vs trading accounts), (2) get_acc_list() response fields (acc_id, trd_env, acc_type, sim_acc_type, trdmarket_auth, acc_status), (3) sim_acc_type values per market (STOCK=0/HK, OPTION=1/HK, STOCK_AND_OPTION=2/US, FUTURES=3), (4) Account selection rules from Futu API Q1/Q17, (5) sam_trader implementation: _discover_accounts() → _register_venue_account_aliases() → _resolve_account_id() pipeline with code samples, edge cases, and design decisions, (6) Factory integration (placeholder pattern), (7) Complete discovery sequence flow, (8) Testing notes with mock data examples, (9) Reference links to Futu API docs.
+- **Files Changed**: `docs/reference/BUILD_PHASE_3.md`
+- **Validation Result**: PASS (RALPH_GATE_PASSED — no code changes, skipped pytest/lint)
+- **Blockers / Notes**: None.

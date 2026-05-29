@@ -17,7 +17,7 @@
 │  Connection Layer                                            │
 │    ├── OpenSecTradeContext (futu-api)                        │
 │    ├── unlock_trade() — trade unlock on connect              │
-│    └── get_acc_list() — account auto-discovery               │
+│    └── get_acc_list() — account auto-discovery (see §11)     │
 ├─────────────────────────────────────────────────────────────┤
 │  Order Methods                                               │
 │    ├── _submit_order() → place_order                         │
@@ -506,4 +506,201 @@ from sam_trader.adapters.futu.constants import (
 
 ---
 
-*Last updated: 2026-05-21*
+## 11. Paper Trading Account Discovery
+
+### 11.1 Overview — Two-Layer Auth Model
+
+Futu OpenD uses a **two-layer authentication model**:
+
+| Layer | Identity | Where Used | Description |
+|-------|----------|------------|-------------|
+| **L1 — OpenD Login** | `login_user_id` (e.g., `FUTU_ACCOUNT_ID` env var) | `ConnectRegionMarket` / `OpenContext` | Authenticates with the OpenD daemon. This is an *operator* identifier, NOT a trading account. |
+| **L2 — Trading Account** | `acc_id` (numeric, discovered via `get_acc_list`) | `place_order`, `position_list_query`, `history_order_list_query`, etc. | The actual brokerage account for order routing. Each market may have a different `acc_id`. |
+
+**Key distinction:** `FUTU_ACCOUNT_ID` in `.env` is the L1 login account used to establish the OpenD connection. It is **never** passed as the trading `acc_id`. Instead, the trading account is discovered at runtime via `get_acc_list(trd_env=TrdEnv.SIMULATE)`.
+
+### 11.2 `get_acc_list()` Response Fields
+
+Calling `ctx.get_acc_list(trd_env=TrdEnv.SIMULATE)` returns a DataFrame with the following columns:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `acc_id` | `int` | Numeric trading account ID (e.g., `123456`). This is what `place_order` etc. expect. |
+| `trd_env` | `int` or `str` | `0` / `"SIMULATE"` for paper trading, `1` / `"REAL"` for live. |
+| `acc_type` | `int` | Account type: `0` = margin, `1` = cash, `2` = futures, `3` = multi. |
+| `sim_acc_type` | `int` | Paper trading sub-type. See §11.3 below. |
+| `trdmarket_auth` | `list[int]` or `str` | Markets authorised for this account. List of `TrdMarket` enum ints, or a comma-separated string depending on SDK serialisation. |
+| `acc_status` | `int` | Account status: `0` = active, `1` = closed, `2` = suspended. |
+
+### 11.3 `sim_acc_type` Values Per Market
+
+The `sim_acc_type` field in the `get_acc_list` response indicates which asset classes a paper trading account supports:
+
+| `sim_acc_type` Value | Constant | Market | Description |
+|----------------------|----------|--------|-------------|
+| `0` | `SimAccType.STOCK` | HK | Stocks only (no options). Default HK paper trading account type. |
+| `1` | `SimAccType.OPTION` | HK | Options only. |
+| `2` | `SimAccType.STOCK_AND_OPTION` | US | Stocks AND options (combined). Default US paper trading account type. |
+| `3` | `SimAccType.FUTURES` | — | Futures only. |
+
+**Selection rule:** `_discover_accounts()` filters accounts by `sim_acc_type` based on the configured `trd_market`:
+- **HK (`trd_market="HK"`)**: Only accounts with `sim_acc_type == 0` (STOCK) are retained.
+- **US (`trd_market="US"`)**: Only accounts with `sim_acc_type == 2` (STOCK_AND_OPTION) are retained.
+
+This prevents cross-market account leakage — a US trader won't accidentally discover an HK options-only account.
+
+### 11.4 Account Selection Rules (from Futu API Q1/Q17)
+
+Per the Futu API documentation:
+
+1. **Q1 — What is `get_acc_list`?**  
+   Returns all trading accounts visible to the current OpenD login session, filtered by `TrdEnv`. Call with `trd_env=TrdEnv.SIMULATE` to list only paper trading accounts.
+
+2. **Q17 — How to map accounts to markets?**  
+   Use the `trdmarket_auth` field in the response to determine which `TrdMarket`(s) each `acc_id` is authorised for. A single account may be authorised for multiple markets (e.g., `[1, 2]` for HK+US). The `trdmarket_auth` value is a list of `TrdMarket` integers.
+
+3. **Paper trading accounts** are always `trd_env == TrdEnv.SIMULATE`. Live accounts (`trd_env == TrdEnv.REAL`) must never be selected for paper trading.
+
+### 11.5 `sam_trader` Implementation
+
+Account discovery is a three-method pipeline in `FutuLiveExecutionClient` (`src/sam_trader/adapters/futu/execution.py`):
+
+#### 11.5.1 `_discover_accounts()` — API-Level Filtering
+
+```python
+async def _discover_accounts(self) -> None:
+    ret, data = self._trade_ctx.get_acc_list(trd_env=TrdEnv.SIMULATE)
+    # Convert DataFrame → list[dict]
+    accounts = data.to_dict("records")
+    # Filter by sim_acc_type for configured market
+    accounts = [a for a in accounts if a.get("sim_acc_type") == expected_type]
+    self._register_venue_account_aliases(accounts)
+```
+
+**Steps:**
+1. Calls `get_acc_list(trd_env=TrdEnv.SIMULATE)` — retrieves ONLY paper trading accounts at the API level.
+2. Converts the returned DataFrame to a list of dicts.
+3. Filters by `sim_acc_type` based on `config.trd_market`:
+   - `trd_market="HK"` → `sim_acc_type == 0` (STOCK)
+   - `trd_market="US"` → `sim_acc_type == 2` (STOCK_AND_OPTION)
+4. Passes the filtered list to `_register_venue_account_aliases()`.
+
+**Edge cases handled:**
+- Empty response → logs warning, returns early.
+- No accounts match `sim_acc_type` filter → logs warning with before/after count, returns early.
+- API error → logs exception, returns early.
+
+#### 11.5.2 `_register_venue_account_aliases()` — Defence-in-Depth & Venue Mapping
+
+```python
+def _register_venue_account_aliases(self, accounts: list[dict[str, Any]]) -> None:
+    for acc in accounts:
+        acc_id_val = acc.get("acc_id")
+        trdmarket_auth = acc.get("trdmarket_auth")
+
+        # Defence-in-depth: reject REAL accounts even if API filter bypassed
+        trd_env = acc.get("trd_env")
+        if trd_env is not None:
+            is_simulate = (
+                isinstance(trd_env, str) and trd_env.upper() == "SIMULATE"
+            ) or (isinstance(trd_env, int) and trd_env == 0)
+            if not is_simulate:
+                continue  # skip REAL accounts
+
+        # Parse trdmarket_auth — handles both list[int] and csv string
+        if isinstance(trdmarket_auth, str):
+            market_codes = [int(m.strip()) for m in trdmarket_auth.split(",")]
+        elif isinstance(trdmarket_auth, (list, tuple)):
+            market_codes = [int(m) for m in trdmarket_auth]
+
+        # Map each TrdMarket int → Nautilus Venue → AccountId
+        acc_id = AccountId(f"FUTU-{acc_id_val}")
+        for market_code in market_codes:
+            venue = FUTU_TRD_MARKET_TO_VENUE.get(market_code)
+            if venue is not None:
+                self._venue_account_aliases[venue] = acc_id
+
+        # Update default account ID from the first discovered account
+        if self._account_id == self._initial_account_id:
+            self._account_id = acc_id
+```
+
+**Key design decisions:**
+- **Defence-in-depth `trd_env` check:** Even though `_discover_accounts()` filters at the API level, `_register_venue_account_aliases` performs a second check. It inspects the response's `trd_env` field (handling both `int` and `str` types) and skips any non-SIMULATE account. If all accounts are REAL, it logs a warning.
+- **`trdmarket_auth` format robustness:** The Futu SDK may serialise `trdmarket_auth` as a Python list of ints OR a comma-separated string. The parser handles both.
+- **Placeholder replacement:** The factory creates an `AccountId` like `FUTU-{client_id}` (e.g., `FUTU-1`). The first discovered paper trading account replaces it. The `_initial_account_id` snapshot enables the comparison.
+- **Multi-market support:** One account authorised for multiple markets (e.g., `trdmarket_auth=[1, 2]`) creates venue aliases for both `HKEX` (1) and `NASDAQ` (2) pointing to the same `acc_id`.
+
+#### 11.5.3 `_resolve_account_id()` — Per-Order Account Resolution
+
+```python
+def _resolve_account_id(self, instrument_id: InstrumentId) -> AccountId:
+    venue = instrument_id.venue
+    return self._venue_account_aliases.get(venue, self._account_id)
+```
+
+Called before every `place_order`, `modify_order`, `cancel_order`, and reconciliation query. Maps the instrument's venue to the correct account ID, falling back to the default account ID if no venue alias exists.
+
+**Example:** An order for `AAPL.NASDAQ` → venue `NASDAQ` → alias lookup returns the US paper trading account. An order for `00700.HKEX` → venue `HKEX` → alias lookup returns the HK paper trading account.
+
+#### 11.5.4 Factory Integration
+
+```python
+# In FutuLiveExecClientFactory.create():
+account_id = AccountId(f"FUTU-{config.client_id}")  # Placeholder
+exec_client = FutuLiveExecutionClient(
+    ...,
+    account_id=account_id,  # Replaced during _discover_accounts()
+)
+```
+
+**Important:** The factory does NOT read `FUTU_ACCOUNT_ID` from the environment for the trading `AccountId`. That env var is only used for OpenD login (L1 auth). The trading account is always discovered.
+
+### 11.6 Complete Discovery Sequence
+
+```
+connect()
+  └── _connect()
+        ├── get_cached_futu_trade_context()  ← L1 auth (OpenD login)
+        ├── unlock_trade()                    ← only for REAL
+        ├── _discover_accounts()              ← get_acc_list(trd_env=SIMULATE)
+        │     ├── filter by sim_acc_type
+        │     └── _register_venue_account_aliases()
+        │           ├── defence-in-depth trd_env check
+        │           ├── parse trdmarket_auth → venue → AccountId
+        │           └── replace placeholder with first discovered acc_id
+        ├── _reconcile_positions()            ← uses discovered acc_id
+        ├── _setup_handlers()                 ← register push callbacks
+        └── _run_push_loop()                  ← start async event loop
+```
+
+### 11.7 Testing Notes
+
+- **Mock `get_acc_list`** with a DataFrame containing `acc_id`, `trd_env`, `sim_acc_type`, `trdmarket_auth` columns.
+- **Test cases to cover:**
+  - Mixed REAL + SIMULATE accounts → only SIMULATE registered.
+  - All REAL accounts → no aliases, placeholder kept, warning logged.
+  - Empty account list → no aliases, placeholder kept.
+  - HK STOCK account (`sim_acc_type=0`) → venue alias for `HKEX`.
+  - US STOCK_AND_OPTION account (`sim_acc_type=2`) → venue alias for `NASDAQ`.
+  - Multi-market `trdmarket_auth` → multiple venue aliases.
+  - `trdmarket_auth` as CSV string → parsed correctly.
+  - `_resolve_account_id()` → correct account per instrument venue.
+- **Mock data example:**
+  ```python
+  mock_acc_list = pd.DataFrame([
+      {"acc_id": 123456, "trd_env": 0, "sim_acc_type": 2,
+       "trdmarket_auth": [1, 2]},
+  ])
+  ```
+
+### 11.8 Reference Links
+
+- Futu API — Account & Position: Q1 (What is `get_acc_list`?), Q17 (How to map accounts to markets?) — these are sections in the official Futu OpenAPI FAQ/documentation at `https://openapi.futunn.com/futu-api-doc`
+- `TrdEnv` enum values: `futu.TrdEnv.SIMULATE = 0`, `futu.TrdEnv.REAL = 1`
+- `TrdMarket` enum: `HK=1, US=2, CN=3, HKCC=4, FUTURES=5, SG=6`
+- Venue mapping constants: `src/sam_trader/adapters/futu/constants.py` → `FUTU_TRD_MARKET_TO_VENUE`
+
+---
+
+*Last updated: 2026-05-29*
