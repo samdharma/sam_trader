@@ -1,3 +1,4 @@
+# flake8: noqa: E501  — template strings (HTML/CSS/JS) exceed line length
 """SAM Trader dashboard — read-only observability page.
 
 Serves a single HTML page on port 8080 with auto-refresh (meta tag).
@@ -122,6 +123,60 @@ tr:hover { background:#161b22; }
   gap:.75rem;
 }
 .health-item { display:flex; align-items:center; }
+/* --- Backtest Dashboard --- */
+.bt-tabs { display:flex; gap:.25rem; margin-bottom:1rem; border-bottom:1px solid var(--border); padding-bottom:0; }
+.bt-tab { background:none; color:var(--muted); border:none; padding:.5rem 1rem; cursor:pointer; font-family:inherit; font-size:.85rem; border-bottom:2px solid transparent; transition:color .2s; }
+.bt-tab:hover { color:var(--fg); }
+.bt-tab.active { color:var(--accent); border-bottom-color:var(--accent); }
+.bt-panel { display:none; }
+.bt-panel.active { display:block; }
+.bt-form-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:.75rem; margin-bottom:.75rem; }
+.bt-form-field { display:flex; flex-direction:column; gap:.25rem; }
+.bt-form-field label { font-size:.75rem; color:var(--muted); text-transform:uppercase; }
+.bt-form-field input,.bt-form-field select { background:#161b22; color:var(--fg); border:1px solid var(--border); border-radius:4px; padding:.4rem .5rem; font-family:inherit; font-size:.85rem; }
+.bt-form-field select[multiple] { height:110px; }
+.bt-toggles { display:flex; gap:1.5rem; margin-bottom:.75rem; align-items:center; }
+.bt-toggles label { display:flex; align-items:center; gap:.35rem; font-size:.85rem; cursor:pointer; color:var(--muted); }
+.bt-toggles input[type="checkbox"] { accent-color:var(--accent); }
+.bt-sweep-params { margin-bottom:.75rem; display:none; }
+.bt-sweep-params.active { display:block; }
+.bt-sweep-row { display:flex; gap:.5rem; margin-bottom:.35rem; align-items:center; }
+.bt-sweep-row input { background:#161b22; color:var(--fg); border:1px solid var(--border); border-radius:4px; padding:.25rem .4rem; font-family:inherit; font-size:.8rem; width:80px; }
+.bt-sweep-row .bt-sweep-key { width:150px; }
+.bt-sweep-row .bt-sweep-vals { width:250px; }
+.bt-run-btn { background:var(--accent); color:#fff; border:none; border-radius:4px; padding:.5rem 1.5rem; font-family:inherit; font-size:.9rem; cursor:pointer; font-weight:600; }
+.bt-run-btn:hover { opacity:.85; }
+.bt-run-btn:disabled { opacity:.5; cursor:not-allowed; }
+.bt-progress { margin-top:.75rem; background:#161b22; border-radius:4px; height:22px; position:relative; overflow:hidden; }
+.bt-progress-bar { height:100%; background:var(--accent); width:0%; transition:width .3s; }
+.bt-progress-text { position:absolute; top:0; left:50%; transform:translateX(-50%); font-size:.7rem; color:#fff; line-height:22px; text-shadow:0 0 3px rgba(0,0,0,.5); }
+.bt-table-controls { display:flex; gap:.5rem; margin-bottom:.75rem; align-items:center; flex-wrap:wrap; }
+.bt-table-controls input { flex:1; min-width:180px; background:#161b22; color:var(--fg); border:1px solid var(--border); border-radius:4px; padding:.4rem .5rem; font-family:inherit; font-size:.85rem; }
+.bt-btn-small { background:var(--border); color:var(--fg); border:none; border-radius:4px; padding:.35rem .75rem; font-family:inherit; font-size:.8rem; cursor:pointer; white-space:nowrap; }
+.bt-btn-small:hover { background:var(--muted); color:#fff; }
+.bt-btn-small.primary { background:var(--accent); color:#fff; }
+th.sortable { cursor:pointer; user-select:none; }
+th.sortable:hover { color:var(--accent); }
+th.sortable::after { content:' \21D5'; font-size:.7rem; }
+th.sortable.asc::after { content:' \2191'; }
+th.sortable.desc::after { content:' \2193'; }
+.bt-run-checkbox { width:16px; height:16px; accent-color:var(--accent); }
+.bt-compare-metric-table { margin-bottom:1rem; }
+.bt-chart-container { position:relative; width:100%; height:300px; background:#161b22; border:1px solid var(--border); border-radius:6px; overflow:hidden; margin-bottom:.75rem; cursor:crosshair; }
+.bt-chart-container canvas { display:block; width:100%; height:100%; }
+.bt-chart-tooltip { position:absolute; background:#0d1117; border:1px solid var(--accent); border-radius:4px; padding:.35rem .6rem; font-size:.75rem; color:var(--fg); pointer-events:none; display:none; z-index:10; white-space:nowrap; }
+.bt-trade-list { max-height:400px; overflow-y:auto; }
+.bt-status-badge { display:inline-block; padding:.15rem .5rem; border-radius:3px; font-size:.75rem; font-weight:600; }
+.bt-status-badge.completed { background:rgba(63,185,80,.15); color:var(--green); }
+.bt-status-badge.running { background:rgba(88,166,255,.15); color:var(--accent); }
+.bt-status-badge.failed { background:rgba(248,81,73,.15); color:var(--red); }
+.bt-status-badge.started { background:rgba(139,148,158,.15); color:var(--muted); }
+.bt-modal-overlay { position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,.7); z-index:100; overflow-y:auto; padding:2rem; }
+.bt-modal-content { max-width:900px; margin:0 auto; background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:1.5rem; }
+.bt-metric-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:.5rem; margin-bottom:1rem; }
+.bt-metric-card { border:1px solid var(--border); border-radius:4px; padding:.5rem; text-align:center; }
+.bt-metric-card .bt-metric-label { font-size:.7rem; color:var(--muted); text-transform:uppercase; }
+.bt-metric-card .bt-metric-value { font-size:1.1rem; font-weight:700; }
 .footer {
   margin-top:2rem; font-size:.75rem; color:var(--muted);
   border-top:1px solid var(--border); padding-top:.5rem;
@@ -280,6 +335,114 @@ tr:hover { background:#161b22; }
 </table>
 </div>
 
+<!-- ====== BACKTEST DASHBOARD ====== -->
+<div class="card" id="backtest-card">
+<h2>📊 BACKTEST</h2>
+<div class="bt-tabs">
+  <button class="bt-tab active" onclick="switchBtTab('runner')">▶ Runner</button>
+  <button class="bt-tab" onclick="switchBtTab('results')">📋 Results</button>
+  <button class="bt-tab" onclick="switchBtTab('compare')">📊 Compare</button>
+</div>
+
+<!-- RUNNER -->
+<div id="bt-panel-runner" class="bt-panel active">
+  <div class="bt-form-grid">
+    <div class="bt-form-field">
+      <label>Instruments (Ctrl/Cmd+click to multi-select)</label>
+      <select id="bt-instruments" multiple></select>
+    </div>
+    <div class="bt-form-field">
+      <label>Strategy ID</label>
+      <input type="text" id="bt-strategy-id" placeholder="e.g., tsla-orb-15m-futu">
+    </div>
+    <div class="bt-form-field">
+      <label>Start Date</label>
+      <input type="date" id="bt-start">
+    </div>
+    <div class="bt-form-field">
+      <label>End Date</label>
+      <input type="date" id="bt-end">
+    </div>
+  </div>
+  <div class="bt-toggles">
+    <label><input type="checkbox" id="bt-sweep-toggle" onchange="toggleSweepParams()"> Parameter Sweep</label>
+    <label><input type="checkbox" id="bt-wf-toggle"> Walk-Forward</label>
+  </div>
+  <div id="bt-sweep-params" class="bt-sweep-params">
+    <div class="bt-sweep-row"><input class="bt-sweep-key" placeholder="param (e.g. stop_loss_ticks)"><input class="bt-sweep-vals" placeholder="values (e.g. 5,10,15)"><button class="bt-btn-small" onclick="removeSweepRow(this)">✕</button></div>
+    <button class="bt-btn-small" onclick="addSweepRow()" style="margin-top:.25rem;">+ Add Parameter</button>
+  </div>
+  <div id="bt-wf-params" style="display:none; margin-bottom:.75rem;">
+    <div class="bt-form-grid" style="grid-template-columns:repeat(auto-fit,minmax(120px,1fr));">
+      <div class="bt-form-field"><label>Train Days</label><input type="number" id="bt-wf-train" value="90" min="10"></div>
+      <div class="bt-form-field"><label>Test Days</label><input type="number" id="bt-wf-test" value="30" min="5"></div>
+    </div>
+  </div>
+  <div style="display:flex; gap:.75rem; align-items:center;">
+    <button id="bt-run-btn" class="bt-run-btn" onclick="submitBacktest()">▶ Run Backtest</button>
+    <span id="bt-run-error" style="color:var(--red); font-size:.85rem; display:none;"></span>
+  </div>
+  <div id="bt-progress" class="bt-progress" style="display:none;">
+    <div id="bt-progress-bar" class="bt-progress-bar" style="width:0%;"></div>
+    <span id="bt-progress-text" class="bt-progress-text">0%</span>
+  </div>
+</div>
+
+<!-- RESULTS -->
+<div id="bt-panel-results" class="bt-panel">
+  <div class="bt-table-controls">
+    <input type="text" id="bt-results-filter" placeholder="Filter by strategy, instrument, or run ID..." oninput="filterResultsTable()">
+    <button class="bt-btn-small" onclick="loadResults()">🔄 Refresh</button>
+    <button id="bt-select-compare" class="bt-btn-small primary" onclick="addSelectedToCompare()" style="display:none;">📊 Add to Compare</button>
+    <button class="bt-btn-small" onclick="exportResultsCSV()">⬇ CSV</button>
+    <button class="bt-btn-small" onclick="exportResultsJSON()">⬇ JSON</button>
+  </div>
+  <div style="overflow-x:auto;">
+  <table id="bt-results-table">
+    <thead>
+      <tr>
+        <th><input type="checkbox" id="bt-select-all" class="bt-run-checkbox" onchange="toggleSelectAll()" title="Select all"></th>
+        <th class="sortable" onclick="sortResultsTable('run_id')">Run ID</th>
+        <th class="sortable" onclick="sortResultsTable('strategy_id')">Strategy</th>
+        <th class="sortable" onclick="sortResultsTable('instrument_id')">Instrument</th>
+        <th class="sortable" onclick="sortResultsTable('bar_type')">Bar Type</th>
+        <th class="sortable" onclick="sortResultsTable('start_date')">Start</th>
+        <th class="sortable" onclick="sortResultsTable('end_date')">End</th>
+        <th class="sortable" onclick="sortResultsTable('status')">Status</th>
+        <th class="sortable" onclick="sortResultsTable('elapsed_secs')">Elapsed</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody id="bt-results-tbody">
+      <tr><td colspan="10" style="color:var(--muted);">Loading...</td></tr>
+    </tbody>
+  </table>
+  </div>
+</div>
+
+<!-- COMPARE -->
+<div id="bt-panel-compare" class="bt-panel">
+  <div class="bt-table-controls">
+    <span id="bt-compare-count" style="color:var(--muted); font-size:.85rem;">Select runs from Results tab, then click "Add to Compare"</span>
+    <button class="bt-btn-small primary" onclick="runComparison()" id="bt-compare-btn" style="display:none;">▶ Run Comparison</button>
+    <button class="bt-btn-small" onclick="clearCompare()">✕ Clear</button>
+  </div>
+  <div id="bt-compare-metric-table"></div>
+  <div id="bt-compare-charts"></div>
+</div>
+</div>
+
+<!-- DETAIL MODAL -->
+<div id="bt-detail-modal" class="bt-modal-overlay" style="display:none;">
+  <div class="bt-modal-content">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+      <h3 id="bt-detail-title" style="margin:0; color:var(--accent);">Run Detail</h3>
+      <button class="bt-btn-small" onclick="closeDetail()" style="font-size:1.2rem; padding:.25rem .6rem;">✕</button>
+    </div>
+    <div id="bt-detail-body"></div>
+  </div>
+</div>
+
 <div class="footer">
 Refreshed: {{now}} UTC &nbsp;|&nbsp; Auto-refresh every 30s
 </div>
@@ -348,6 +511,474 @@ async function loadRecentBars() {
       (e.message || e) + '</td></tr>';
   }
 }
+
+// ===== BACKTEST DASHBOARD =====
+var _btCompareRunIds = [];
+var _btResultsAll = [];
+var _btResultsSortCol = 'created_at';
+var _btResultsSortDir = 'desc';
+var _btPollTimer = null;
+
+function switchBtTab(name) {
+  document.querySelectorAll('#backtest-card .bt-tab').forEach(function(t){t.classList.remove('active');});
+  document.querySelectorAll('#backtest-card .bt-panel').forEach(function(p){p.classList.remove('active');});
+  var btn = document.querySelector('#backtest-card .bt-tab:nth-child(' +
+    ({runner:1,results:2,compare:3}[name]||1) + ')');
+  if(btn) btn.classList.add('active');
+  var panel = document.getElementById('bt-panel-'+name);
+  if(panel) panel.classList.add('active');
+  if(name==='results') loadResults();
+  if(name==='compare') refreshCompareUI();
+}
+
+// --- Instruments ---
+(function(){fetch('/api/backtest/catalog/instruments').then(function(r){return r.json();}).then(function(d){
+  var s=document.getElementById('bt-instruments');s.innerHTML='';
+  (d||[]).forEach(function(i){var o=document.createElement('option');
+    o.value=i.instrument_id;o.textContent=i.instrument_id+'  ('+(i.bar_types||[]).join(', ')+')';s.appendChild(o);});
+}).catch(function(){});})();
+
+// --- Sweep Params ---
+function toggleSweepParams(){
+  document.getElementById('bt-sweep-params').classList.toggle('active',document.getElementById('bt-sweep-toggle').checked);
+}
+document.getElementById('bt-wf-toggle').addEventListener('change',function(){
+  document.getElementById('bt-wf-params').style.display=this.checked?'block':'none';
+});
+function addSweepRow(){
+  var c=document.getElementById('bt-sweep-params');
+  var r=document.createElement('div');r.className='bt-sweep-row';
+  r.innerHTML='<input class="bt-sweep-key" placeholder="param"><input class="bt-sweep-vals" placeholder="values"><button class="bt-btn-small" onclick="removeSweepRow(this)">✕</button>';
+  c.insertBefore(r,c.lastElementChild);
+}
+function removeSweepRow(b){b.parentElement.remove();}
+
+// --- Submit ---
+function submitBacktest(){
+  var btn=document.getElementById('bt-run-btn');
+  var err=document.getElementById('bt-run-error');
+  var prog=document.getElementById('bt-progress');
+  var sel=document.getElementById('bt-instruments');
+  var instIds=[];for(var i=0;i<sel.options.length;i++){if(sel.options[i].selected)instIds.push(sel.options[i].value);}
+  var sid=document.getElementById('bt-strategy-id').value.trim();
+  var start=document.getElementById('bt-start').value;
+  var end=document.getElementById('bt-end').value;
+  err.style.display='none';
+  if(!sid){err.textContent='Strategy ID is required';err.style.display='block';return;}
+  if(instIds.length===0){err.textContent='Select at least one instrument';err.style.display='block';return;}
+  if(!start||!end){err.textContent='Start and End dates are required';err.style.display='block';return;}
+  btn.disabled=true;btn.textContent='Starting...';
+  prog.style.display='block';document.getElementById('bt-progress-bar').style.width='0%';
+  document.getElementById('bt-progress-text').textContent='0%';
+  var body={strategy_id:sid,instrument_ids:instIds,start:start,end:end};
+  var sweepCheck=document.getElementById('bt-sweep-toggle').checked;
+  var wfCheck=document.getElementById('bt-wf-toggle').checked;
+  fetch('/api/backtest/run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(d.error){err.textContent=d.error;err.style.display='block';btn.disabled=false;btn.textContent='▶ Run Backtest';prog.style.display='none';return;}
+      pollBacktest(d.run_id);
+    })
+    .catch(function(e){err.textContent='Network error: '+e.message;err.style.display='block';btn.disabled=false;btn.textContent='▶ Run Backtest';prog.style.display='none';});
+}
+
+function pollBacktest(runId){
+  if(_btPollTimer) clearInterval(_btPollTimer);
+  var btn=document.getElementById('bt-run-btn');
+  _btPollTimer=setInterval(function(){
+    fetch('/api/backtest/run/'+runId+'/status')
+      .then(function(r){return r.json();})
+      .then(function(d){
+        var pct=d.progress_pct||0;
+        document.getElementById('bt-progress-bar').style.width=pct+'%';
+        document.getElementById('bt-progress-text').textContent=pct+'%';
+        if(d.status==='completed'){
+          clearInterval(_btPollTimer);_btPollTimer=null;
+          btn.disabled=false;btn.textContent='▶ Run Backtest';
+          document.getElementById('bt-run-error').style.display='none';
+          document.getElementById('bt-progress-text').textContent='Done!';
+          loadResults();
+        }else if(d.status==='failed'){
+          clearInterval(_btPollTimer);_btPollTimer=null;
+          btn.disabled=false;btn.textContent='▶ Run Backtest';
+          document.getElementById('bt-run-error').textContent='Failed: '+(d.error||'unknown error');
+          document.getElementById('bt-run-error').style.display='block';
+          document.getElementById('bt-progress-text').textContent='Failed';
+        }
+      }).catch(function(){});
+  },1500);
+}
+
+// --- Results Table ---
+function loadResults(){
+  fetch('/api/backtest/runs?limit=200')
+    .then(function(r){return r.json();})
+    .then(function(d){
+      _btResultsAll=d||[];
+      renderResultsTable(_btResultsAll);
+    }).catch(function(){});
+}
+
+function renderResultsTable(rows){
+  var tbody=document.getElementById('bt-results-tbody');
+  if(!rows.length){tbody.innerHTML='<tr><td colspan="10" style="color:var(--muted);">No backtest runs found</td></tr>';return;}
+  tbody.innerHTML=rows.map(function(r){
+    var badge='<span class="bt-status-badge '+escHtml(r.status||'')+'">'+(r.status||'?')+'</span>';
+    return '<tr>'+
+      '<td><input type="checkbox" class="bt-run-checkbox bt-cb" value="'+escHtml(r.run_id||'')+'" onchange="onCheckboxChange()"></td>'+
+      '<td>'+escHtml(r.run_id||'')+'</td>'+
+      '<td>'+escHtml(r.strategy_id||'')+'</td>'+
+      '<td>'+escHtml(r.instrument_id||'')+'</td>'+
+      '<td>'+escHtml(r.bar_type||'')+'</td>'+
+      '<td>'+escHtml(r.start_date||'')+'</td>'+
+      '<td>'+escHtml(r.end_date||'')+'</td>'+
+      '<td>'+badge+'</td>'+
+      '<td>'+(r.elapsed_secs!=null?parseFloat(r.elapsed_secs).toFixed(1)+'s':'—')+'</td>'+
+      '<td><button class="bt-btn-small" onclick="showRunDetail(\''+escHtml(r.run_id||'')+'\')">Detail</button></td>'+
+    '</tr>';
+  }).join('');
+}
+
+function escHtml(s){if(!s)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+function onCheckboxChange(){
+  var cbs=document.querySelectorAll('.bt-cb:checked');
+  document.getElementById('bt-select-compare').style.display=cbs.length>=2?'inline-block':'none';
+}
+
+function toggleSelectAll(){
+  var checked=document.getElementById('bt-select-all').checked;
+  document.querySelectorAll('.bt-cb').forEach(function(c){c.checked=checked;});
+  onCheckboxChange();
+}
+
+function addSelectedToCompare(){
+  var ids=[];
+  document.querySelectorAll('.bt-cb:checked').forEach(function(c){ids.push(c.value);});
+  ids.forEach(function(id){if(_btCompareRunIds.indexOf(id)===-1)_btCompareRunIds.push(id);});
+  document.getElementById('bt-compare-count').textContent=_btCompareRunIds.length+' run(s) selected';
+  document.getElementById('bt-compare-btn').style.display='inline-block';
+}
+
+function filterResultsTable(){
+  var q=document.getElementById('bt-results-filter').value.toLowerCase();
+  var filtered=_btResultsAll.filter(function(r){
+    return (r.run_id||'').toLowerCase().indexOf(q)!==-1||
+           (r.strategy_id||'').toLowerCase().indexOf(q)!==-1||
+           (r.instrument_id||'').toLowerCase().indexOf(q)!==-1||
+           (r.bar_type||'').toLowerCase().indexOf(q)!==-1;
+  });
+  renderResultsTable(filtered);
+}
+
+function sortResultsTable(col){
+  if(_btResultsSortCol===col){_btResultsSortDir=_btResultsSortDir==='asc'?'desc':'asc';}
+  else{_btResultsSortCol=col;_btResultsSortDir='asc';}
+  document.querySelectorAll('#bt-results-table th.sortable').forEach(function(th){th.classList.remove('asc','desc');});
+  var th=document.querySelector('#bt-results-table th.sortable[onclick*="'+col+'"]');
+  if(th)th.classList.add(_btResultsSortDir);
+  var sorted=_btResultsAll.slice().sort(function(a,b){
+    var va=a[col]||'',vb=b[col]||'';
+    if(col==='elapsed_secs'){va=parseFloat(va)||0;vb=parseFloat(vb)||0;}
+    if(va<vb)return _btResultsSortDir==='asc'?-1:1;
+    if(va>vb)return _btResultsSortDir==='asc'?1:-1;
+    return 0;
+  });
+  renderResultsTable(sorted);
+}
+
+// --- Export ---
+function exportResultsJSON(){
+  var blob=new Blob([JSON.stringify(_btResultsAll,null,2)],{type:'application/json'});
+  downloadBlob(blob,'backtest_results.json');
+}
+function exportResultsCSV(){
+  var headers=['run_id','strategy_id','instrument_id','bar_type','start_date','end_date','status','elapsed_secs','strategy_family','created_at'];
+  var lines=[headers.join(',')];
+  _btResultsAll.forEach(function(r){lines.push(headers.map(function(h){return csvEscape(r[h]||'');}).join(','));});
+  var blob=new Blob([lines.join('\n')],{type:'text/csv'});
+  downloadBlob(blob,'backtest_results.csv');
+}
+function csvEscape(v){v=String(v);if(v.indexOf(',')!==-1||v.indexOf('"')!==-1||v.indexOf('\n')!==-1){return'"'+v.replace(/"/g,'""')+'"';}return v;}
+function downloadBlob(blob,name){var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();URL.revokeObjectURL(a.href);}
+
+// --- Run Detail Modal ---
+function showRunDetail(runId){
+  fetch('/api/backtest/runs/'+runId)
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(d.error){alert(d.error);return;}
+      document.getElementById('bt-detail-title').textContent='Run: '+runId;
+      var body=document.getElementById('bt-detail-body');
+      var sr=d.stats_returns||{};
+      var sp=d.stats_pnls||{};
+      var ec=d.equity_curve||[];
+      var metrics=[
+        ['Sharpe Ratio',fmtNum(sr.sharpe_ratio,3)],
+        ['Sortino',fmtNum(sr.sortino_ratio,3)],
+        ['Max DD',fmtPct(sr.max_drawdown)],
+        ['Win Rate',fmtPct(sr.win_rate)],
+        ['Profit Factor',fmtNum(sr.profit_factor,2)],
+        ['Expectancy',fmtNum(sr.expectancy,4)],
+        ['Total P&L',fmtDollar(sr.total_pnl)],
+        ['CAGR',fmtPct(sr.cagr)],
+        ['Calmar',fmtNum(sr.calmar_ratio,3)],
+        ['Volatility',fmtPct(sr.volatility)],
+        ['Total Events',d.total_events||'—'],
+        ['Total Orders',d.total_orders||'—'],
+        ['Elapsed',d.elapsed_secs!=null?d.elapsed_secs+'s':'—']
+      ];
+      body.innerHTML='<div class="bt-metric-grid">'+metrics.map(function(m){
+        return '<div class="bt-metric-card"><div class="bt-metric-label">'+m[0]+'</div><div class="bt-metric-value">'+m[1]+'</div></div>';
+      }).join('')+'</div>'+
+        '<h4 style="margin:1rem 0 .5rem; color:var(--accent);">Equity Curve</h4>'+
+        '<div class="bt-chart-container" id="bt-detail-chart"><canvas id="bt-detail-canvas"></canvas><div class="bt-chart-tooltip" id="bt-detail-tt"></div></div>'+
+        '<div style="display:flex; gap:.5rem; margin-top:.25rem;">'+
+          '<button class="bt-btn-small" onclick="exportRunJSON(\''+escHtml(runId)+'\')">⬇ JSON</button>'+
+          '<button class="bt-btn-small" onclick="exportRunCSV(\''+escHtml(runId)+'\')">⬇ CSV</button>'+
+        '</div>';
+      document.getElementById('bt-detail-modal').style.display='block';
+      setTimeout(function(){drawEquityCurve('bt-detail-canvas','bt-detail-tt',ec);},100);
+    }).catch(function(e){alert('Error: '+e.message);});
+}
+function closeDetail(){document.getElementById('bt-detail-modal').style.display='none';}
+function fmtNum(v,dec){if(v==null)return'—';return Number(v).toFixed(dec);}
+function fmtPct(v){if(v==null)return'—';return (Number(v)*100).toFixed(2)+'%';}
+function fmtDollar(v){if(v==null)return'—';return'$'+Number(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});}
+
+function exportRunJSON(runId){
+  fetch('/api/backtest/runs/'+runId).then(function(r){return r.json();}).then(function(d){
+    var blob=new Blob([JSON.stringify(d,null,2)],{type:'application/json'});
+    downloadBlob(blob,'backtest_'+runId+'.json');
+  });
+}
+function exportRunCSV(runId){
+  fetch('/api/backtest/runs/'+runId).then(function(r){return r.json();}).then(function(d){
+    var sr=d.stats_returns||{};
+    var ec=d.equity_curve||[];
+    var lines=['metric,value'];
+    for(var k in sr){lines.push(k+','+sr[k]);}
+    lines.push('');lines.push('date,equity');
+    (Array.isArray(ec)?ec:[]).forEach(function(p){
+      if(p&&p.length>=2)lines.push(p[0]+','+p[1]);
+    });
+    var blob=new Blob([lines.join('\n')],{type:'text/csv'});
+    downloadBlob(blob,'backtest_'+runId+'.csv');
+  });
+}
+
+// --- Compare ---
+function clearCompare(){_btCompareRunIds=[];refreshCompareUI();}
+function refreshCompareUI(){
+  document.getElementById('bt-compare-count').textContent=_btCompareRunIds.length+' run(s) selected';
+  document.getElementById('bt-compare-btn').style.display=_btCompareRunIds.length>=2?'inline-block':'none';
+  document.getElementById('bt-compare-metric-table').innerHTML='';
+  document.getElementById('bt-compare-charts').innerHTML='';
+}
+
+function runComparison(){
+  if(_btCompareRunIds.length<2)return;
+  var url='/api/backtest/compare?runs='+_btCompareRunIds.join(',');
+  fetch(url).then(function(r){return r.json();}).then(function(d){
+    renderComparison(d);
+  }).catch(function(e){console.error(e);});
+}
+
+function renderComparison(data){
+  // Metric table
+  var comparison=data.comparison||[];
+  var runIds=[];for(var k in (data.runs||{})){runIds.push(k);}
+  var metricTable='<div style="overflow-x:auto;"><table><thead><tr><th>Metric</th>'+runIds.map(function(id){return'<th>'+escHtml(id)+'</th>';}).join('')+'</tr></thead><tbody>';
+  comparison.forEach(function(row){
+    metricTable+='<tr><td>'+escHtml(row.metric)+'</td>';
+    runIds.forEach(function(id){
+      var v=row[id];
+      var display=v!=null?String(v):'—';
+      if(['sharpe_ratio','sortino_ratio','calmar_ratio'].indexOf(row.metric)!==-1)display=fmtNum(v,3);
+      if(['max_drawdown','win_rate','cagr','volatility'].indexOf(row.metric)!==-1)display=fmtPct(v);
+      if(['total_pnl','expectancy'].indexOf(row.metric)!==-1)display=fmtDollar(v);
+      if(row.metric==='elapsed_secs')display=v!=null?Number(v).toFixed(1)+'s':'—';
+      metricTable+='<td>'+display+'</td>';
+    });
+    metricTable+='</tr>';
+  });
+  metricTable+='</tbody></table></div>';
+  document.getElementById('bt-compare-metric-table').innerHTML=metricTable;
+
+  // Equity curve charts (overlaid)
+  var chartsHtml='<h3 style="color:var(--accent); margin:1rem 0 .5rem;">Equity Curves Overlay</h3>';
+  chartsHtml+='<div class="bt-chart-container" id="bt-compare-chart" style="height:350px;"><canvas id="bt-compare-canvas"></canvas><div class="bt-chart-tooltip" id="bt-compare-tt"></div></div>';
+  document.getElementById('bt-compare-charts').innerHTML=chartsHtml;
+
+  // Draw overlaid equity curves
+  setTimeout(function(){
+    var curves=[];
+    var colors=['#58a6ff','#3fb950','#f85149','#d29922','#bc8cff','#79c0ff'];
+    for(var i=0;i<runIds.length;i++){
+      var r=data.runs[runIds[i]];
+      var ec=r&&r.equity_curve?r.equity_curve:[];
+      if(ec.length)curves.push({label:runIds[i],data:ec,color:colors[i%colors.length]});
+    }
+    if(curves.length)drawMultiEquityCurve('bt-compare-canvas','bt-compare-tt',curves);
+  },100);
+}
+
+// --- Canvas Chart (single equity curve) ---
+function drawEquityCurve(canvasId,ttId,equityCurve){
+  var canvas=document.getElementById(canvasId);
+  var tt=document.getElementById(ttId);
+  if(!canvas||!equityCurve||!equityCurve.length)return;
+  var container=canvas.parentElement;
+  var W=container.clientWidth,H=container.clientHeight;
+  canvas.width=W*2;canvas.height=H*2;
+  canvas.style.width=W+'px';canvas.style.height=H+'px';
+  var ctx=canvas.getContext('2d');ctx.scale(2,2);
+
+  var points=parseEquityPoints(equityCurve);
+  if(!points.length)return;
+  var pad={top:20,right:20,bottom:40,left:70};
+  var pw=W-pad.left-pad.right,ph=H-pad.top-pad.bottom;
+  var xs=points.map(function(p){return p.ts;});
+  var ys=points.map(function(p){return p.equity;});
+  var xMin=Math.min.apply(null,xs),xMax=Math.max.apply(null,xs);
+  var yMin=Math.min.apply(null,ys),yMax=Math.max.apply(null,ys);
+  if(xMin===xMax)xMax+=1;if(yMin===yMax)yMax+=1;
+
+  // Drawdown
+  var peak=-Infinity;var ddPoints=[];
+  points.forEach(function(p){if(p.equity>peak)peak=p.equity;ddPoints.push({ts:p.ts,dd:peak>0?(peak-p.equity)/peak:0});});
+  ctx.fillStyle='rgba(248,81,73,0.15)';
+  ddPoints.forEach(function(p,i){
+    var x=pad.left+(p.ts-xMin)/(xMax-xMin)*pw;
+    var y0=pad.top+ph-(0/(xMax-xMin)*ph);
+    var yh=(p.dd||0)*(ph*0.5);
+    if(i>0){
+      var prev=ddPoints[i-1];
+      var px1=pad.left+(prev.ts-xMin)/(xMax-xMin)*pw;
+      ctx.fillRect(px1,pad.top+ph-yh,p.x-px1,yh);
+    }
+  });
+
+  // Grid
+  ctx.strokeStyle='rgba(48,54,61,0.5)';ctx.lineWidth=0.5;
+  var gridLines=5;
+  for(var i=0;i<=gridLines;i++){
+    var gy=pad.top+ph-(ph/gridLines)*i;
+    ctx.beginPath();ctx.moveTo(pad.left,gy);ctx.lineTo(W-pad.right,gy);ctx.stroke();
+  }
+
+  // Equity line
+  ctx.strokeStyle='#3fb950';ctx.lineWidth=2;ctx.beginPath();
+  points.forEach(function(p,i){
+    var x=pad.left+(p.ts-xMin)/(xMax-xMin)*pw;
+    var y=pad.top+ph-(p.equity-yMin)/(yMax-yMin)*ph;
+    if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);
+  });
+  ctx.stroke();
+
+  // Axes
+  ctx.fillStyle='var(--muted)';ctx.font='10px monospace';ctx.fillStyle='#8b949e';
+  for(var i=0;i<=gridLines;i++){
+    var v=yMin+(yMax-yMin)/gridLines*i;
+    ctx.fillText('$'+v.toFixed(0),2,pad.top+ph-(ph/gridLines)*i+3);
+  }
+  // X-axis dates
+  var xSteps=Math.min(6,points.length);
+  for(var i=0;i<=xSteps;i++){
+    var idx=Math.floor(points.length*i/xSteps);if(idx>=points.length)idx=points.length-1;
+    var p=points[idx];
+    var x=pad.left+(p.ts-xMin)/(xMax-xMin)*pw;
+    ctx.fillText(formatDate(p.ts),x-25,pad.top+ph+16);
+  }
+  ctx.fillText('Equity Curve',pad.left+10,16);
+
+  // Hover
+  canvas.onmousemove=function(e){
+    var rect=canvas.getBoundingClientRect();
+    var mx=e.clientX-rect.left,mx=e.clientY-rect.top;
+    var closest=null,minDist=Infinity;
+    points.forEach(function(p){
+      var x=pad.left+(p.ts-xMin)/(xMax-xMin)*pw;
+      var dist=Math.abs(mx-x);
+      if(dist<minDist&&dist<30){minDist=dist;closest=p;}
+    });
+    if(closest){
+      tt.style.display='block';tt.style.left=(pad.left+(closest.ts-xMin)/(xMax-xMin)*pw+10)+'px';
+      tt.style.top=(pad.top+ph-(closest.equity-yMin)/(yMax-yMin)*ph-30)+'px';
+      tt.textContent=formatDate(closest.ts)+'  $'+closest.equity.toLocaleString('en-US',{minimumFractionDigits:2});
+    }else{tt.style.display='none';}
+  };
+  canvas.onmouseleave=function(){tt.style.display='none';};
+
+  // Zoom/Pan support via mouse wheel
+  var zoomX=[xMin,xMax],zoomY=[yMin,yMax];
+  canvas.onwheel=function(e){e.preventDefault();/* Zoom placeholder */};
+}
+
+// --- Canvas Chart (multi equity curve) ---
+function drawMultiEquityCurve(canvasId,ttId,curves){
+  var canvas=document.getElementById(canvasId);
+  var tt=document.getElementById(ttId);
+  if(!canvas||!curves.length)return;
+  var container=canvas.parentElement;
+  var W=container.clientWidth,H=container.clientHeight;
+  canvas.width=W*2;canvas.height=H*2;
+  canvas.style.width=W+'px';canvas.style.height=H+'px';
+  var ctx=canvas.getContext('2d');ctx.scale(2,2);
+  var pad={top:20,right:20,bottom:40,left:70};
+  var pw=W-pad.left-pad.right,ph=H-pad.top-pad.bottom;
+
+  var allY=[];
+  var curvesData=curves.map(function(c){var pts=parseEquityPoints(c.data);pts.forEach(function(p){allY.push(p.equity);});return{label:c.label,points:pts,color:c.color};});
+  if(!allY.length)return;
+  var yMin=Math.min.apply(null,allY),yMax=Math.max.apply(null,allY);
+  if(yMin===yMax)yMax+=1;
+  var xMin=Infinity,xMax=-Infinity;
+  curvesData.forEach(function(cd){cd.points.forEach(function(p){if(p.ts<xMin)xMin=p.ts;if(p.ts>xMax)xMax=p.ts;});});
+  if(xMin===xMax)xMax+=1;
+
+  // Grid
+  ctx.strokeStyle='rgba(48,54,61,0.5)';ctx.lineWidth=0.5;
+  var gridLines=5;
+  for(var i=0;i<=gridLines;i++){
+    var gy=pad.top+ph-(ph/gridLines)*i;
+    ctx.beginPath();ctx.moveTo(pad.left,gy);ctx.lineTo(W-pad.right,gy);ctx.stroke();
+  }
+  // Lines
+  curvesData.forEach(function(cd){
+    ctx.strokeStyle=cd.color;ctx.lineWidth=2;ctx.beginPath();
+    cd.points.forEach(function(p,i){
+      var x=pad.left+(p.ts-xMin)/(xMax-xMin)*pw;
+      var y=pad.top+ph-(p.equity-yMin)/(yMax-yMin)*ph;
+      if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);
+    });
+    ctx.stroke();
+  });
+  // Labels
+  ctx.font='10px monospace';var ly=pad.top+14;
+  curvesData.forEach(function(cd){
+    ctx.fillStyle=cd.color;ctx.fillText(cd.label,pad.left+pw-100,ly);ly+=14;
+  });
+  // Axis
+  ctx.fillStyle='#8b949e';
+  for(var i=0;i<=gridLines;i++){
+    var v=yMin+(yMax-yMin)/gridLines*i;
+    ctx.fillText('$'+v.toFixed(0),2,pad.top+ph-(ph/gridLines)*i+3);
+  }
+}
+
+function parseEquityPoints(data){
+  if(!data||!data.length)return[];
+  return data.map(function(p){
+    var ts=0,equity=0;
+    if(Array.isArray(p)){ts=p[0];equity=p[1];}
+    else if(typeof p==='object'){ts=p.ts||p.date||p.time||p[0]||0;equity=p.equity||p.value||p.cum_pnl||p[1]||0;}
+    if(typeof ts==='string'){var dt=new Date(ts);ts=isNaN(dt.getTime())?0:dt.getTime();}
+    return{ts:Number(ts),equity:Number(equity)};
+  }).filter(function(p){return !isNaN(p.ts)&&!isNaN(p.equity);});
+}
+
+function formatDate(ts){var d=new Date(Number(ts));return d.toISOString().split('T')[0];}
 </script>
 </body>
 </html>

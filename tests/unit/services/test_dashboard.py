@@ -1492,3 +1492,172 @@ class TestDashboardStartup:
         assert result == 1
         mock_validate.assert_called_once()
         mock_run.assert_not_called()
+
+
+class TestBacktestDashboardUI:
+    """Tests for the backtest dashboard UI panels embedded in the HTML template."""
+
+    @staticmethod
+    def _render_dashboard() -> str:
+        """Render a minimal dashboard HTML with backtest panels."""
+        data: dict[str, Any] = {
+            "health": {
+                "status": "healthy",
+                "services": {
+                    "postgres": {"status": "UP"},
+                    "redis": {"status": "UP"},
+                    "futu_opend": {"status": "running"},
+                    "sam_trader": {"status": "running"},
+                },
+            },
+            "fills": [],
+            "positions": [],
+            "pnl": {"strategies": {}, "total": 0.0},
+            "market_data": {"instruments": [], "counts": {}, "venues": []},
+            "schedule": {"banners": [], "indicators": [], "countdowns": []},
+            "equity_curve": [],
+            "drawdown": {"current_dd_pct": 0, "max_dd_pct": 0, "events": []},
+            "performance": {
+                "net_pnl": 0,
+                "net_pnl_delta": 0,
+                "win_rate": 0,
+                "win_rate_delta": 0,
+                "sharpe_20d": 0,
+                "sharpe_20d_delta": 0,
+                "max_drawdown_pct": 0,
+                "max_drawdown_delta": 0,
+                "expectancy": 0,
+                "expectancy_delta": 0,
+            },
+        }
+        return _render_html(data)
+
+    def test_backtest_section_present(self) -> None:
+        """Backtest dashboard section is rendered in the HTML."""
+        html = self._render_dashboard()
+        assert "BACKTEST" in html
+        assert 'id="backtest-card"' in html
+
+    def test_runner_tab_present(self) -> None:
+        """Runner tab with form elements is rendered."""
+        html = self._render_dashboard()
+        assert 'id="bt-panel-runner"' in html
+        assert 'id="bt-instruments"' in html
+        assert 'id="bt-strategy-id"' in html
+        assert 'id="bt-start"' in html
+        assert 'id="bt-end"' in html
+        assert 'id="bt-run-btn"' in html
+        assert 'id="bt-progress"' in html
+
+    def test_results_tab_present(self) -> None:
+        """Results tab with table is rendered."""
+        html = self._render_dashboard()
+        assert 'id="bt-panel-results"' in html
+        assert 'id="bt-results-table"' in html
+        assert 'id="bt-results-tbody"' in html
+        assert 'id="bt-results-filter"' in html
+
+    def test_compare_tab_present(self) -> None:
+        """Compare tab with controls is rendered."""
+        html = self._render_dashboard()
+        assert 'id="bt-panel-compare"' in html
+        assert 'id="bt-compare-btn"' in html
+        assert 'id="bt-compare-metric-table"' in html
+        assert 'id="bt-compare-charts"' in html
+
+    def test_detail_modal_present(self) -> None:
+        """Detail modal is rendered for run detail view."""
+        html = self._render_dashboard()
+        assert 'id="bt-detail-modal"' in html
+        assert 'id="bt-detail-body"' in html
+
+    def test_sweep_toggle_present(self) -> None:
+        """Parameter sweep toggle and params section are rendered."""
+        html = self._render_dashboard()
+        assert 'id="bt-sweep-toggle"' in html
+        assert 'id="bt-sweep-params"' in html
+
+    def test_walk_forward_toggle_present(self) -> None:
+        """Walk-forward toggle and params section are rendered."""
+        html = self._render_dashboard()
+        assert 'id="bt-wf-toggle"' in html
+        assert 'id="bt-wf-params"' in html
+        assert 'id="bt-wf-train"' in html
+        assert 'id="bt-wf-test"' in html
+
+    def test_export_buttons_present(self) -> None:
+        """Export buttons (CSV/JSON) are rendered in results tab."""
+        html = self._render_dashboard()
+        assert "exportResultsCSV" in html
+        assert "exportResultsJSON" in html
+
+    def test_sortable_table_headers(self) -> None:
+        """Results table has sortable column headers."""
+        html = self._render_dashboard()
+        assert "sortResultsTable(" in html
+
+    def test_equity_curve_chart_render(self) -> None:
+        """Equity curve chart rendering function is present."""
+        html = self._render_dashboard()
+        assert "drawEquityCurve" in html
+        assert "parseEquityPoints" in html
+
+    def test_comparison_functionality_present(self) -> None:
+        """Comparison mode JS is present."""
+        html = self._render_dashboard()
+        assert "runComparison" in html
+        assert "drawMultiEquityCurve" in html
+
+    def test_tab_switching_js_present(self) -> None:
+        """Tab switching JavaScript is present."""
+        html = self._render_dashboard()
+        assert "switchBtTab" in html
+
+    def test_submit_backtest_js_present(self) -> None:
+        """Backtest submission JavaScript is present."""
+        html = self._render_dashboard()
+        assert "submitBacktest" in html
+        assert "pollBacktest" in html
+
+    def test_results_filtering_js_present(self) -> None:
+        """Results filtering JavaScript is present."""
+        html = self._render_dashboard()
+        assert "filterResultsTable" in html
+
+    def test_add_to_compare_js_present(self) -> None:
+        """Add-to-compare JavaScript is present."""
+        html = self._render_dashboard()
+        assert "addSelectedToCompare" in html
+
+    def test_detail_modal_js_present(self) -> None:
+        """Detail modal JavaScript is present."""
+        html = self._render_dashboard()
+        assert "showRunDetail" in html
+        assert "closeDetail" in html
+
+    def test_export_js_present(self) -> None:
+        """Export functions (CSV/JSON) JavaScript is present."""
+        html = self._render_dashboard()
+        assert "downloadBlob" in html
+
+    def test_run_detail_export_js_present(self) -> None:
+        """Per-run export (JSON/CSV) JavaScript is present."""
+        html = self._render_dashboard()
+        assert "exportRunJSON" in html
+        assert "exportRunCSV" in html
+
+    def test_template_renders_without_errors(self) -> None:
+        """Full template renders without exceptions."""
+        html = self._render_dashboard()
+        assert len(html) > 30000
+        # All placeholders should be substituted
+        assert "{{" not in html
+        assert "}}" not in html
+
+    def test_css_styles_present(self) -> None:
+        """Backtest CSS styles are present in the template."""
+        html = self._render_dashboard()
+        assert "bt-tabs" in html
+        assert "bt-panel" in html
+        assert "bt-chart-container" in html
+        assert "bt-status-badge" in html
