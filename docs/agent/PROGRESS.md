@@ -1,5 +1,14 @@
 > **Note: see first-entry Iteration 20 for Phase 2 config dataclasses.**
 
+## Iteration 131
+- **Task**: Unit tests for paper trading account discovery
+- **Task ID**: sam_trader-byh
+- **Status**: COMPLETE
+- **Decisions**: (1) Added `trd_env` check to `_register_venue_account_aliases()` — defensively excludes REAL accounts even if `_discover_accounts()` API-level filter is bypassed. Checks both int (0=SIMULATE, 1=REAL) and string values. Missing `trd_env` field → pass-through for backward compat. (2) Added `registered_count`/`skipped_real_count` counters; warns when all accounts are REAL. (3) Added 8 new unit tests: `test_discover_accounts_simulate_only` (mixed REAL+SIMULATE response → only SIMULATE registered), `test_discover_replaces_placeholder` (factory AccountId replaced on connect), `test_empty_account_list` (no accounts → aliases empty, placeholder kept), `test_only_real_accounts` (all REAL → no aliases, placeholder kept), `test_register_venue_aliases_hk_stock` (HK STOCK → HKEX), `test_register_venue_aliases_us_stock_and_option` (US STOCK_AND_OPTION → NASDAQ), `test_register_venue_aliases_excludes_real` (REAL excluded from aliases), `test_resolve_account_id_per_market` (HK→HK acc, US→US acc, unknown→default). (4) Updated all existing mock data to include realistic `trd_env` field.
+- **Files Changed**: `src/sam_trader/adapters/futu/execution.py`, `tests/unit/adapters/futu/test_execution.py`
+- **Validation Result**: PASS (RALPH_GATE_PASSED — 44/44 targeted tests, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None.
+
 ## Iteration 130
 - **Task**: BUG: Paper trading account discovery — get_acc_list not filtering SIMULATE
 - **Task ID**: sam_trader-awz

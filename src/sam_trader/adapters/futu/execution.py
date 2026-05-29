@@ -261,11 +261,27 @@ class FutuLiveExecutionClient(LiveExecutionClient):
             List of account dictionaries from ``get_acc_list``.
 
         """
+        registered_count = 0
+        skipped_real_count = 0
+
         for acc in accounts:
             acc_id_val = acc.get("acc_id")
             trdmarket_auth = acc.get("trdmarket_auth")
             if acc_id_val is None or trdmarket_auth is None:
                 continue
+
+            # Exclude REAL accounts — only SIMULATE (paper trading)
+            # accounts are valid for venue alias registration.
+            # This is defence-in-depth; ``_discover_accounts`` already
+            # filters at the API level via ``trd_env=TrdEnv.SIMULATE``.
+            trd_env = acc.get("trd_env")
+            if trd_env is not None:
+                is_simulate = (
+                    isinstance(trd_env, str) and trd_env.upper() == "SIMULATE"
+                ) or (isinstance(trd_env, int) and trd_env == 0)
+                if not is_simulate:
+                    skipped_real_count += 1
+                    continue
 
             # ``trdmarket_auth`` may be a list of ints or a
             # comma-separated string (depending on SDK serialisation).
@@ -291,6 +307,8 @@ class FutuLiveExecutionClient(LiveExecutionClient):
                         f"Registered venue alias: {venue} -> {acc_id}",
                     )
 
+            registered_count += 1
+
             # Use the first discovered account as the default
             # Compare against the factory-provided account ID (handles both
             # client_id-based defaults like FUTU-1 and env-var overrides)
@@ -299,6 +317,12 @@ class FutuLiveExecutionClient(LiveExecutionClient):
                 self._log.info(
                     f"Account discovery: updated default account to {acc_id}",
                 )
+
+        if registered_count == 0 and skipped_real_count > 0:
+            self._log.warning(
+                f"Skipped {skipped_real_count} REAL accounts from "
+                "get_acc_list — no SIMULATE paper trading accounts available",
+            )
 
     def _resolve_account_id(self, instrument_id: InstrumentId) -> AccountId:
         """Resolve the account ID for an instrument based on venue aliases."""

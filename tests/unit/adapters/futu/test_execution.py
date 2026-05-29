@@ -474,6 +474,171 @@ class TestConnectDisconnect:
 class TestAccountDiscovery:
     """Tests for get_acc_list and venue alias registration."""
 
+    def test_discover_accounts_simulate_only(
+        self, event_loop, make_client, mock_trade_ctx
+    ):
+        """Mixed REAL + SIMULATE accounts: only SIMULATE populate venue aliases.
+
+        Even if ``get_acc_list`` returns both REAL and SIMULATE accounts
+        (e.g. due to mock bypassing the API-level trd_env filter),
+        ``_register_venue_account_aliases`` defensively excludes REAL.
+        """
+        mock_trade_ctx.get_acc_list.return_value = (
+            RET_OK,
+            pd.DataFrame(
+                {
+                    "acc_id": [100, 200, 300],
+                    "trd_env": [0, 1, 0],  # SIMULATE, REAL, SIMULATE
+                    "trdmarket_auth": [[2], [2], [2]],  # all US
+                    "sim_acc_type": [2, 2, 2],
+                }
+            ),
+        )
+        client = make_client()  # trd_market="US"
+        event_loop.run_until_complete(client._discover_accounts())
+
+        # Only SIMULATE accounts registered; last one wins per venue
+        assert len(client._venue_account_aliases) == 1
+        assert client._venue_account_aliases[Venue("NASDAQ")] == AccountId("FUTU-300")
+        # Default account is the first SIMULATE account
+        assert client._account_id == AccountId("FUTU-100")
+
+    def test_discover_replaces_placeholder(
+        self, event_loop, make_client, mock_trade_ctx
+    ):
+        """Factory-provided placeholder AccountId is replaced on connect.
+
+        The factory creates a client with AccountId("FUTU-1") (from
+        config.client_id).  During ``_connect`` → ``_discover_accounts``,
+        this placeholder must be replaced by the first discovered
+        SIMULATE paper trading account ID.
+        """
+        mock_trade_ctx.get_acc_list.return_value = (
+            RET_OK,
+            pd.DataFrame(
+                {
+                    "acc_id": [234387941],
+                    "trd_env": [0],
+                    "trdmarket_auth": [[2]],
+                    "sim_acc_type": [2],
+                }
+            ),
+        )
+        client = make_client()  # placeholder: FUTU-1
+        assert client._account_id == AccountId("FUTU-1")
+        assert client._initial_account_id == AccountId("FUTU-1")
+
+        event_loop.run_until_complete(client._discover_accounts())
+
+        assert client._account_id == AccountId("FUTU-234387941")
+
+    def test_empty_account_list(self, event_loop, make_client, mock_trade_ctx):
+        """Empty account list: no aliases registered, placeholder kept."""
+        mock_trade_ctx.get_acc_list.return_value = (
+            RET_OK,
+            pd.DataFrame(),
+        )
+        client = make_client()
+        placeholder = client._account_id  # FUTU-1
+
+        event_loop.run_until_complete(client._discover_accounts())
+
+        assert client._venue_account_aliases == {}
+        assert client._account_id == placeholder
+
+    def test_only_real_accounts(self, event_loop, make_client, mock_trade_ctx):
+        """Only REAL accounts returned: no aliases, placeholder kept.
+
+        When every account in the response has ``trd_env`` REAL (1),
+        ``_register_venue_account_aliases`` skips them all and logs a
+        warning.  The factory-provided placeholder is left unchanged.
+        """
+        mock_trade_ctx.get_acc_list.return_value = (
+            RET_OK,
+            pd.DataFrame(
+                {
+                    "acc_id": [999, 888],
+                    "trd_env": [1, 1],  # all REAL
+                    "trdmarket_auth": [[2], [2]],
+                    "sim_acc_type": [2, 2],
+                }
+            ),
+        )
+        client = make_client()
+        placeholder = client._account_id
+
+        event_loop.run_until_complete(client._discover_accounts())
+
+        assert client._venue_account_aliases == {}
+        assert client._account_id == placeholder
+
+    def test_register_venue_aliases_hk_stock(self, event_loop, make_client):
+        """HK STOCK account (sim_acc_type=0, trdmarket_auth=[1]) → HKEX."""
+        client = make_client()
+        accounts = [
+            {
+                "acc_id": 500,
+                "trd_env": 0,
+                "trdmarket_auth": [1],  # FUTU_TRD_MARKET_HK
+                "sim_acc_type": 0,  # STOCK
+            },
+        ]
+        client._register_venue_account_aliases(accounts)
+
+        assert client._venue_account_aliases[Venue("HKEX")] == AccountId("FUTU-500")
+
+    def test_register_venue_aliases_us_stock_and_option(self, event_loop, make_client):
+        """US STOCK_AND_OPTION account (sim_acc_type=2, trdmarket_auth=[2]) → NASDAQ."""
+        client = make_client()
+        accounts = [
+            {
+                "acc_id": 600,
+                "trd_env": 0,
+                "trdmarket_auth": [2],  # FUTU_TRD_MARKET_US
+                "sim_acc_type": 2,  # STOCK_AND_OPTION
+            },
+        ]
+        client._register_venue_account_aliases(accounts)
+
+        assert client._venue_account_aliases[Venue("NASDAQ")] == AccountId("FUTU-600")
+
+    def test_register_venue_aliases_excludes_real(self, event_loop, make_client):
+        """REAL accounts (trd_env=1 or 'REAL') are excluded from aliases."""
+        client = make_client()
+        accounts = [
+            {"acc_id": 100, "trd_env": 0, "trdmarket_auth": [2]},  # SIMULATE
+            {"acc_id": 200, "trd_env": 1, "trdmarket_auth": [2]},  # REAL (int)
+            {"acc_id": 300, "trd_env": "REAL", "trdmarket_auth": [2]},  # REAL (str)
+        ]
+        client._register_venue_account_aliases(accounts)
+
+        # Only the SIMULATE account (100) should be registered
+        assert client._venue_account_aliases[Venue("NASDAQ")] == AccountId("FUTU-100")
+
+    def test_resolve_account_id_per_market(self, event_loop, make_client):
+        """HK instrument → HK paper acc_id, US → US, unknown → default."""
+        client = make_client()
+        client._venue_account_aliases = {
+            Venue("HKEX"): AccountId("FUTU-888"),
+            Venue("NASDAQ"): AccountId("FUTU-999"),
+        }
+        client._account_id = AccountId("FUTU-001")  # default fallback
+
+        # HK instrument → HKEX alias
+        assert client._resolve_account_id(
+            InstrumentId.from_str("00700.HKEX")
+        ) == AccountId("FUTU-888")
+
+        # US instrument → NASDAQ alias
+        assert client._resolve_account_id(
+            InstrumentId.from_str("AAPL.NASDAQ")
+        ) == AccountId("FUTU-999")
+
+        # Unknown venue → default fallback
+        assert client._resolve_account_id(
+            InstrumentId.from_str("7203.XTKS")
+        ) == AccountId("FUTU-001")
+
     def test_discover_accounts_registers_aliases(
         self, event_loop, make_client, mock_trade_ctx
     ):
@@ -487,6 +652,7 @@ class TestAccountDiscovery:
             pd.DataFrame(
                 {
                     "acc_id": [123, 456],
+                    "trd_env": [0, 0],
                     "trdmarket_auth": [[2], [2, 1]],  # US-only, US+HK
                     "sim_acc_type": [2, 2],  # both STOCK_AND_OPTION
                 }
@@ -516,6 +682,7 @@ class TestAccountDiscovery:
             pd.DataFrame(
                 {
                     "acc_id": [100, 200],
+                    "trd_env": [0, 0],
                     "trdmarket_auth": [[2], [2]],
                     "sim_acc_type": [1, 2],  # OPTION, STOCK_AND_OPTION
                 }
@@ -556,6 +723,7 @@ class TestAccountDiscovery:
             pd.DataFrame(
                 {
                     "acc_id": [300, 400],
+                    "trd_env": [0, 0],
                     "trdmarket_auth": [[1], [1]],
                     "sim_acc_type": [2, 0],  # STOCK_AND_OPTION, STOCK
                 }
@@ -576,6 +744,7 @@ class TestAccountDiscovery:
             pd.DataFrame(
                 {
                     "acc_id": [999],
+                    "trd_env": [0],
                     "trdmarket_auth": [[2]],
                     "sim_acc_type": [2],
                 }
@@ -601,6 +770,7 @@ class TestAccountDiscovery:
             pd.DataFrame(
                 {
                     "acc_id": [777],
+                    "trd_env": [0],
                     "trdmarket_auth": ["1,2"],  # CSV string
                     "sim_acc_type": [2],
                 }
