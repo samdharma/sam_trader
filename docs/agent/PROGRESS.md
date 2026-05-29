@@ -1,5 +1,14 @@
 > **Note: see first-entry Iteration 20 for Phase 2 config dataclasses.**
 
+## Iteration 136
+- **Task**: 12.1.5: Parameter sweep — grid search via multi-config BacktestNode
+- **Task ID**: sam_trader-9z3.13.1.5
+- **Status**: COMPLETE
+- **Decisions**: Created `ParameterSweep` in `src/sam_trader/services/backtest/sweep.py` with: (1) `parse_sweep_flags()` — parses `--sweep key=val1,val2,val3` into typed param grid (auto-detects int/float/str), (2) `generate_sweep_grid()` — cartesian product via `itertools.product`, (3) `_patch_strategy_config()` — deep-copies ImportableStrategyConfig and applies sweep overrides, (4) `ParameterSweep.run()` — generates one BacktestRunConfig per combo, runs all via single BacktestNode using `BacktestEngineWrapper.run_multi()`, collects results sorted by Sharpe descending, (5) `ParameterSweep.format_table()` — ranked comparison table with all combo keys, strategy, P&L, Sharpe, Max DD, Win Rate, Trades, Elapsed columns. Added `--sweep` multiple option to `sam backtest` CLI with `_run_sweep()` helper. When sweep flags present, bypasses single-run path and uses ParameterSweep. JSON output includes param_grid and ranked results. 29 unit tests covering: parse_sweep_flags (9 tests: single, multiple, float, string, mixed, error cases, whitespace, empty slots), generate_sweep_grid (6 tests: single param, 2-param cartesian, 3-param, empty, 10+ combos, single value), _patch_strategy_config (3 tests: override, no mutation, deep copy), ParameterSweep.run (5 tests: single param sorted by Sharpe, 2-param cartesian, None Sharpe sinks to bottom, empty grid raises, multi-strategy sweep), format_table (4 tests: basic table, empty, single result, mixed combo keys, None values).
+- **Files Changed**: `src/sam_trader/services/backtest/sweep.py` (new), `src/sam_trader/services/backtest/__init__.py` (export sweep), `src/sam_trader/services/cli.py` (add --sweep option + _run_sweep helper), `tests/unit/services/backtest/test_sweep.py` (new)
+- **Validation Result**: PASS (RALPH_GATE_PASSED — 29/29 targeted tests, 77/77 total backtest+CLI tests, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for sam_trader-9z3.13.1.6 (walk-forward optimization).
+
 ## Iteration 135
 - **Task**: 12.1.4: backtest_results PG table + storage service
 - **Task ID**: sam_trader-9z3.13.1.4

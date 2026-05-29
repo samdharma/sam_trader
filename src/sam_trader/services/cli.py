@@ -2949,6 +2949,82 @@ def switch_market(ctx: click.Context, market: str, timeout: int) -> None:
 # ---------------------------------------------------------------------------
 
 
+def _run_sweep(
+    ctx: click.Context,
+    strategies: list,
+    instrument_ids: list[str],
+    bar_types: list[str],
+    start_date: str,
+    end_date: str,
+    catalog_path: str,
+    sweep_flags: list[str],
+) -> None:
+    """Execute a parameter sweep and output results.
+
+    Parameters
+    ----------
+    ctx : click.Context
+        CLI context (for --json flag).
+    strategies : list[ImportableStrategyConfig]
+        Base strategy configurations.
+    instrument_ids : list[str]
+        Instrument IDs for data loading.
+    bar_types : list[str]
+        Bar type strings for data loading.
+    start_date : str
+        Backtest start date.
+    end_date : str
+        Backtest end date.
+    catalog_path : str
+        Path to Parquet data catalog.
+    sweep_flags : list[str]
+        Raw --sweep key=val1,val2 entries.
+
+    """
+    from sam_trader.services.backtest.engine import BacktestEngineWrapper
+    from sam_trader.services.backtest.sweep import ParameterSweep, parse_sweep_flags
+
+    # Parse sweep grid
+    try:
+        param_grid = parse_sweep_flags(sweep_flags)
+    except ValueError as exc:
+        raise click.ClickException(str(exc))
+
+    if not param_grid:
+        raise click.ClickException(
+            "No valid sweep parameters. Use: --sweep key=val1,val2,val3"
+        )
+
+    # Run sweep
+    wrapper = BacktestEngineWrapper(catalog_path=catalog_path)
+    sweeper = ParameterSweep(
+        wrapper=wrapper,
+        base_strategies=list(strategies),
+        instrument_ids=instrument_ids,
+        bar_types=bar_types,
+        start=start_date,
+        end=end_date,
+    )
+
+    try:
+        results = sweeper.run(param_grid=param_grid)
+    except Exception as exc:
+        raise click.ClickException(f"Sweep failed: {exc}")
+
+    # Group by strategy class if multi-strategy sweep
+    if ctx.obj.get("json"):
+        result_payload: dict[str, Any] = {
+            "command": "backtest-sweep",
+            "start": start_date,
+            "end": end_date,
+            "param_grid": {k: [str(v) for v in vals] for k, vals in param_grid.items()},
+            "results": results,
+        }
+        _out(ctx, result_payload)
+    else:
+        click.echo(sweeper.format_table(results))
+
+
 def _safe_round(value: Any, ndigits: int = 2) -> float | None:
     """Round a numeric value, returning None for non-numeric input."""
     if isinstance(value, (int, float)):
@@ -3099,6 +3175,15 @@ def _build_backtest_summary(
     default="data/catalog",
     help="Path to Parquet data catalog.",
 )
+@click.option(
+    "--sweep",
+    "sweep_flags",
+    multiple=True,
+    help=(
+        "Parameter sweep flag (repeatable). "
+        "Format: key=val1,val2,val3 (e.g., --sweep stop_loss_ticks=5,10,15)."
+    ),
+)
 @click.pass_context
 def backtest(
     ctx: click.Context,
@@ -3107,6 +3192,7 @@ def backtest(
     start_date: str,
     end_date: str,
     catalog_path: str,
+    sweep_flags: tuple[str, ...],
 ) -> None:
     """Run a backtest using NautilusTrader's BacktestNode.
 
@@ -3115,6 +3201,13 @@ def backtest(
         sam backtest tsla-orb-15m-futu --start 2024-01-01 --end 2024-06-30
 
         sam backtest --bundles config/bundles.yaml --start 2024-01-01 --end 2024-06-30
+
+    SWEEP EXAMPLES:
+
+        sam backtest --sweep stop_loss_ticks=5,10,15 \
+            --sweep take_profit_ticks=20,30,40 \
+            --bundles config/bundles.yaml \
+            --start 2024-01-01 --end 2024-06-30
 
     """
     from sam_trader.bundle_loader import BundleLoaderError, load_bundles
@@ -3166,6 +3259,21 @@ def backtest(
     if not bar_types:
         raise click.ClickException("No bar_types found in bundle configs")
 
+    # --- Parameter Sweep path ---
+    if sweep_flags:
+        _run_sweep(
+            ctx=ctx,
+            strategies=strategies,
+            instrument_ids=instrument_ids,
+            bar_types=bar_types,
+            start_date=start_date,
+            end_date=end_date,
+            catalog_path=catalog_path,
+            sweep_flags=list(sweep_flags),
+        )
+        return
+
+    # --- Single Run path ---
     # Run backtest
     wrapper = BacktestEngineWrapper(catalog_path=catalog_path)
 
