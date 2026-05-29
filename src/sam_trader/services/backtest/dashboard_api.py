@@ -340,23 +340,52 @@ def _update_run_status(
         _run_registry[run_id] = entry
 
 
+# Mapping of Nautilus canonical stat names (v1.227.0) to dashboard output keys.
+# See nautilus_trader.core.nautilus_pyo3 stat .name attributes.
+_RETURNS_STAT_KEY_MAP: dict[str, str] = {
+    "Sharpe Ratio (252 days)": "sharpe_ratio",
+    "Sortino Ratio (252 days)": "sortino_ratio",
+    "Max Drawdown": "max_drawdown",
+    "Win Rate": "win_rate",
+    "Profit Factor": "profit_factor",
+    "Expectancy": "expectancy",
+    "CAGR (252 days)": "cagr",
+    "Calmar Ratio (252 days)": "calmar_ratio",
+    "Returns Volatility (252 days)": "volatility",
+}
+
+
 def _extract_result_stats(result: BacktestResult) -> dict[str, Any]:
-    """Extract human-readable stats from a BacktestResult."""
+    """Extract human-readable stats from a :class:`BacktestResult`.
+
+    Returns stats use mapped keys from the Nautilus canonical stat names
+    (e.g. ``"Sharpe Ratio (252 days)"`` → ``"sharpe_ratio"``).
+    ``total_pnl`` is read from :attr:`BacktestResult.stats_pnls` (key
+    ``"PnL (total)"``, summed across all currencies), **not** from
+    ``stats_returns``.
+    """
     stats: dict[str, Any] = {}
     try:
         if result.stats_returns:
             sr = result.stats_returns
             if isinstance(sr, dict):
-                stats["sharpe_ratio"] = sr.get("sharpe_ratio")
-                stats["sortino_ratio"] = sr.get("sortino_ratio")
-                stats["max_drawdown"] = sr.get("max_drawdown")
-                stats["win_rate"] = sr.get("win_rate")
-                stats["profit_factor"] = sr.get("profit_factor")
-                stats["expectancy"] = sr.get("expectancy")
-                stats["total_pnl"] = sr.get("total_pnl")
-                stats["cagr"] = sr.get("cagr")
-                stats["volatility"] = sr.get("volatility")
-                stats["calmar_ratio"] = sr.get("calmar_ratio")
+                for nautilus_key, output_key in _RETURNS_STAT_KEY_MAP.items():
+                    stats[output_key] = sr.get(nautilus_key)
+    except Exception:
+        pass
+    try:
+        # total_pnl lives in stats_pnls (per-currency/per-strategy dict of dicts).
+        # Key name from Nautilus PortfolioAnalyzer.get_performance_stats_pnls().
+        if result.stats_pnls:
+            sp = result.stats_pnls
+            if isinstance(sp, dict):
+                total_pnl: float | None = None
+                for inner in sp.values():
+                    if isinstance(inner, dict):
+                        pnl = inner.get("PnL (total)")
+                        if pnl is not None:
+                            total_pnl = pnl if total_pnl is None else total_pnl + pnl
+                stats["total_pnl"] = total_pnl
     except Exception:
         pass
     try:
@@ -738,41 +767,77 @@ def handle_backtest_compare(
             "equity_curve": row_data.get("equity_curve"),
         }
 
-    # Build comparison table: one row per metric, columns per run
-    all_metrics = [
-        "sharpe_ratio",
-        "sortino_ratio",
-        "max_drawdown",
-        "win_rate",
-        "profit_factor",
-        "expectancy",
-        "total_pnl",
-        "cagr",
-        "calmar_ratio",
-        "volatility",
+    # Build comparison table: one row per metric, columns per run.
+    # Metrics are grouped by source: stats_returns (canonical Nautilus names),
+    # stats_pnls (per-currency/per-strategy P&L), and scalar row columns.
+    _COMPARE_RETURNS_METRICS: list[tuple[str, str]] = [
+        ("Sharpe Ratio (252 days)", "sharpe_ratio"),
+        ("Sortino Ratio (252 days)", "sortino_ratio"),
+        ("Max Drawdown", "max_drawdown"),
+        ("Win Rate", "win_rate"),
+        ("Profit Factor", "profit_factor"),
+        ("Expectancy", "expectancy"),
+        ("CAGR (252 days)", "cagr"),
+        ("Calmar Ratio (252 days)", "calmar_ratio"),
+        ("Returns Volatility (252 days)", "volatility"),
+    ]
+    _COMPARE_PNLS_METRICS: list[tuple[str, str]] = [
+        ("PnL (total)", "total_pnl"),
+    ]
+    _COMPARE_SCALAR_METRICS: list[str] = [
         "total_events",
         "total_orders",
         "total_positions",
         "elapsed_secs",
     ]
+
     comparison: list[dict[str, Any]] = []
-    for metric in all_metrics:
-        metric_row: dict[str, Any] = {"metric": metric}
+
+    # Returns-based metrics (from stats_returns JSONB column)
+    for nautilus_key, output_key in _COMPARE_RETURNS_METRICS:
+        returns_row: dict[str, Any] = {"metric": output_key}
         for rid in run_ids:
             r_data = runs.get(rid, {})
             if isinstance(r_data, dict) and "error" not in r_data:
                 sr = r_data.get("stats_returns") or {}
-                if metric in ("total_events", "total_orders", "total_positions"):
-                    metric_row[rid] = r_data.get(metric)
-                elif metric == "elapsed_secs":
-                    metric_row[rid] = r_data.get("elapsed_secs")
-                elif isinstance(sr, dict):
-                    metric_row[rid] = sr.get(metric)
-                else:
-                    metric_row[rid] = None
+                returns_row[rid] = (
+                    sr.get(nautilus_key) if isinstance(sr, dict) else None
+                )
             else:
-                metric_row[rid] = None
-        comparison.append(metric_row)
+                returns_row[rid] = None
+        comparison.append(returns_row)
+
+    # PnL-based metrics (from stats_pnls JSONB column — summed across currencies)
+    for pnl_key, output_key in _COMPARE_PNLS_METRICS:
+        pnls_row: dict[str, Any] = {"metric": output_key}
+        for rid in run_ids:
+            r_data = runs.get(rid, {})
+            if isinstance(r_data, dict) and "error" not in r_data:
+                sp = r_data.get("stats_pnls") or {}
+                if isinstance(sp, dict):
+                    val: float | None = None
+                    for inner in sp.values():
+                        if isinstance(inner, dict):
+                            v = inner.get(pnl_key)
+                            if v is not None:
+                                val = v if val is None else val + v
+                    pnls_row[rid] = val
+                else:
+                    pnls_row[rid] = None
+            else:
+                pnls_row[rid] = None
+        comparison.append(pnls_row)
+
+    # Scalar metrics (direct row columns)
+    for metric in _COMPARE_SCALAR_METRICS:
+        scalar_row: dict[str, Any] = {"metric": metric}
+        for rid in run_ids:
+            r_data = runs.get(rid, {})
+            if isinstance(r_data, dict) and "error" not in r_data:
+                scalar_row[rid] = r_data.get(metric)
+            else:
+                scalar_row[rid] = None
+        comparison.append(scalar_row)
 
     return {"runs": runs, "comparison": comparison}
 

@@ -1,5 +1,18 @@
 > **Note: see first-entry Iteration 20 for Phase 2 config dataclasses.**
 
+## Iteration 145
+- **Task**: 12.1.12: Dashboard _extract_result_stats reads total_pnl from wrong BacktestResult field
+- **Task ID**: sam_trader-9z3.13.1.12
+- **Status**: COMPLETE
+- **Decisions**: Root cause: `_extract_result_stats()` and `handle_backtest_compare()` used snake_case key names (e.g., `"sharpe_ratio"`, `"total_pnl"`) to read from `BacktestResult.stats_returns`, but Nautilus v1.227.0 uses canonical human-readable names (e.g., `"Sharpe Ratio (252 days)"`, `"CAGR (252 days)"`). Additionally, `total_pnl` belongs in `stats_pnls` (key `"PnL (total)"`), not `stats_returns`. Fix:
+  1. Added `_RETURNS_STAT_KEY_MAP` constant mapping Nautilus canonical → output keys.
+  2. `_extract_result_stats()` now reads `stats_returns` via the mapping and `total_pnl` from `stats_pnls` (summing `"PnL (total)"` across all currencies).
+  3. `handle_backtest_compare()` similarly uses the canonical mapping for returns metrics and reads `total_pnl` from `stats_pnls`.
+  4. Also discovered: `sweep.py`, `walk_forward.py`, and `cli.py` have the same bug (read wrong keys from BacktestResult) — filed as follow-up.
+- **Files Changed**: `src/sam_trader/services/backtest/dashboard_api.py` (+80/-40 lines), `tests/unit/services/backtest/test_dashboard_api.py` (updated mock keys), `tests/unit/services/backtest/test_engine.py` (updated mock keys)
+- **Validation Result**: PASS (RALPH_GATE_PASSED — 159/159 backtest unit tests, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: The `sweep.py`, `walk_forward.py`, and `cli.py` modules also read `BacktestResult` fields using wrong keys but were not fixed — they're out of scope for this ticket. Their tests pass because they use the same wrong keys in mocks.
+
 ## Iteration 144
 - **Task**: 12.1.11: Dashboard backtest POST /run always fails — strategies list is empty
 - **Task ID**: sam_trader-9z3.13.1.11

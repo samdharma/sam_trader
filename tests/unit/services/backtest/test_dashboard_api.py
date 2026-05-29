@@ -91,8 +91,8 @@ def _make_row(
         "total_orders": total_orders,
         "total_positions": total_positions,
         "elapsed_secs": elapsed_secs,
-        "stats_returns": stats_returns or {"sharpe_ratio": 1.5, "total_pnl": 5000.0},
-        "stats_pnls": stats_pnls or {},
+        "stats_returns": stats_returns or {"Sharpe Ratio (252 days)": 1.5},
+        "stats_pnls": stats_pnls or {"USD": {"PnL (total)": 5000.0}},
         "equity_curve": equity_curve or [],
         "error_message": None,
         "strategy_family": strategy_family,
@@ -487,8 +487,8 @@ class TestHandleBacktestRunsDetail:
         equity = [{"timestamp": "2024-01-01", "value": 100000}]
         row = _make_row(
             equity_curve=equity,
-            stats_returns={"sharpe_ratio": 1.8, "total_pnl": 7500.0},
-            stats_pnls={"tsla-orb": {"pnl": 7500.0}},
+            stats_returns={"Sharpe Ratio (252 days)": 1.8},
+            stats_pnls={"tsla-orb": {"PnL (total)": 7500.0}},
         )
         store = _mock_store_rows(row)
         with patch(
@@ -498,7 +498,7 @@ class TestHandleBacktestRunsDetail:
             result = handle_backtest_runs_detail("bt-001")
 
         assert result["run_id"] == "bt-001"
-        assert result["stats_returns"]["sharpe_ratio"] == 1.8
+        assert result["stats_returns"]["Sharpe Ratio (252 days)"] == 1.8
         assert result["equity_curve"] == equity
         assert result["total_events"] == 1000
         assert result["strategy_version"] == "1.0"
@@ -563,19 +563,19 @@ class TestHandleBacktestCompare:
                 "bt-001",
                 strategy_id="tsla-orb",
                 stats_returns={
-                    "sharpe_ratio": 1.5,
-                    "total_pnl": 5000.0,
-                    "max_drawdown": 0.10,
+                    "Sharpe Ratio (252 days)": 1.5,
+                    "Max Drawdown": 0.10,
                 },
+                stats_pnls={"tsla-orb": {"PnL (total)": 5000.0}},
             ),
             _make_row(
                 "bt-002",
                 strategy_id="aapl-mom",
                 stats_returns={
-                    "sharpe_ratio": 0.8,
-                    "total_pnl": -1000.0,
-                    "max_drawdown": 0.25,
+                    "Sharpe Ratio (252 days)": 0.8,
+                    "Max Drawdown": 0.25,
                 },
+                stats_pnls={"aapl-mom": {"PnL (total)": -1000.0}},
             ),
         ]
         store = _mock_store_rows(*rows)
@@ -640,8 +640,8 @@ class TestHandleBacktestCompare:
     def test_all_metrics_included(self) -> None:
         """Comparison table includes all expected metrics."""
         rows = [
-            _make_row("bt-001", stats_returns={"sharpe_ratio": 1.0}),
-            _make_row("bt-002", stats_returns={"sharpe_ratio": 1.0}),
+            _make_row("bt-001", stats_returns={"Sharpe Ratio (252 days)": 1.0}),
+            _make_row("bt-002", stats_returns={"Sharpe Ratio (252 days)": 1.0}),
         ]
         store = _mock_store_rows(*rows)
         with patch(

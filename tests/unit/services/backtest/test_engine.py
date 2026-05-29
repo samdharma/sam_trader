@@ -83,13 +83,13 @@ def sample_backtest_result() -> BacktestResult:
         total_events=500,
         total_orders=10,
         total_positions=5,
-        stats_pnls={"OrbStrategy": {"total_pnl": 1500.0, "avg_win": 200.0}},
+        stats_pnls={"OrbStrategy": {"PnL (total)": 1500.0, "avg_win": 200.0}},
         stats_returns={
-            "sharpe_ratio": 1.8,
-            "sortino_ratio": 2.1,
-            "max_drawdown": -0.12,
-            "win_rate": 0.55,
-            "profit_factor": 1.8,
+            "Sharpe Ratio (252 days)": 1.8,
+            "Sortino Ratio (252 days)": 2.1,
+            "Max Drawdown": -0.12,
+            "Win Rate": 0.55,
+            "Profit Factor": 1.8,
         },
     )
 
