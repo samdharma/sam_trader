@@ -1,5 +1,14 @@
 > **Note: see first-entry Iteration 20 for Phase 2 config dataclasses.**
 
+## Iteration 139
+- **Task**: Futu: dynamic paper account selection by market and instrument type in SIMULATE mode
+- **Task ID**: sam_trader-99c
+- **Status**: COMPLETE
+- **Decisions**: Three root causes fixed: (1) `_discover_accounts()` now matches `trd_env` as string ("SIMULATE") alongside integer (0) via `_is_simulate_trd_env()` helper, resolving SDK v10.6+ incompatibility where the protobuf response returns string instead of int. (2) `sim_acc_type` filter now handles both int (0/2) and string ("STOCK"/"STOCK_AND_OPTION") via `_matches_sim_acc_type()` helper. (3) Added REAL mode path — when `trd_env=REAL`, uses `FUTU_ACCOUNT_ID` directly from env instead of discovery. (4) Added `_fallback_to_env_account()` for all discovery-failure paths — empty response, no SIMULATE accounts, no matching sim_acc_type, or API exception. (5) Enhanced INFO logging with account selection rationale (acc_id, sim_acc_type, authorised venues, market). (6) `_register_venue_account_aliases()` now uses shared `_is_simulate_trd_env()` helper for consistency. (7) 23 new unit tests: string trd_env/sim_acc_type, bug scenario reproduction (HK + SIMULATE → acc_id 19064358), REAL mode with/without FUTU_ACCOUNT_ID, fallback paths, and 13 module-level helper tests.
+- **Files Changed**: `src/sam_trader/adapters/futu/execution.py`, `tests/unit/adapters/futu/test_execution.py`
+- **Validation Result**: PASS (RALPH_GATE_PASSED — 68/68 targeted tests, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Manual verification requires live Futu OpenD with paper trading accounts — operator should deploy with MARKET=HK to verify acc_id 19064358 is selected.
+
 ## Iteration 138
 - **Task**: 12.1.7: Backtest dashboard API endpoints
 - **Task ID**: sam_trader-9z3.13.1.7
