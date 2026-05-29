@@ -619,6 +619,15 @@ class FutuLiveExecutionClient(LiveExecutionClient):
         tif = self._tif_to_futu(order.time_in_force)
         trd_env = self._trd_env_to_futu()
 
+        # ── Defense-in-depth: SIMULATE rejects GTC ─────────────
+        if trd_env == "SIMULATE" and order.time_in_force == TimeInForce.GTC:
+            self._log.warning(
+                "FUTU_TRD_ENV=SIMULATE — overriding GTC to DAY "
+                "for order %s (paper trading rejects GTC).",
+                order.client_order_id,
+            )
+            tif = "DAY"
+
         if self._trade_ctx is None:
             self.generate_order_rejected(
                 strategy_id=order.strategy_id,

@@ -96,6 +96,12 @@ class OrbStrategyConfig(StrategyConfig, frozen=True):  # type: ignore[call-arg]
     lunch_end : str, default ""
         Lunch pause end time in ``HH:MM`` format (instrument local timezone).
         HK default: ``"13:00"``.
+    time_in_force : str | None, default None
+        Order time-in-force override.  One of ``"GTC"``, ``"DAY"``, ``"IOC"``.
+        When ``None``, resolves via ``DEFAULT_TIME_IN_FORCE`` env var →
+        market_config ``default_time_in_force`` → ``"DAY"`` fallback.
+        Automatically forced to ``"DAY"`` when ``FUTU_TRD_ENV=SIMULATE``
+        (paper trading rejects GTC orders).
 
     """
 
@@ -127,6 +133,7 @@ class OrbStrategyConfig(StrategyConfig, frozen=True):  # type: ignore[call-arg]
     lunch_pause_enabled: bool = False
     lunch_start: str = ""
     lunch_end: str = ""
+    time_in_force: str | None = None
 
 
 class OrbStrategy(Strategy):
@@ -207,6 +214,94 @@ class OrbStrategy(Strategy):
 
         # STOP_MARKET entry tracking
         self._entry_order = None
+
+        # ── Resolve time_in_force ──────────────────────────────────
+        self._time_in_force: TimeInForce = self._resolve_time_in_force(config)
+
+    # ── TIF resolution ───────────────────────────────────────────────
+
+    _TIF_MAP: dict[str, TimeInForce] = {
+        "GTC": TimeInForce.GTC,
+        "DAY": TimeInForce.DAY,
+        "IOC": TimeInForce.IOC,
+    }
+
+    @classmethod
+    def _resolve_time_in_force(
+        cls,
+        config: OrbStrategyConfig,
+    ) -> TimeInForce:
+        """Resolve the effective ``TimeInForce`` for this strategy instance.
+
+        Resolution order:
+        1. ``config.time_in_force`` (explicit strategy override)
+        2. ``DEFAULT_TIME_IN_FORCE`` env var
+        3. ``market_config.yaml`` per-market ``default_time_in_force``
+        4. Fallback: ``TimeInForce.DAY``
+
+        If ``FUTU_TRD_ENV=SIMULATE`` and the resolved TIF is GTC, it is
+        forced to DAY with a warning log (paper trading rejects GTC).
+        """
+        import logging
+        import os
+
+        _log = logging.getLogger(__name__)
+
+        tif_str: str | None = None
+
+        # 1. Strategy-level explicit override
+        if config.time_in_force:
+            tif_str = config.time_in_force.upper()
+            _log.debug(
+                "Resolved time_in_force=%s from strategy config",
+                tif_str,
+            )
+
+        # 2. Env var override
+        if tif_str is None:
+            env_tif = os.environ.get("DEFAULT_TIME_IN_FORCE", "").strip().upper()
+            if env_tif:
+                tif_str = env_tif
+                _log.debug(
+                    "Resolved time_in_force=%s from DEFAULT_TIME_IN_FORCE env var",
+                    tif_str,
+                )
+
+        # 3. Market config fallback
+        if tif_str is None:
+            market = getattr(config, "market", "") or os.environ.get("MARKET", "US")
+            try:
+                from sam_trader.market_config import MarketConfig
+
+                mc = MarketConfig.get_market(market)
+                tif_str = mc.default_time_in_force.upper()
+                _log.debug(
+                    "Resolved time_in_force=%s from market_config for %s",
+                    tif_str,
+                    market,
+                )
+            except Exception:
+                _log.debug(
+                    "Could not load market_config for time_in_force "
+                    "— using fallback",
+                )
+
+        # 4. Hard fallback
+        if tif_str is None:
+            tif_str = "DAY"
+
+        tif = cls._TIF_MAP.get(tif_str, TimeInForce.DAY)
+
+        # ── SIMULATE safety: force DAY ─────────────────────────────
+        trd_env = os.environ.get("FUTU_TRD_ENV", "SIMULATE").upper()
+        if trd_env == "SIMULATE" and tif == TimeInForce.GTC:
+            _log.warning(
+                "FUTU_TRD_ENV=SIMULATE — forcing time_in_force=DAY "
+                "(paper trading rejects GTC). Resolved TIF was GTC.",
+            )
+            tif = TimeInForce.DAY
+
+        return tif
 
     # ------------------------------------------------------------------
     # Helpers
@@ -618,7 +713,7 @@ class OrbStrategy(Strategy):
             "instrument_id": self.instrument_id,
             "order_side": OrderSide.BUY,
             "quantity": self.instrument.make_qty(trade_size),
-            "time_in_force": TimeInForce.GTC,
+            "time_in_force": self._time_in_force,
             "sl_trigger_price": self.instrument.make_price(sl_price),
             "tp_price": self.instrument.make_price(tp_price),
         }
@@ -668,7 +763,7 @@ class OrbStrategy(Strategy):
             "instrument_id": self.instrument_id,
             "order_side": OrderSide.SELL,
             "quantity": self.instrument.make_qty(trade_size),
-            "time_in_force": TimeInForce.GTC,
+            "time_in_force": self._time_in_force,
             "sl_trigger_price": self.instrument.make_price(sl_price),
             "tp_price": self.instrument.make_price(tp_price),
         }
@@ -700,7 +795,7 @@ class OrbStrategy(Strategy):
             order_side=order_side,
             quantity=self.instrument.make_qty(trade_size),
             trigger_price=self.instrument.make_price(trigger_price),
-            time_in_force=TimeInForce.GTC,
+            time_in_force=self._time_in_force,
         )
         self.submit_order(entry_order)
         self._entry_order = entry_order
@@ -728,7 +823,7 @@ class OrbStrategy(Strategy):
             order_side=OrderSide.SELL if side == 1 else OrderSide.BUY,
             quantity=self.instrument.make_qty(qty),
             trigger_price=self.instrument.make_price(sl_price),
-            time_in_force=TimeInForce.GTC,
+            time_in_force=self._time_in_force,
         )
         self.submit_order(sl_order)
 
@@ -737,7 +832,7 @@ class OrbStrategy(Strategy):
             "order_side": OrderSide.SELL if side == 1 else OrderSide.BUY,
             "quantity": self.instrument.make_qty(qty),
             "price": self.instrument.make_price(tp_price),
-            "time_in_force": TimeInForce.GTC,
+            "time_in_force": self._time_in_force,
         }
         if self.config.venue == "IB":
             tp_kwargs.setdefault("post_only", False)

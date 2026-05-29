@@ -2264,3 +2264,19 @@
 - **Files Changed**: `docs/reference/BUILD_PHASE_3.md`
 - **Validation Result**: PASS (RALPH_GATE_PASSED — no code changes, skipped pytest/lint)
 - **Blockers / Notes**: None.
+
+## Iteration 147
+- **Task**: Order type configuration: general + strategy-level time_in_force setting
+- **Task ID**: sam_trader-ljn
+- **Status**: COMPLETE
+- **Decisions**: 
+  1. **market_config.yaml + MarketConfig**: Added `default_time_in_force` field (default "DAY") per-market. Both US and HK now have it.
+  2. **OrbStrategyConfig + MomentumStrategyConfig**: Added `time_in_force: str | None = None` field for strategy-level override.
+  3. **TIF resolution (classmethod _resolve_time_in_force)**: Both ORB and Momentum strategies now resolve TIF via: config.time_in_force → DEFAULT_TIME_IN_FORCE env var → market_config.default_time_in_force → "DAY" fallback. If FUTU_TRD_ENV=SIMULATE and resolved TIF is GTC, it is forced to DAY with a warning log (paper trading rejects GTC).
+  4. **All 5 GTC references replaced** in ORB and Momentum strategies with `self._time_in_force`.
+  5. **Defense-in-depth in Futu execution adapter**: `_submit_order()` now checks if trd_env=SIMULATE and order.time_in_force==GTC, overriding to DAY with a warning log. This catches any strategy that hardcodes GTC.
+  6. **DEFAULT_TIME_IN_FORCE env var** documented in `.env.example`.
+  7. **8 new unit tests** in TestTimeInForceResolution class covering: explicit config override, env var override, defaults-to-DAY, SIMULATE→DAY from GTC, SIMULATE keeps IOC, unknown TIF→DAY, strategy stores resolved TIF, SIMULATE+strategy forces DAY.
+- **Files Changed**: `config/market_config.yaml` (+2 entries), `src/sam_trader/market_config.py` (+5 lines docstring, +1 field), `src/sam_trader/strategies/orb.py` (+80 lines resolution, -5 GTC), `src/sam_trader/strategies/momentum.py` (+80 lines resolution, -5 GTC), `src/sam_trader/adapters/futu/execution.py` (+9 lines SIMULATE defense), `.env.example` (+5 lines DEFAULT_TIME_IN_FORCE doc), `tests/unit/strategies/test_orb.py` (+86 lines TIF tests)
+- **Validation Result**: PASS (280/280 targeted tests — orb + momentum + template + common + market_config + execution adapter; black/isort/flake8/mypy all green; 11 pre-existing test_restart_subscriber.py failures + 4 pre-existing test_samtrader_config.py failures unrelated)
+- **Blockers / Notes**: The `futu_paper_account_id` field in SamTraderConfig is missing from 4 test helpers in `test_samtrader_config.py` — pre-existing, filed separately. The sandbox should no longer trip the GTC circuit breaker after this fix.

@@ -1638,3 +1638,90 @@ class TestRejectionCircuitBreaker:
         strategy.on_order_rejected(rejected)
         assert strategy._rejection_count == 3
         assert strategy._rejection_disabled is True
+
+
+# ---------------------------------------------------------------------------
+# time_in_force resolution
+# ---------------------------------------------------------------------------
+
+
+class TestTimeInForceResolution:
+    """Unit tests for OrbStrategy._resolve_time_in_force() resolution."""
+
+    def test_explicit_config_override(self) -> None:
+        """When config.time_in_force is set, use it directly."""
+        from nautilus_trader.model.enums import TimeInForce
+
+        config = _make_config(time_in_force="IOC")
+        result = OrbStrategy._resolve_time_in_force(config)
+        assert result == TimeInForce.IOC
+
+    def test_env_var_override(self, monkeypatch) -> None:
+        """When DEFAULT_TIME_IN_FORCE env var is set, use it."""
+        from nautilus_trader.model.enums import TimeInForce
+
+        monkeypatch.setenv("DEFAULT_TIME_IN_FORCE", "IOC")
+        monkeypatch.delenv("FUTU_TRD_ENV", raising=False)
+        monkeypatch.setenv("FUTU_TRD_ENV", "REAL")
+        config = _make_config(time_in_force=None)
+        result = OrbStrategy._resolve_time_in_force(config)
+        assert result == TimeInForce.IOC
+
+    def test_defaults_to_day(self, monkeypatch) -> None:
+        """When nothing is configured, fall back to DAY."""
+        from nautilus_trader.model.enums import TimeInForce
+
+        monkeypatch.delenv("DEFAULT_TIME_IN_FORCE", raising=False)
+        monkeypatch.delenv("FUTU_TRD_ENV", raising=False)
+        monkeypatch.setenv("FUTU_TRD_ENV", "REAL")
+        config = _make_config(time_in_force=None)
+        result = OrbStrategy._resolve_time_in_force(config)
+        assert result == TimeInForce.DAY
+
+    def test_simulate_forces_day_from_gtc(self, monkeypatch) -> None:
+        """When FUTU_TRD_ENV=SIMULATE and resolved TIF=GTC, force DAY."""
+        from nautilus_trader.model.enums import TimeInForce
+
+        monkeypatch.delenv("DEFAULT_TIME_IN_FORCE", raising=False)
+        monkeypatch.setenv("FUTU_TRD_ENV", "SIMULATE")
+        config = _make_config(time_in_force="GTC")
+        result = OrbStrategy._resolve_time_in_force(config)
+        assert result == TimeInForce.DAY
+
+    def test_simulate_does_not_force_day_from_ioc(self, monkeypatch) -> None:
+        """When FUTU_TRD_ENV=SIMULATE and resolved TIF=IOC, keep IOC."""
+        from nautilus_trader.model.enums import TimeInForce
+
+        monkeypatch.delenv("DEFAULT_TIME_IN_FORCE", raising=False)
+        monkeypatch.setenv("FUTU_TRD_ENV", "SIMULATE")
+        config = _make_config(time_in_force="IOC")
+        result = OrbStrategy._resolve_time_in_force(config)
+        assert result == TimeInForce.IOC
+
+    def test_unknown_tif_falls_back_to_day(self, monkeypatch) -> None:
+        """An unrecognized TIF string falls back to DAY."""
+        from nautilus_trader.model.enums import TimeInForce
+
+        monkeypatch.delenv("DEFAULT_TIME_IN_FORCE", raising=False)
+        monkeypatch.setenv("FUTU_TRD_ENV", "REAL")
+        config = _make_config(time_in_force="FOK")
+        result = OrbStrategy._resolve_time_in_force(config)
+        assert result == TimeInForce.DAY
+
+    def test_strategy_uses_resolved_tif(self, monkeypatch) -> None:
+        """OrbStrategy.__init__ stores resolved TIF as self._time_in_force."""
+        from nautilus_trader.model.enums import TimeInForce
+
+        monkeypatch.delenv("DEFAULT_TIME_IN_FORCE", raising=False)
+        monkeypatch.setenv("FUTU_TRD_ENV", "REAL")
+        strategy = OrbStrategy(_make_config(time_in_force="DAY"))
+        assert strategy._time_in_force == TimeInForce.DAY
+
+    def test_simulate_strategy_forces_day(self, monkeypatch) -> None:
+        """When FUTU_TRD_ENV=SIMULATE and config says GTC, strategy resolves DAY."""
+        from nautilus_trader.model.enums import TimeInForce
+
+        monkeypatch.delenv("DEFAULT_TIME_IN_FORCE", raising=False)
+        monkeypatch.setenv("FUTU_TRD_ENV", "SIMULATE")
+        strategy = OrbStrategy(_make_config(time_in_force="GTC"))
+        assert strategy._time_in_force == TimeInForce.DAY

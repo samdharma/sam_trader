@@ -115,6 +115,9 @@
 markets:
   # ── US Market ───────────────────────────────────────────────────────────
   US:
+    # --- Order defaults ---
+    default_time_in_force: "DAY"  # GTC rejected by Futu SIMULATE paper trading
+
     # --- Futu broker ---
     futu_trd_market: "US"
     futu_paper_acc_type: "STOCK_AND_OPTION"
@@ -139,6 +142,9 @@ markets:
 
   # ── HK Market ───────────────────────────────────────────────────────────
   HK:
+    # --- Order defaults ---
+    default_time_in_force: "DAY"  # GTC rejected by Futu SIMULATE paper trading
+
     # --- Futu broker ---
     futu_trd_market: "HK"
     futu_paper_acc_type: "STOCK"

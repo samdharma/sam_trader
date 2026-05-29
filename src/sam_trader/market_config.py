@@ -29,6 +29,11 @@ class MarketConfig:
     ----------
     futu_trd_market : str
         Futu trade market identifier (e.g., "US", "HK").
+    default_time_in_force : str
+        Default order time-in-force for this market. One of "DAY", "GTC",
+        "IOC".  Overridable per-strategy via bundles.yaml or per-deployment
+        via DEFAULT_TIME_IN_FORCE env var.  Defaults to "DAY" because Futu
+        SIMULATE (paper trading) rejects GTC orders.
     futu_paper_acc_type : str
         Expected ``sim_acc_type`` for paper trading account discovery
         (e.g., ``"STOCK"`` for HK, ``"STOCK_AND_OPTION"`` for US).
@@ -62,6 +67,7 @@ class MarketConfig:
     """
 
     futu_trd_market: str
+    default_time_in_force: str = "DAY"
     futu_paper_acc_type: str = "STOCK_AND_OPTION"
     futu_routing_venues: list[str] = field(default_factory=list)
     ib_enabled: bool = False
