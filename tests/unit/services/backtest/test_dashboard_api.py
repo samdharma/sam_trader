@@ -8,10 +8,16 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
 
+from nautilus_trader.trading.config import ImportableStrategyConfig
+
 from sam_trader.services.backtest.dashboard_api import (
+    _build_strategy_from_body,
+    _derive_config_path_from_strategy_path,
     _discover_bar_types,
     _generate_run_id,
     _get_catalog,
+    _lookup_strategies_from_bundles,
+    _resolve_strategies,
     _run_registry,
     _run_registry_lock,
     handle_backtest_catalog_instruments,
@@ -111,8 +117,29 @@ def _clear_run_registry() -> None:
 class TestHandleBacktestRun:
     """Tests for POST /api/backtest/run — launch asynchronous backtest."""
 
-    def test_minimal_body(self) -> None:
-        """Launch with required fields only."""
+    # ------------------------------------------------------------------
+    # helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _make_importable_strategy(
+        strategy_path: str = "sam_trader.strategies.orb:OrbStrategy",
+        config_path: str = "sam_trader.strategies.orb:OrbStrategyConfig",
+        config: dict[str, Any] | None = None,
+    ) -> ImportableStrategyConfig:
+        """Build a minimal ImportableStrategyConfig for test return values."""
+        return ImportableStrategyConfig(
+            strategy_path=strategy_path,
+            config_path=config_path,
+            config=config or {"bundle_id": "tsla-orb", "strategy_id": "US-tsla-orb"},
+        )
+
+    # ------------------------------------------------------------------
+    # strategy resolution via bundles lookup
+    # ------------------------------------------------------------------
+
+    def test_minimal_body_with_bundles_lookup(self) -> None:
+        """Launch with strategy_id resolved from bundles.yaml."""
         body = {
             "strategy_id": "tsla-orb",
             "instrument_ids": ["TSLA.NASDAQ"],
@@ -120,21 +147,26 @@ class TestHandleBacktestRun:
             "end": "2024-06-30",
         }
         _clear_run_registry()
+        strategy = self._make_importable_strategy()
         with patch(
-            "sam_trader.services.backtest.dashboard_api._get_catalog",
-            return_value=None,
+            "sam_trader.services.backtest.dashboard_api._resolve_strategies",
+            return_value=([strategy], None),
         ):
             with patch(
-                "sam_trader.services.backtest.dashboard_api.threading.Thread",
-            ) as mock_thread:
-                result = handle_backtest_run(body, catalog_path="data/catalog")
+                "sam_trader.services.backtest.dashboard_api._get_catalog",
+                return_value=None,
+            ):
+                with patch(
+                    "sam_trader.services.backtest.dashboard_api.threading.Thread",
+                ) as mock_thread:
+                    result = handle_backtest_run(body, catalog_path="data/catalog")
 
         assert result["run_id"].startswith("bt-")
         assert result["status"] == "started"
         assert mock_thread.called
 
     def test_missing_strategy_id(self) -> None:
-        """Missing strategy_id returns error."""
+        """Missing strategy_id and strategy_path returns error."""
         result = handle_backtest_run(
             {
                 "instrument_ids": ["TSLA.NASDAQ"],
@@ -146,16 +178,34 @@ class TestHandleBacktestRun:
 
     def test_missing_instrument_ids(self) -> None:
         """Missing instrument_ids returns error."""
-        result = handle_backtest_run(
-            {"strategy_id": "tsla-orb", "start": "2024-01-01", "end": "2024-06-30"}
-        )
+        strategy = self._make_importable_strategy()
+        with patch(
+            "sam_trader.services.backtest.dashboard_api._resolve_strategies",
+            return_value=([strategy], None),
+        ):
+            result = handle_backtest_run(
+                {
+                    "strategy_id": "tsla-orb",
+                    "start": "2024-01-01",
+                    "end": "2024-06-30",
+                }
+            )
         assert "error" in result
+        assert "instrument_ids" in result["error"]
 
     def test_missing_dates(self) -> None:
         """Missing start or end returns error."""
-        result = handle_backtest_run(
-            {"strategy_id": "tsla-orb", "instrument_ids": ["TSLA.NASDAQ"]}
-        )
+        strategy = self._make_importable_strategy()
+        with patch(
+            "sam_trader.services.backtest.dashboard_api._resolve_strategies",
+            return_value=([strategy], None),
+        ):
+            result = handle_backtest_run(
+                {
+                    "strategy_id": "tsla-orb",
+                    "instrument_ids": ["TSLA.NASDAQ"],
+                }
+            )
         assert "error" in result
 
     def test_auto_bar_types_no_catalog(self) -> None:
@@ -167,14 +217,19 @@ class TestHandleBacktestRun:
             "end": "2024-06-30",
         }
         _clear_run_registry()
+        strategy = self._make_importable_strategy()
         with patch(
-            "sam_trader.services.backtest.dashboard_api._get_catalog",
-            return_value=None,
+            "sam_trader.services.backtest.dashboard_api._resolve_strategies",
+            return_value=([strategy], None),
         ):
             with patch(
-                "sam_trader.services.backtest.dashboard_api.threading.Thread",
+                "sam_trader.services.backtest.dashboard_api._get_catalog",
+                return_value=None,
             ):
-                result = handle_backtest_run(body)
+                with patch(
+                    "sam_trader.services.backtest.dashboard_api.threading.Thread",
+                ):
+                    result = handle_backtest_run(body)
 
         assert result["run_id"].startswith("bt-")
         # Verify the run_registry has default bar types
@@ -192,14 +247,19 @@ class TestHandleBacktestRun:
             "end": "2024-06-30",
         }
         _clear_run_registry()
+        strategy = self._make_importable_strategy()
         with patch(
-            "sam_trader.services.backtest.dashboard_api._get_catalog",
-            return_value=None,
+            "sam_trader.services.backtest.dashboard_api._resolve_strategies",
+            return_value=([strategy], None),
         ):
             with patch(
-                "sam_trader.services.backtest.dashboard_api.threading.Thread",
+                "sam_trader.services.backtest.dashboard_api._get_catalog",
+                return_value=None,
             ):
-                result = handle_backtest_run(body)
+                with patch(
+                    "sam_trader.services.backtest.dashboard_api.threading.Thread",
+                ):
+                    result = handle_backtest_run(body)
 
         with _run_registry_lock:
             entry = _run_registry.get(result["run_id"])
@@ -207,6 +267,56 @@ class TestHandleBacktestRun:
             assert entry["status"] == "started"
             assert entry["strategy_id"] == "tsla-orb"
             assert entry["instrument_ids"] == ["TSLA.NASDAQ"]
+
+    # ------------------------------------------------------------------
+    # strategy resolution via direct strategy_path in body
+    # ------------------------------------------------------------------
+
+    def test_direct_strategy_path_resolution(self) -> None:
+        """POST with strategy_path + config_path builds config directly."""
+        body = {
+            "strategy_path": "sam_trader.strategies.orb:OrbStrategy",
+            "config_path": "sam_trader.strategies.orb:OrbStrategyConfig",
+            "config": {"instrument_id": "TSLA.NASDAQ"},
+            "instrument_ids": ["TSLA.NASDAQ"],
+            "start": "2024-01-01",
+            "end": "2024-06-30",
+        }
+        _clear_run_registry()
+        with patch(
+            "sam_trader.services.backtest.dashboard_api._get_catalog",
+            return_value=None,
+        ):
+            with patch(
+                "sam_trader.services.backtest.dashboard_api.threading.Thread",
+            ) as mock_thread:
+                result = handle_backtest_run(body)
+
+        assert result["run_id"].startswith("bt-")
+        assert result["status"] == "started"
+        assert mock_thread.called
+
+    def test_direct_strategy_path_auto_config_path(self) -> None:
+        """strategy_path without config_path auto-derives Config class path."""
+        body = {
+            "strategy_path": "sam_trader.strategies.orb:OrbStrategy",
+            "instrument_ids": ["TSLA.NASDAQ"],
+            "start": "2024-01-01",
+            "end": "2024-06-30",
+        }
+        _clear_run_registry()
+        with patch(
+            "sam_trader.services.backtest.dashboard_api._get_catalog",
+            return_value=None,
+        ):
+            with patch(
+                "sam_trader.services.backtest.dashboard_api.threading.Thread",
+            ) as mock_thread:
+                result = handle_backtest_run(body)
+
+        assert result["run_id"].startswith("bt-")
+        assert result["status"] == "started"
+        assert mock_thread.called
 
 
 # ---------------------------------------------------------------------------
@@ -678,6 +788,220 @@ class TestGenerateRunId:
         """IDs start with bt-."""
         for _ in range(10):
             assert _generate_run_id().startswith("bt-")
+
+
+# ---------------------------------------------------------------------------
+# Strategy resolution helpers
+# ---------------------------------------------------------------------------
+
+
+class TestResolveStrategies:
+    """Tests for _resolve_strategies — body → ImportableStrategyConfig."""
+
+    def test_direct_strategy_path_takes_priority(self) -> None:
+        """When strategy_path is provided, direct config is used."""
+        body = {
+            "strategy_path": "sam_trader.strategies.momentum:MomentumStrategy",
+            "config_path": "sam_trader.strategies.momentum:MomentumStrategyConfig",
+            "config": {"instrument_id": "NVDA.NASDAQ"},
+            "strategy_id": "ignored-bundle-id",
+        }
+        strategies, error = _resolve_strategies(body)
+
+        assert error is None
+        assert strategies is not None
+        assert len(strategies) == 1
+        assert (
+            strategies[0].strategy_path
+            == "sam_trader.strategies.momentum:MomentumStrategy"
+        )
+        assert (
+            strategies[0].config_path
+            == "sam_trader.strategies.momentum:MomentumStrategyConfig"
+        )
+        assert strategies[0].config["instrument_id"] == "NVDA.NASDAQ"
+
+    def test_falls_back_to_bundles_when_no_strategy_path(self) -> None:
+        """When only strategy_id is provided, bundles.yaml is used."""
+        body = {"strategy_id": "orb-aggressive-tsla"}
+        mock_strategy = ImportableStrategyConfig(
+            strategy_path="sam_trader.strategies.orb:OrbStrategy",
+            config_path="sam_trader.strategies.orb:OrbStrategyConfig",
+            config={"bundle_id": "orb-aggressive-tsla"},
+        )
+        with patch(
+            "sam_trader.services.backtest.dashboard_api"
+            "._lookup_strategies_from_bundles",
+            return_value=[mock_strategy],
+        ):
+            strategies, error = _resolve_strategies(body)
+
+        assert error is None
+        assert strategies is not None
+        assert len(strategies) == 1
+
+    def test_bundle_not_found_returns_error(self) -> None:
+        """When strategy_id doesn't match any bundle, returns error."""
+        body = {"strategy_id": "nonexistent-bundle"}
+        with patch(
+            "sam_trader.services.backtest.dashboard_api"
+            "._lookup_strategies_from_bundles",
+            return_value=None,
+        ):
+            strategies, error = _resolve_strategies(body)
+
+        assert strategies is None
+        assert error is not None
+        assert "not found" in error.lower()
+
+    def test_neither_provided_returns_error(self) -> None:
+        """When neither strategy_id nor strategy_path is provided, error."""
+        body: dict[str, Any] = {"instrument_ids": ["TSLA.NASDAQ"]}
+        strategies, error = _resolve_strategies(body)
+
+        assert strategies is None
+        assert error is not None
+        assert "strategy_id" in error
+
+
+class TestLookupStrategiesFromBundles:
+    """Tests for _lookup_strategies_from_bundles — bundles.yaml lookup."""
+
+    def test_match_by_bundle_id(self) -> None:
+        """Matches by bundle_id in config."""
+        mock_configs = [
+            ImportableStrategyConfig(
+                strategy_path="sp",
+                config_path="cp",
+                config={"bundle_id": "tsla-orb", "strategy_id": "US-tsla-orb"},
+            ),
+            ImportableStrategyConfig(
+                strategy_path="sp",
+                config_path="cp",
+                config={"bundle_id": "aapl-orb", "strategy_id": "US-aapl-orb"},
+            ),
+        ]
+        with patch(
+            "sam_trader.services.backtest.dashboard_api.load_bundles",
+            return_value=mock_configs,
+        ):
+            result = _lookup_strategies_from_bundles("tsla-orb")
+
+        assert result is not None
+        assert len(result) == 1
+        assert result[0].config["bundle_id"] == "tsla-orb"
+
+    def test_match_by_strategy_id(self) -> None:
+        """Matches by market-prefixed strategy_id for backward compat."""
+        mock_configs = [
+            ImportableStrategyConfig(
+                strategy_path="sp",
+                config_path="cp",
+                config={"bundle_id": "rdw-1m", "strategy_id": "US-rdw-1m"},
+            ),
+        ]
+        with patch(
+            "sam_trader.services.backtest.dashboard_api.load_bundles",
+            return_value=mock_configs,
+        ):
+            result = _lookup_strategies_from_bundles("US-rdw-1m")
+
+        assert result is not None
+        assert len(result) == 1
+        assert result[0].config["bundle_id"] == "rdw-1m"
+
+    def test_no_match_returns_none(self) -> None:
+        """No matching bundle returns None."""
+        mock_configs: list[ImportableStrategyConfig] = []
+        with patch(
+            "sam_trader.services.backtest.dashboard_api.load_bundles",
+            return_value=mock_configs,
+        ):
+            result = _lookup_strategies_from_bundles("unknown")
+
+        assert result is None
+
+    def test_missing_file_returns_none(self) -> None:
+        """When bundles file doesn't exist, returns None."""
+        with patch("pathlib.Path.exists", return_value=False):
+            result = _lookup_strategies_from_bundles(
+                "tsla-orb", bundles_path="/nonexistent/bundles.yaml"
+            )
+
+        assert result is None
+
+    def test_load_error_returns_none(self) -> None:
+        """When bundles file can't be parsed, returns None."""
+        with patch("pathlib.Path.exists", return_value=True):
+            with patch(
+                "sam_trader.services.backtest.dashboard_api.load_bundles",
+                side_effect=RuntimeError("invalid YAML"),
+            ):
+                result = _lookup_strategies_from_bundles("tsla-orb")
+
+        assert result is None
+
+
+class TestBuildStrategyFromBody:
+    """Tests for _build_strategy_from_body — direct ImportableStrategyConfig."""
+
+    def test_full_fields(self) -> None:
+        """All fields provided builds a complete config."""
+        body = {
+            "strategy_path": "sam_trader.strategies.orb:OrbStrategy",
+            "config_path": "sam_trader.strategies.orb:OrbStrategyConfig",
+            "config": {"instrument_id": "TSLA.NASDAQ", "trade_size": 10},
+        }
+        result = _build_strategy_from_body(body)
+
+        assert result is not None
+        assert result.strategy_path == "sam_trader.strategies.orb:OrbStrategy"
+        assert result.config_path == "sam_trader.strategies.orb:OrbStrategyConfig"
+        assert result.config["instrument_id"] == "TSLA.NASDAQ"
+        assert result.config["trade_size"] == 10
+
+    def test_auto_config_path(self) -> None:
+        """config_path auto-derived from strategy_path when omitted."""
+        body = {
+            "strategy_path": "sam_trader.strategies.momentum:MomentumStrategy",
+        }
+        result = _build_strategy_from_body(body)
+
+        assert result is not None
+        assert (
+            result.config_path
+            == "sam_trader.strategies.momentum:MomentumStrategyConfig"
+        )
+
+    def test_no_strategy_path_returns_none(self) -> None:
+        """When strategy_path is missing, returns None."""
+        body: dict[str, Any] = {"config": {}}
+        result = _build_strategy_from_body(body)
+        assert result is None
+
+    def test_empty_config_defaults_to_empty_dict(self) -> None:
+        """Missing config field defaults to empty dict."""
+        body = {"strategy_path": "sam_trader.strategies.orb:OrbStrategy"}
+        result = _build_strategy_from_body(body)
+
+        assert result is not None
+        assert result.config == {}
+
+
+class TestDeriveConfigPath:
+    """Tests for _derive_config_path_from_strategy_path."""
+
+    def test_appends_config_suffix(self) -> None:
+        """Derives config class name by appending 'Config'."""
+        result = _derive_config_path_from_strategy_path(
+            "sam_trader.strategies.orb:OrbStrategy"
+        )
+        assert result == "sam_trader.strategies.orb:OrbStrategyConfig"
+
+    def test_preserves_module_path(self) -> None:
+        """Module path is unchanged."""
+        result = _derive_config_path_from_strategy_path("a.b.c:MyStrategy")
+        assert result == "a.b.c:MyStrategyConfig"
 
 
 class TestGetCatalog:

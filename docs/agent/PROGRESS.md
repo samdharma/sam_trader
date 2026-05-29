@@ -1,5 +1,17 @@
 > **Note: see first-entry Iteration 20 for Phase 2 config dataclasses.**
 
+## Iteration 144
+- **Task**: 12.1.11: Dashboard backtest POST /run always fails — strategies list is empty
+- **Task ID**: sam_trader-9z3.13.1.11
+- **Status**: COMPLETE
+- **Decisions**: Root cause: `_run_backtest_in_thread()` called `wrapper.run(strategies=[], ...)` — strategies always empty. The `strategy_id` string from the POST body was never converted to `ImportableStrategyConfig`. Three-pronged fix:
+  1. Added `_resolve_strategies()` — resolves strategy configs from POST body, with two paths: (a) `strategy_id` → lookup from bundles.yaml via `_lookup_strategies_from_bundles()`, (b) `strategy_path` + `config_path` → direct `ImportableStrategyConfig` construction via `_build_strategy_from_body()`.
+  2. `_lookup_strategies_from_bundles()` loads bundles.yaml, matches by `bundle_id` or `strategy_id` in config dict, returns `ImportableStrategyConfig` list.
+  3. `_run_backtest_in_thread()` now receives serialised strategy dicts (from `strategies_serialised` in `handle_backtest_run`), rebuilds `ImportableStrategyConfig` objects, and passes them to `wrapper.run()`. The empty-list bug is fixed — strategies are never empty when resolved successfully.
+- **Files Changed**: `src/sam_trader/services/backtest/dashboard_api.py` (+150/-40 lines), `tests/unit/services/backtest/test_dashboard_api.py` (+185/-30 lines)
+- **Validation Result**: PASS (RALPH_GATE_PASSED — 52/52 targeted dashboard API tests, 159/159 backtest unit tests, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: The `handle_backtest_run` call in `dashboard.py` uses the default `bundles_path="config/bundles.yaml"` — no changes needed. The `strategy_path` direct-construction path supports ad-hoc strategies without bundles file (useful for CI/testing).
+
 ## Iteration 143
 - **Task**: 12.1.10: [EXIT] Phase 12.1 E2E — download→backtest→sweep→walk-forward→dashboard
 - **Task ID**: sam_trader-9z3.13.1.10

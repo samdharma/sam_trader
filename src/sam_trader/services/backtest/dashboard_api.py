@@ -29,7 +29,9 @@ from typing import Any
 from nautilus_trader.backtest.results import BacktestResult
 from nautilus_trader.model.data import Bar
 from nautilus_trader.persistence.catalog.parquet import ParquetDataCatalog
+from nautilus_trader.trading.config import ImportableStrategyConfig
 
+from sam_trader.bundle_loader import load_bundles
 from sam_trader.services.backtest.engine import (
     BacktestEngineError,
     BacktestEngineWrapper,
@@ -103,6 +105,136 @@ def _catalog_date_range(
 
 
 # ---------------------------------------------------------------------------
+# Strategy lookup helpers
+# ---------------------------------------------------------------------------
+
+
+def _lookup_strategies_from_bundles(
+    strategy_id: str,
+    bundles_path: str = "config/bundles.yaml",
+) -> list[ImportableStrategyConfig] | None:
+    """Look up strategy configs from bundles YAML by bundle id.
+
+    Parameters
+    ----------
+    strategy_id : str
+        The bundle ``id`` field to match (e.g. ``"orb-aggressive-tsla"``).
+        Also matches against the auto-generated ``strategy_id`` config key
+        (``{market}-{bundle_id}``) for backward compatibility.
+    bundles_path : str
+        Path to the bundles YAML file.
+
+    Returns
+    -------
+    list[ImportableStrategyConfig] | None
+        Matching strategy configs, or ``None`` if the file or bundle is
+        not found.
+
+    """
+    p = Path(bundles_path)
+    if not p.exists():
+        logger.warning("Bundles file not found: %s", bundles_path)
+        return None
+
+    try:
+        all_bundles = load_bundles(bundles_path)
+    except Exception as exc:
+        logger.warning("Failed to load bundles from %s: %s", bundles_path, exc)
+        return None
+
+    # Match by bundle_id (stored in config dict) or strategy_id (market-bundle_id)
+    matches: list[ImportableStrategyConfig] = []
+    for b in all_bundles:
+        cfg = b.config
+        if cfg.get("bundle_id") == strategy_id or cfg.get("strategy_id") == strategy_id:
+            matches.append(b)
+
+    if not matches:
+        logger.warning(
+            "Bundle not found for strategy_id=%r in %s",
+            strategy_id,
+            bundles_path,
+        )
+        return None
+
+    return matches
+
+
+def _build_strategy_from_body(body: dict[str, Any]) -> ImportableStrategyConfig | None:
+    """Build a single ImportableStrategyConfig from POST body fields.
+
+    Supports direct strategy specification without needing a bundles file:
+
+    - ``strategy_path`` (str, required) — dotted class path
+    - ``config_path`` (str, required) — dotted config class path
+    - ``config`` (dict, optional) — strategy parameter overrides
+
+    Returns ``None`` if ``strategy_path`` is not present in the body.
+    """
+    strategy_path: str | None = body.get("strategy_path")
+    if not strategy_path:
+        return None
+
+    config_path: str = body.get(
+        "config_path"
+    ) or _derive_config_path_from_strategy_path(strategy_path)
+    config: dict[str, Any] = dict(body.get("config", {}))
+
+    return ImportableStrategyConfig(
+        strategy_path=strategy_path,
+        config_path=config_path,
+        config=config,
+    )
+
+
+def _derive_config_path_from_strategy_path(strategy_path: str) -> str:
+    """Derive config class path from strategy class path.
+
+    ``sam_trader.strategies.orb:OrbStrategy`` →
+    ``sam_trader.strategies.orb:OrbStrategyConfig``
+    """
+    module, class_name = strategy_path.split(":", 1)
+    return f"{module}:{class_name}Config"
+
+
+def _resolve_strategies(
+    body: dict[str, Any],
+    bundles_path: str = "config/bundles.yaml",
+) -> tuple[list[ImportableStrategyConfig] | None, str | None]:
+    """Resolve strategy configs from a POST body.
+
+    Resolution order:
+    1. If ``strategy_path`` is in the body, build an ImportableStrategyConfig
+       directly from body fields.
+    2. If ``strategy_id`` is in the body, look it up from ``bundles.yaml``.
+
+    Returns
+    -------
+    tuple[list[ImportableStrategyConfig] | None, str | None]
+        (strategies, error_string).  If error_string is not None,
+        strategies will be None.
+
+    """
+    # 1. Direct strategy path
+    direct = _build_strategy_from_body(body)
+    if direct is not None:
+        return [direct], None
+
+    # 2. Bundle lookup
+    strategy_id: str = body.get("strategy_id", "")
+    if strategy_id:
+        bundles = _lookup_strategies_from_bundles(
+            strategy_id, bundles_path=bundles_path
+        )
+        if bundles is None:
+            return None, f"Strategy not found in bundles: {strategy_id!r}"
+        return bundles, None
+
+    # Neither provided
+    return None, "Missing required field: strategy_id (or strategy_path + config_path)"
+
+
+# ---------------------------------------------------------------------------
 # POST /api/backtest/run
 # ---------------------------------------------------------------------------
 
@@ -110,6 +242,7 @@ def _catalog_date_range(
 def _run_backtest_in_thread(
     run_id: str,
     catalog_path: str,
+    strategies: list[dict[str, Any]],
     strategy_id: str,
     instrument_ids: list[str],
     bar_types: list[str],
@@ -121,19 +254,29 @@ def _run_backtest_in_thread(
     try:
         _update_run_status(run_id, "running", progress_pct=0)
 
+        # Rebuild ImportableStrategyConfig objects from serialisable dicts.
+        # (Threads share memory, but passing dicts is more explicit.)
+        strategy_configs: list[ImportableStrategyConfig] = []
+        for s in strategies:
+            strategy_configs.append(
+                ImportableStrategyConfig(
+                    strategy_path=s["strategy_path"],
+                    config_path=s["config_path"],
+                    config=s["config"],
+                )
+            )
+
         # Phase 1 — build and run
         wrapper = BacktestEngineWrapper(catalog_path=catalog_path)
         try:
             result: BacktestResult = wrapper.run(
-                strategies=[],  # strategies loaded via bundle configs
+                strategies=strategy_configs,
                 instrument_ids=instrument_ids,
                 bar_types=bar_types,
                 start=start,
                 end=end,
             )
         except BacktestEngineError as exc:
-            # If no strategy configs were provided directly, store as failed
-            # and note that live strategies are needed for full backtest.
             _update_run_status(run_id, "failed", error=str(exc))
             return
 
@@ -247,13 +390,26 @@ def handle_backtest_run(
     body: dict[str, Any],
     *,
     catalog_path: str = "data/catalog",
+    bundles_path: str = "config/bundles.yaml",
     pg_dsn: str | None = None,
 ) -> dict[str, Any]:
     """Handle POST /api/backtest/run — launch an asynchronous backtest.
 
-    Expects JSON body with:
+    Expects JSON body with one of these strategy specification methods:
 
-    - ``strategy_id`` (str, required) — strategy to backtest
+    **Via bundles.yaml lookup** (recommended):
+
+    - ``strategy_id`` (str, required) — bundle ``id`` field to look up
+
+    **Via direct config** (for ad-hoc strategies):
+
+    - ``strategy_path`` (str, required) — dotted class path
+    - ``config_path`` (str, optional) — dotted config class path;
+      auto-derived from ``strategy_path`` if omitted
+    - ``config`` (dict, optional) — strategy parameter overrides
+
+    **Common fields**:
+
     - ``instrument_ids`` (list[str], required) — instruments to use
     - ``bar_types`` (list[str], optional) — defaults to auto-discover
     - ``start`` (str, required) — ISO date
@@ -271,12 +427,22 @@ def handle_backtest_run(
     start: str = body.get("start", "")
     end: str = body.get("end", "")
 
-    if not strategy_id:
-        return {"error": "Missing required field: strategy_id"}
+    # Resolve strategy config(s)
+    strategies, strategy_error = _resolve_strategies(body, bundles_path=bundles_path)
+    if strategies is None:
+        return {"error": strategy_error or "Unable to resolve strategy configuration"}
+
     if not instrument_ids:
         return {"error": "Missing required field: instrument_ids"}
     if not start or not end:
         return {"error": "Missing required fields: start, end"}
+
+    # Use strategy_id from body or derive from first strategy config
+    if not strategy_id:
+        first_config = strategies[0].config
+        strategy_id = first_config.get(
+            "strategy_id", first_config.get("bundle_id", "unknown")
+        )
 
     # Auto-discover bar types if not specified
     if not bar_types:
@@ -304,11 +470,23 @@ def handle_backtest_run(
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
 
+    # Serialise ImportableStrategyConfig objects to dicts for thread transfer
+    strategies_serialised: list[dict[str, Any]] = []
+    for s in strategies:
+        strategies_serialised.append(
+            {
+                "strategy_path": s.strategy_path,
+                "config_path": s.config_path,
+                "config": dict(s.config),
+            }
+        )
+
     thread = threading.Thread(
         target=_run_backtest_in_thread,
         args=(
             run_id,
             catalog_path,
+            strategies_serialised,
             strategy_id,
             instrument_ids,
             bar_types,
