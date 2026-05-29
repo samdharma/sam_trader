@@ -1,5 +1,22 @@
 > **Note: see first-entry Iteration 20 for Phase 2 config dataclasses.**
 
+## Iteration 140
+- **Task**: 12.1.8: Backtest dashboard UI — runner, results viewer, equity curves
+- **Task ID**: sam_trader-9z3.13.1.8
+- **Status**: COMPLETE
+- **Decisions**: Added backtest dashboard UI panels inline to the existing single-page dashboard HTML template:
+  - **Runner tab**: instrument multi-select (populated from `/api/backtest/catalog/instruments`), strategy ID text input, start/end date pickers, parameter sweep toggle with dynamic key/value row management, walk-forward toggle with train/test days inputs, run button with live progress bar polling `/api/backtest/run/<id>/status` every 1.5s.
+  - **Results tab**: sortable/filterable table loading from `/api/backtest/runs`, checkbox selection with "Add to Compare" button, JSON/CSV export for full results list.
+  - **Compare tab**: side-by-side metric comparison table from `/api/backtest/compare?runs=...`, overlaid multi-curve Canvas chart with legend and color-coded runs.
+  - **Detail modal**: full metric grid (Sharpe, Sortino, MaxDD, WinRate, etc.), Canvas-based equity curve chart with drawdown shading (red region for underwater periods), hover tooltips showing date+value, per-run JSON/CSV export.
+  - **Chart rendering**: Canvas-based `drawEquityCurve()` with drawdown overlay, grid lines, axes labels, hover tooltips; `drawMultiEquityCurve()` for comparison overlay with color-coded legends.
+  - **Export**: `exportResultsCSV()`/`exportResultsJSON()` for full results table; `exportRunCSV()`/`exportRunJSON()` for individual run detail (includes equity curve data).
+  - No external JS dependencies — all vanilla JavaScript.
+  - Added `# flake8: noqa: E501` file-level exemption for template strings.
+- **Files Changed**: `src/sam_trader/services/dashboard.py` (+631 lines: CSS, HTML panels, JavaScript), `tests/unit/services/test_dashboard.py` (+169 lines: 20 new tests)
+- **Validation Result**: PASS (208/208 targeted tests, 1 deselected pre-existing timeout; black/isort/flake8/mypy all green)
+- **Blockers / Notes**: Trade-level data (entry/exit time, price, P&L, MAE/MFE) is not yet available from the backtest API — the `BacktestResult` is stored as aggregate stats/equity_curve JSONB in PG but individual trade lists are not persisted. This is a backend limitation — the UI is structured to display trade lists when that data becomes available. Full zoom/pan on equity curve charts not yet implemented (mouse wheel handler exists as placeholder).
+
 ## Iteration 139
 - **Task**: Futu: dynamic paper account selection by market and instrument type in SIMULATE mode
 - **Task ID**: sam_trader-99c
