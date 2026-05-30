@@ -71,18 +71,36 @@ def _get_catalog(catalog_path: str = "data/catalog") -> ParquetDataCatalog | Non
 
 
 def _discover_bar_types(catalog: ParquetDataCatalog, instrument_id: str) -> list[str]:
-    """Discover available bar types for an instrument by scanning catalog files."""
+    """Discover available bar types for an instrument by scanning catalog files.
+
+    Parquet filenames in the Nautilus catalog are full bar type strings,
+    e.g. ``TSLA.NASDAQ-5-MINUTE-LAST-EXTERNAL.parquet``.  The returned
+    values are the complete bar type strings (including the instrument
+    ID prefix) because that is what Nautilus ``BacktestDataConfig``
+    expects.
+
+    Parameters
+    ----------
+    catalog : ParquetDataCatalog
+        The catalog whose ``data/bar`` directory is scanned.
+    instrument_id : str
+        Instrument ID to filter on (e.g. ``"TSLA.NASDAQ"``).
+
+    Returns
+    -------
+    list[str]
+        Sorted, de-duplicated full bar type strings for the instrument.
+
+    """
     bar_types: list[str] = []
     try:
         bar_data_dir = Path(catalog.path) / "data" / "bar"
         if bar_data_dir.exists():
+            prefix = f"{instrument_id}-"
             for f in bar_data_dir.glob("*.parquet"):
-                # Parquet filenames are like: TSLA.NASDAQ-5-MINUTE-LAST-EXTERNAL.parquet
                 stem = f.stem
-                if stem.startswith(instrument_id):
-                    bar_type_str = stem[len(instrument_id) + 1 :]  # skip the '-'
-                    if bar_type_str:
-                        bar_types.append(bar_type_str)
+                if stem.startswith(prefix):
+                    bar_types.append(stem)
     except Exception as exc:
         logger.debug("Failed to scan bar files for %s: %s", instrument_id, exc)
     return sorted(set(bar_types))

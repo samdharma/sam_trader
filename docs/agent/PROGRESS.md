@@ -2376,3 +2376,16 @@
 - **Files Changed**: `src/sam_trader/services/dashboard.py` (3 lines changed: 2 SQL interval clauses + 1 parameter reference)
 - **Validation Result**: PASS (153/153 dashboard tests green, black/isort/flake8 all clean)
 - **Blockers / Notes**: None
+
+## Iteration 153
+- **Task**: 12.1.19: Fix _discover_bar_types bar type naming
+- **Task ID**: sam_trader-9z3.13.1.19
+- **Status**: COMPLETE
+- **Decisions**: 
+  1. `_discover_bar_types` was returning stripped bar type strings (e.g. `5-MINUTE-LAST-EXTERNAL`) by removing the instrument_id prefix from parquet filenames. Nautilus `BacktestDataConfig` expects full bar type strings (e.g. `TSLA.NASDAQ-5-MINUTE-LAST-EXTERNAL`).
+  2. Fixed extraction logic to return the full stem of the parquet file using `prefix = f"{instrument_id}-"` and `stem.startswith(prefix)`, then appending the full `stem`.
+  3. This aligns auto-discovered bar types with the fallback default `f"{iid}-5-MINUTE-LAST-EXTERNAL"` used when catalog scanning fails.
+  4. Added tests with real parquet files on tmp_path covering multiple bar types, multiple instrument IDs (US + HK), and EXTERNAL/INTERNAL suffix preservation.
+- **Files Changed**: `src/sam_trader/services/backtest/dashboard_api.py`, `tests/unit/services/backtest/test_dashboard_api.py`
+- **Validation Result**: PASS (RALPH_GATE_PASSED — 54/54 tests, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None

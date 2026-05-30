@@ -685,7 +685,7 @@ class TestHandleBacktestCatalogInstruments:
         assert result == []
 
     def test_catalog_instruments(self) -> None:
-        """Catalog with instruments returns list."""
+        """Catalog with instruments returns list with full bar type strings."""
         mock_catalog = MagicMock()
         mock_instr_a = MagicMock()
         mock_instr_a.id = "TSLA.NASDAQ"
@@ -702,13 +702,16 @@ class TestHandleBacktestCatalogInstruments:
         ):
             with patch(
                 "sam_trader.services.backtest.dashboard_api._discover_bar_types",
-                return_value=["5-MINUTE-LAST-EXTERNAL", "1-HOUR-LAST-EXTERNAL"],
+                return_value=[
+                    "TSLA.NASDAQ-5-MINUTE-LAST-EXTERNAL",
+                    "TSLA.NASDAQ-1-HOUR-LAST-EXTERNAL",
+                ],
             ):
                 result = handle_backtest_catalog_instruments()
 
         assert len(result) == 2
         assert result[0]["instrument_id"] == "TSLA.NASDAQ"
-        assert "5-MINUTE-LAST-EXTERNAL" in result[0]["bar_types"]
+        assert "TSLA.NASDAQ-5-MINUTE-LAST-EXTERNAL" in result[0]["bar_types"]
         assert result[1]["instrument_id"] == "AAPL.NASDAQ"
 
     def test_catalog_enumeration_error(self) -> None:
@@ -762,7 +765,7 @@ class TestHandleBacktestCatalogStatus:
         ):
             with patch(
                 "sam_trader.services.backtest.dashboard_api._discover_bar_types",
-                return_value=["5-MINUTE-LAST-EXTERNAL"],
+                return_value=["TSLA.NASDAQ-5-MINUTE-LAST-EXTERNAL"],
             ):
                 result = handle_backtest_catalog_status()
 
@@ -1026,7 +1029,7 @@ class TestDiscoverBarTypes:
         assert result == []
 
     def test_discover_bar_types(self) -> None:
-        """Returns discovered bar types from filenames."""
+        """Returns full bar type strings from filenames."""
         catalog = MagicMock()
         catalog.path = "/fake/catalog"
 
@@ -1042,10 +1045,53 @@ class TestDiscoverBarTypes:
                 result = _discover_bar_types(catalog, "TSLA.NASDAQ")
 
         assert len(result) == 2
-        assert "5-MINUTE-LAST-EXTERNAL" in result
-        assert "1-HOUR-LAST-EXTERNAL" in result
+        assert "TSLA.NASDAQ-5-MINUTE-LAST-EXTERNAL" in result
+        assert "TSLA.NASDAQ-1-HOUR-LAST-EXTERNAL" in result
         # AAPL should NOT be included
         assert "AAPL.NASDAQ-5-MINUTE-LAST-EXTERNAL" not in result
+
+    def test_discover_bar_types_with_real_files(self, tmp_path: Path) -> None:
+        """Scan actual parquet files on disk and return full bar type strings."""
+        catalog = MagicMock()
+        bar_dir = tmp_path / "data" / "bar"
+        bar_dir.mkdir(parents=True)
+        # Create dummy parquet files for multiple instruments and bar types
+        (bar_dir / "TSLA.NASDAQ-5-MINUTE-LAST-EXTERNAL.parquet").write_text("")
+        (bar_dir / "TSLA.NASDAQ-1-HOUR-LAST-EXTERNAL.parquet").write_text("")
+        (bar_dir / "AAPL.NASDAQ-5-MINUTE-LAST-EXTERNAL.parquet").write_text("")
+        (bar_dir / "AAPL.NASDAQ-15-MINUTE-LAST-EXTERNAL.parquet").write_text("")
+        (bar_dir / "00700.HKEX-1-MINUTE-LAST-EXTERNAL.parquet").write_text("")
+        catalog.path = str(tmp_path)
+
+        tsla = _discover_bar_types(catalog, "TSLA.NASDAQ")
+        assert tsla == [
+            "TSLA.NASDAQ-1-HOUR-LAST-EXTERNAL",
+            "TSLA.NASDAQ-5-MINUTE-LAST-EXTERNAL",
+        ]
+
+        aapl = _discover_bar_types(catalog, "AAPL.NASDAQ")
+        assert aapl == [
+            "AAPL.NASDAQ-15-MINUTE-LAST-EXTERNAL",
+            "AAPL.NASDAQ-5-MINUTE-LAST-EXTERNAL",
+        ]
+
+        hk = _discover_bar_types(catalog, "00700.HKEX")
+        assert hk == ["00700.HKEX-1-MINUTE-LAST-EXTERNAL"]
+
+    def test_external_suffix_preserved(self, tmp_path: Path) -> None:
+        """The -EXTERNAL (or -INTERNAL) suffix is preserved in the bar type."""
+        catalog = MagicMock()
+        bar_dir = tmp_path / "data" / "bar"
+        bar_dir.mkdir(parents=True)
+        (bar_dir / "NVDA.NASDAQ-5-MINUTE-LAST-EXTERNAL.parquet").write_text("")
+        (bar_dir / "NVDA.NASDAQ-5-MINUTE-LAST-INTERNAL.parquet").write_text("")
+        catalog.path = str(tmp_path)
+
+        result = _discover_bar_types(catalog, "NVDA.NASDAQ")
+        assert result == [
+            "NVDA.NASDAQ-5-MINUTE-LAST-EXTERNAL",
+            "NVDA.NASDAQ-5-MINUTE-LAST-INTERNAL",
+        ]
 
 
 class TestRunRegistryThreadSafety:
