@@ -467,6 +467,7 @@ th.sortable.desc::after { content:' \2193'; }
 <span id="live-refresh-indicator" class="bt-refresh-indicator"></span>
 Last updated: <span id="live-last-update">{{now}}</span> UTC &nbsp;|&nbsp; Live auto-refresh every 30s
 </div>
+<script>
 // ===== LIVE POLLING (replaces meta-refresh — preserves form state) =====
 var _livePollTimer = null;
 var _livePolling = false;
