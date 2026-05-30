@@ -2367,3 +2367,12 @@
 - **Files Changed**: None (already correct)
 - **Validation Result**: PASS (RALPH_GATE_PASSED — targeted; 1 pre-existing Cython test failure unrelated to this ticket)
 - **Blockers / Notes**: Ticket created 2026-05-30 but underlying data was already correct. The US market entry never had `ib_enabled: false` in any commit touching this file. Likely a stale observation or the ticket was filed against a branch that had already been fixed.
+
+## Iteration 152
+- **Task**: P8: Equity curve SQL binding — asyncpg %s to dollar-1 in dashboard queries
+- **Task ID**: sam_trader-mud
+- **Status**: COMPLETE
+- **Decisions**: Replaced psycopg2-style `INTERVAL '%s days'` with asyncpg-compatible `$1::int * INTERVAL '1 day'` in both `_query_daily_pnl_from_fills_async` (line 1228) and `_query_benchmark_daily_pnl_from_fills_async` (line 1267). In benchmark query, instrument_id renamed from `$1` to `$2` to match new parameter order. This eliminates the `invalid input syntax for type interval: %s days` WARNING.
+- **Files Changed**: `src/sam_trader/services/dashboard.py` (3 lines changed: 2 SQL interval clauses + 1 parameter reference)
+- **Validation Result**: PASS (153/153 dashboard tests green, black/isort/flake8 all clean)
+- **Blockers / Notes**: None
