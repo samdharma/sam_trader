@@ -907,6 +907,54 @@ def handle_backtest_catalog_instruments(
 
 
 # ---------------------------------------------------------------------------
+# GET /api/backtest/catalog/strategies
+# ---------------------------------------------------------------------------
+
+
+def handle_backtest_catalog_strategies(
+    bundles_path: str = "config/bundles.yaml",
+) -> list[dict[str, Any]]:
+    """Handle GET /api/backtest/catalog/strategies — list enabled bundles.
+
+    Parameters
+    ----------
+    bundles_path : str
+        Path to the bundles YAML file.
+
+    Returns
+    -------
+    list[dict]
+        Each entry: ``bundle_id``, ``strategy_path``, ``instrument_id``,
+        ``venue``, ``market``, ``family``, ``enabled``.
+        Only bundles with ``enabled: true`` are returned.
+        Returns an empty list when the file is missing, empty, or
+        cannot be parsed.
+
+    """
+    try:
+        bundles = load_bundles(bundles_path)
+    except Exception as exc:
+        logger.warning("Failed to load bundles for catalog: %s", exc)
+        return []
+
+    result: list[dict[str, Any]] = []
+    for b in bundles:
+        cfg = b.config
+        result.append(
+            {
+                "bundle_id": cfg.get("bundle_id", "unknown"),
+                "strategy_path": b.strategy_path,
+                "instrument_id": cfg.get("instrument_id"),
+                "venue": cfg.get("venue"),
+                "market": cfg.get("market", "US"),
+                "family": cfg.get("family"),
+                "enabled": True,
+            }
+        )
+    return result
+
+
+# ---------------------------------------------------------------------------
 # GET /api/backtest/catalog/status
 # ---------------------------------------------------------------------------
 

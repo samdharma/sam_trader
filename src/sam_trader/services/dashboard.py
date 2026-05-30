@@ -20,6 +20,7 @@ from urllib.parse import parse_qs, urlparse
 from sam_trader.services.backtest.dashboard_api import (
     handle_backtest_catalog_instruments,
     handle_backtest_catalog_status,
+    handle_backtest_catalog_strategies,
     handle_backtest_compare,
     handle_backtest_run,
     handle_backtest_run_status,
@@ -354,8 +355,9 @@ th.sortable.desc::after { content:' \2193'; }
       <select id="bt-instruments" multiple></select>
     </div>
     <div class="bt-form-field">
-      <label>Strategy ID</label>
-      <input type="text" id="bt-strategy-id" placeholder="e.g., tsla-orb-15m-futu">
+      <label>Strategy</label>
+      <select id="bt-strategy-id"></select>
+      <span id="bt-strategy-empty" style="color:var(--red);font-size:.85rem;display:none;">No strategies configured in bundles.yaml</span>
     </div>
     <div class="bt-form-field">
       <label>Start Date</label>
@@ -539,6 +541,22 @@ function switchBtTab(name) {
     var s=document.getElementById('bt-instruments');s.innerHTML='';
     (d||[]).forEach(function(i){var o=document.createElement('option');
       o.value=i.instrument_id;o.textContent=i.instrument_id+'  ('+(i.bar_types||[]).join(', ')+')';s.appendChild(o);});
+  }).catch(function(){});
+  fetch('/api/backtest/catalog/strategies').then(function(r){return r.json();}).then(function(d){
+    var s=document.getElementById('bt-strategy-id');s.innerHTML='';
+    var empty=document.getElementById('bt-strategy-empty');
+    if(!d||!d.length){
+      var o=document.createElement('option');o.value='';o.textContent='No strategies available';o.disabled=true;s.appendChild(o);
+      if(empty)empty.style.display='inline';
+      return;
+    }
+    if(empty)empty.style.display='none';
+    d.forEach(function(strat){
+      var o=document.createElement('option');
+      o.value=strat.bundle_id;
+      o.textContent=strat.bundle_id+' ('+(strat.instrument_id||'')+', '+(strat.venue||'')+')';
+      s.appendChild(o);
+    });
   }).catch(function(){});
   fetch('/api/backtest/catalog/status').then(function(r){return r.json();}).then(function(d){
     var banner=document.getElementById('bt-catalog-banner');
@@ -2131,6 +2149,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self._send_json(200, data)
         elif path == "/api/backtest/catalog/status":
             data = handle_backtest_catalog_status()
+            self._send_json(200, data)
+        elif path == "/api/backtest/catalog/strategies":
+            data = handle_backtest_catalog_strategies()  # type: ignore[assignment]
             self._send_json(200, data)
         else:
             # Serve dashboard HTML for any other path

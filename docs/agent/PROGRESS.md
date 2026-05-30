@@ -1,3 +1,12 @@
+## Iteration 152
+- **Task**: 12.1.13: Strategy catalog API + dashboard dropdown
+- **Task ID**: sam_trader-9z3.13.1.13
+- **Status**: COMPLETE
+- **Decisions**: Replaced free-text strategy_id input with a <select> dropdown populated from bundles.yaml. Backend handler calls load_bundles() and returns enabled bundles with metadata. Frontend fetches on page load and shows empty-state message when bundles.yaml is missing/empty. Used # type: ignore[assignment] for mypy on the list-returning catalog handler to match existing pattern in DashboardHandler.do_GET.
+- **Files Changed**: `src/sam_trader/services/backtest/dashboard_api.py` (+55 lines: handle_backtest_catalog_strategies), `src/sam_trader/services/dashboard.py` (+39 lines: import, HTML select, JS fetch, route), `tests/unit/services/backtest/test_dashboard_api.py` (+59 lines: 3 tests), `tests/unit/services/test_dashboard.py` (+46 lines: 2 tests)
+- **Validation Result**: PASS (RALPH_GATE_PASSED — 132/132 targeted tests, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None.
+
 > **Note: see first-entry Iteration 20 for Phase 2 config dataclasses.**
 
 ## Iteration 151

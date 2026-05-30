@@ -465,6 +465,29 @@ class TestHtmlRendering:
         assert "No open positions" in html
         assert "No P&L data" in html
 
+    def test_html_renders_backtest_strategy_select(self) -> None:
+        """Backtest panel contains strategy select dropdown."""
+        from sam_trader.services.dashboard import _render_html
+
+        html = _render_html(
+            {
+                "health": {"status": "healthy", "services": {}},
+                "fills": [],
+                "positions": [],
+                "market_data": {
+                    "instruments": [],
+                    "counts": {},
+                    "venues": [],
+                    "timestamp": "",
+                },
+                "pnl": {"strategies": {}, "total": 0.0, "date": ""},
+                "timestamp": "",
+            }
+        )
+        assert 'id="bt-strategy-id"' in html
+        assert "<select" in html
+        assert "/api/backtest/catalog/strategies" in html
+
     def test_html_renders_market_data_summary(self) -> None:
         """Collapsed Market Data panel shows compact summary text."""
         from sam_trader.services.dashboard import _render_html
@@ -698,6 +721,35 @@ class TestDashboardServer:
         assert "TODAY'S FILLS" in html
         assert "CURRENT POSITIONS" in html
         assert "P&L SUMMARY" in html
+
+    def test_get_api_backtest_catalog_strategies_via_http(
+        self, server_port: int
+    ) -> None:
+        """GET /api/backtest/catalog/strategies returns enabled bundles."""
+        with patch(
+            "sam_trader.services.dashboard.handle_backtest_catalog_strategies",
+            return_value=[
+                {
+                    "bundle_id": "tsla-orb",
+                    "strategy_path": "sam_trader.strategies.orb:OrbStrategy",
+                    "instrument_id": "TSLA.NASDAQ",
+                    "venue": "FUTU",
+                    "market": "US",
+                    "family": "ORB",
+                    "enabled": True,
+                }
+            ],
+        ):
+            conn = HTTPConnection("127.0.0.1", server_port, timeout=5)
+            conn.request("GET", "/api/backtest/catalog/strategies")
+            resp = conn.getresponse()
+            body = json.loads(resp.read().decode())
+            conn.close()
+
+        assert resp.status == 200
+        assert len(body) == 1
+        assert body[0]["bundle_id"] == "tsla-orb"
+        assert body[0]["enabled"] is True
 
     def test_get_api_bars_recent_via_http(self, server_port: int) -> None:
         """GET /api/bars/recent over HTTP returns JSON with filtered bars."""

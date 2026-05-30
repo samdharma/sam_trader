@@ -22,6 +22,7 @@ from sam_trader.services.backtest.dashboard_api import (
     _run_registry_lock,
     handle_backtest_catalog_instruments,
     handle_backtest_catalog_status,
+    handle_backtest_catalog_strategies,
     handle_backtest_compare,
     handle_backtest_run,
     handle_backtest_run_status,
@@ -725,6 +726,81 @@ class TestHandleBacktestCatalogInstruments:
             return_value=mock_catalog,
         ):
             result = handle_backtest_catalog_instruments()
+
+        assert result == []
+
+
+# ---------------------------------------------------------------------------
+# handle_backtest_catalog_strategies
+# ---------------------------------------------------------------------------
+
+
+class TestHandleBacktestCatalogStrategies:
+    """Tests for GET /api/backtest/catalog/strategies."""
+
+    def test_returns_enabled_bundles(self) -> None:
+        """Enabled bundles are returned with all metadata fields."""
+        mock_configs = [
+            ImportableStrategyConfig(
+                strategy_path="sam_trader.strategies.orb:OrbStrategy",
+                config_path="sam_trader.strategies.orb:OrbStrategyConfig",
+                config={
+                    "bundle_id": "tsla-orb",
+                    "instrument_id": "TSLA.NASDAQ",
+                    "venue": "FUTU",
+                    "market": "US",
+                    "family": "ORB",
+                },
+            ),
+            ImportableStrategyConfig(
+                strategy_path="sam_trader.strategies.momentum:MomentumStrategy",
+                config_path="sam_trader.strategies.momentum:MomentumStrategyConfig",
+                config={
+                    "bundle_id": "aapl-mom",
+                    "instrument_id": "AAPL.NASDAQ",
+                    "venue": "IB",
+                    "market": "US",
+                },
+            ),
+        ]
+        with patch(
+            "sam_trader.services.backtest.dashboard_api.load_bundles",
+            return_value=mock_configs,
+        ):
+            result = handle_backtest_catalog_strategies()
+
+        assert len(result) == 2
+        r0 = result[0]
+        assert r0["bundle_id"] == "tsla-orb"
+        assert r0["strategy_path"] == "sam_trader.strategies.orb:OrbStrategy"
+        assert r0["instrument_id"] == "TSLA.NASDAQ"
+        assert r0["venue"] == "FUTU"
+        assert r0["market"] == "US"
+        assert r0["family"] == "ORB"
+        assert r0["enabled"] is True
+
+        r1 = result[1]
+        assert r1["bundle_id"] == "aapl-mom"
+        assert r1["family"] is None
+        assert r1["enabled"] is True
+
+    def test_missing_file_returns_empty(self) -> None:
+        """Missing bundles file returns empty list gracefully."""
+        with patch(
+            "sam_trader.services.backtest.dashboard_api.load_bundles",
+            side_effect=RuntimeError("file not found"),
+        ):
+            result = handle_backtest_catalog_strategies()
+
+        assert result == []
+
+    def test_empty_bundles_returns_empty(self) -> None:
+        """No enabled bundles returns empty list."""
+        with patch(
+            "sam_trader.services.backtest.dashboard_api.load_bundles",
+            return_value=[],
+        ):
+            result = handle_backtest_catalog_strategies()
 
         assert result == []
 
