@@ -2331,3 +2331,12 @@
 - **Files Changed**: `src/sam_trader/services/crontab`, `tests/unit/test_crontab.py`, `tests/unit/services/test_cron.py`, `docs/user/OPERATOR_GUIDE.md`, `docs/user/DYNAMIC_MULTI_MARKET_PLAN.md`
 - **Validation Result**: PASS (15/15 tests, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None
+
+## Iteration 150
+- **Task**: P5: IB_ENABLED=true FATAL — TWS_USERID/TWS_PASSWORD missing from sam-trader container
+- **Task ID**: sam_trader-bez
+- **Status**: COMPLETE
+- **Decisions**: Added TWS_USERID and TWS_PASSWORD env vars to sam-trader service in docker-compose.yml (after IB_ENABLED). These were already passed to sam-ib-gateway but missing from sam-trader, causing entrypoint.sh FATAL at line 115.
+- **Files Changed**: `docker/docker-compose.yml` (+2 lines: TWS_USERID, TWS_PASSWORD in sam-trader env)
+- **Validation Result**: PASS (RALPH_GATE_PASSED — targeted no python changes; docker compose config confirms vars present in both containers; test_entrypoint_fails_when_ib_enabled_but_no_credentials passes)
+- **Blockers / Notes**: 2 pre-existing test_entrypoint failures (tests don't set IB_ENABLED/FUTU_ENABLED=true in env, so broker waits are skipped — unrelated to this fix).
