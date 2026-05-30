@@ -451,7 +451,7 @@ tests/
 | 12.1.16 | \`sam_trader-9z3.13.1.16\` | Wire walk-forward to dashboard API | task | 12.1.13 |
 | 12.1.17 | \`sam_trader-9z3.13.1.17\` | Wire parameter sweep to dashboard API | task | 12.1.16 |
 | 12.1.18 | \`sam_trader-9z3.13.1.18\` | WF/Sweep result display panels | task | 12.1.17 |
-| 12.1.19 | \`sam_trader-9z3.13.1.19\` | Fix \`_discover_bar_types\` bar type naming | bug | — (root, parallel) |
+| 12.1.19 | \`sam_trader-9z3.13.1.19\` | Fix catalog instrument discovery — filesystem fallback + bar type naming | bug | — (root, parallel) |
 | 12.1.20 | \`sam_trader-9z3.13.1.20\` | [E2E] Download AAPL 3yr + validate backtest | task | 12.1.15, 12.1.18, 12.1.19 |
 
 ### 10.2 Build Order (Dependency Graph)
