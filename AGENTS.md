@@ -99,20 +99,39 @@ EPIC (type: epic, labels: epic, meta-grouping, <phase-tag>) - not to be closed
         - Blocks the NEXT phase's first work ticket(s)
 ```
 
+### Ticket ID Naming
+
+Work tickets follow the pattern: **`<project-name>-<project-code>.<feature-id-num>.<SeqNum>`**
+
+| Part | Example | Meaning |
+|------|---------|--------|
+| `project-name` | `sam_trader` | Fixed project name |
+| `project-code` | `9z3` | Fixed project code |
+| `feature-id-num` | `13.1` | Phase number + 1 (Phase 12 → 13, Phase 12.1 → 13.1) |
+| `SeqNum` | `1` | Sequential number within the feature, starting at 1 |
+
+Example: `sam_trader-9z3.13.1.13` = Phase 12.1, ticket 13.
+
+Use `bd create --force --id=<full-id> ...` to create tickets with explicit IDs.
+
 ### Label Rules
 | Ticket Type | Allowed Labels |
 |-------------|----------------|
 | EPIC | `epic`, `meta-grouping`, optional `<phase-tag>` |
-| FEATURE | `<phase-tag>`, `meta-grouping` |
-| WORK (task, bug, test, docs) | `<phase-tag>` **only** |
+| FEATURE / FEATURE-within-FEATURE | `<phase-tag>`, `meta-grouping` |
+| WORK (task, bug, test, docs) | `<phase-tag>` **only** — exactly ONE value |
 | EXIT | `exit`, `<phase-tag>` |
+
+**`<phase-tag>` format:** `phase-<phase-number>` where phase-number is the assigned phase identifier (e.g., `phase-8`, `phase-12.1`). Sub-phases use dotted notation. This value is critical — Ralph uses it to locate the corresponding `BUILD_PHASE_<N>.md` or `BUILD_PLAN_<N>.md` reference doc.
+
+**Container tickets** (EPIC, FEATURE) additionally carry `meta-grouping` so Ralph skips them during work selection.
 
 ### Dependency Rules
 1. **FEATURE parents are pure containers** — they MUST NOT carry blocking dependencies (including on previous phase EXIT tickets).
 2. **Phase gating** — a phase's first work ticket(s) depend on the previous phase's EXIT ticket ONLY. No cross-phase skip links (e.g., a phase-11 ticket must NOT directly depend on a phase-7 ticket).
 3. **EXIT tickets** depend only on their own phase's work tickets.
 4. **Work tickets** MUST have exactly one label (`<phase-tag>`). EXIT tickets are the exception: `exit, <phase-tag>`.
-5. **Phase labels** use `phase-<N>`. Non-numeric suffixes break Ralph's build-doc lookup.
+5. **Phase labels** use `phase-<phase-number>` (e.g., `phase-8`, `phase-12.1`). Ralph resolves the corresponding `BUILD_PHASE_<N>.md` or `BUILD_PLAN_<N>.md` doc.
 6. **No redundant transitive dependencies** — if A depends on B and B depends on C, A must NOT also directly depend on C. Keep the graph flat within each phase.
 7. **Ralph deterministic selection** — the Ralph loop skips `epic` and `feature` tickets, then sorts ready work tickets by feature number ascending, then task number ascending. Lower numbers are always built first.
 
