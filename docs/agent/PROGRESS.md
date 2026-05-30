@@ -2429,3 +2429,17 @@
 - **Files Changed**: `src/sam_trader/services/backtest/dashboard_api.py`, `src/sam_trader/services/dashboard.py`, `tests/unit/services/backtest/test_dashboard_api.py`, `tests/unit/services/test_dashboard.py`
 - **Validation Result**: PASS (RALPH_GATE_PASSED — 127/127 targeted tests, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None.
+
+## Iteration 154
+- **Task**: 12.1.17: Wire parameter sweep to dashboard API
+- **Task ID**: sam_trader-9z3.13.1.17
+- **Status**: COMPLETE
+- **Decisions**: 
+  1. Frontend `submitBacktest()` already iterates `.bt-sweep-row` elements and sends `sweep_flags` array when sweep toggle is checked. No JS changes needed.
+  2. Added `save_sweep()` to `BacktestResultStore` to persist ranked sweep results with top Sharpe/PnL in `stats_returns`/`stats_pnls` and full results in `tags`.
+  3. Added `_run_sweep_in_thread()` in `dashboard_api.py` — mirrors `_run_walk_forward_in_thread()` but uses `ParameterSweep.run()` instead.
+  4. Restructured `handle_backtest_run()` routing: parse `param_grid` once, then branch walk-forward → sweep-only → plain backtest. This ensures sweep + WF still goes to walk-forward (as before) and plain backtest is unchanged when no sweep params.
+  5. Added unit tests for sweep-only mode (`mode="sweep"`), sweep via `sweep_params` dict, and sweep+WF combo preferring walk-forward.
+- **Files Changed**: `src/sam_trader/services/backtest/results.py`, `src/sam_trader/services/backtest/dashboard_api.py`, `tests/unit/services/backtest/test_dashboard_api.py`
+- **Validation Result**: PASS (RALPH_GATE_PASSED — 69/69 targeted tests, 179/179 backtest unit tests, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None.
