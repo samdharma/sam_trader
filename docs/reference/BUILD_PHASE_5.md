@@ -64,6 +64,8 @@ from nautilus_trader.adapters.interactive_brokers.providers import InteractiveBr
 
 **No custom IB adapter code needed** — Nautilus provides the official adapter. We only wire it.
 
+> **⚠️ Note:** \`docker/entrypoint.sh\` validates that \`TWS_USERID\` and \`TWS_PASSWORD\` are set when \`IB_ENABLED=true\`. These env vars must be passed to **both** the \`sam-ib-gateway\` container (for auto-login) and the \`sam-trader\` container (for entrypoint validation). If missing, the trader FATALs at startup. See ticket \`sam_trader-bez\`.
+
 ---
 
 ## 4. Ticket Breakdown
