@@ -31,7 +31,7 @@ services:
       - REDIS_HOST=${REDIS_HOST:-sam-redis}
       - REDIS_PORT=${REDIS_PORT:-6379}
       - REDIS_PASSWORD=${REDIS_PASSWORD:-}
-      - IB_ENABLED=${IB_ENABLED:-false}
+      - IB_ENABLED=${IB_ENABLED:-true}
       - TWS_USERID=${TWS_USERID:-}
       - TWS_PASSWORD=${TWS_PASSWORD:-}
       - IB_TRADING_MODE=${IB_TRADING_MODE:-paper}
