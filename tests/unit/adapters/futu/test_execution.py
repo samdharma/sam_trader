@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pandas as pd
 import pytest
-from futu import RET_OK, ContextStatus, ModifyOrderOp
+from futu import RET_OK, ContextStatus, ModifyOrderOp, TrdEnv
 from nautilus_trader.common.component import LiveClock
 from nautilus_trader.common.providers import InstrumentProvider
 from nautilus_trader.core.uuid import UUID4
@@ -1756,6 +1756,174 @@ class TestReconciliationReports:
         )
 
         assert reports == []
+
+    # --- generate_order_status_report (singular) ---
+
+    def test_generate_order_status_report_found_by_venue_order_id(
+        self, event_loop, make_client, mock_trade_ctx
+    ):
+        """Order found via venue_order_id returns OrderStatusReport."""
+        mock_trade_ctx.history_order_list_query.return_value = (
+            RET_OK,
+            pd.DataFrame(
+                {
+                    "code": ["US.AAPL"],
+                    "order_id": ["12345"],
+                    "trd_side": ["BUY"],
+                    "order_type": ["NORMAL"],
+                    "order_status": ["SUBMITTED"],
+                    "qty": [100],
+                    "dealt_qty": [0],
+                    "price": [150.0],
+                    "create_time": ["2026-05-22 10:00:00"],
+                    "updated_time": ["2026-05-22 10:01:00"],
+                }
+            ),
+        )
+        client = make_client()
+        from nautilus_trader.execution.messages import GenerateOrderStatusReport
+
+        cmd = GenerateOrderStatusReport.from_dict(
+            {
+                "instrument_id": "AAPL.NASDAQ",
+                "client_order_id": "O-001",
+                "venue_order_id": "12345",
+                "command_id": str(UUID4()),
+                "ts_init": 0,
+            }
+        )
+        report = event_loop.run_until_complete(client.generate_order_status_report(cmd))
+
+        assert report is not None
+        assert report.venue_order_id.value == "12345"
+        assert report.instrument_id == InstrumentId.from_str("AAPL.NASDAQ")
+
+    def test_generate_order_status_report_not_found_returns_none(
+        self, event_loop, make_client, mock_trade_ctx
+    ):
+        """Order not found in Futu response returns None."""
+        mock_trade_ctx.history_order_list_query.return_value = (
+            RET_OK,
+            pd.DataFrame(
+                {
+                    "code": ["US.AAPL"],
+                    "order_id": ["12345"],
+                    "trd_side": ["BUY"],
+                    "order_type": ["NORMAL"],
+                    "order_status": ["SUBMITTED"],
+                    "qty": [100],
+                    "dealt_qty": [0],
+                    "price": [150.0],
+                    "create_time": ["2026-05-22 10:00:00"],
+                    "updated_time": ["2026-05-22 10:01:00"],
+                }
+            ),
+        )
+        client = make_client()
+        from nautilus_trader.execution.messages import GenerateOrderStatusReport
+
+        # venue_order_id "99999" does not exist in the mock data
+        cmd = GenerateOrderStatusReport.from_dict(
+            {
+                "instrument_id": "AAPL.NASDAQ",
+                "client_order_id": "O-001",
+                "venue_order_id": "99999",
+                "command_id": str(UUID4()),
+                "ts_init": 0,
+            }
+        )
+        report = event_loop.run_until_complete(client.generate_order_status_report(cmd))
+
+        assert report is None
+
+    def test_generate_order_status_report_futu_params_passed_correctly(
+        self, event_loop, make_client, mock_trade_ctx
+    ):
+        """Instrument ID, trd_env and acc_id are passed to Futu SDK."""
+        mock_trade_ctx.history_order_list_query.return_value = (
+            RET_OK,
+            pd.DataFrame(
+                {
+                    "code": ["US.TSLA"],
+                    "order_id": ["67890"],
+                    "trd_side": ["SELL"],
+                    "order_type": ["NORMAL"],
+                    "order_status": ["FILLED_ALL"],
+                    "qty": [50],
+                    "dealt_qty": [50],
+                    "price": [250.0],
+                    "create_time": ["2026-05-22 09:00:00"],
+                    "updated_time": ["2026-05-22 09:05:00"],
+                }
+            ),
+        )
+        client = make_client()
+        from nautilus_trader.execution.messages import GenerateOrderStatusReport
+
+        cmd = GenerateOrderStatusReport.from_dict(
+            {
+                "instrument_id": "TSLA.NASDAQ",
+                "client_order_id": "O-002",
+                "venue_order_id": "67890",
+                "command_id": str(UUID4()),
+                "ts_init": 0,
+            }
+        )
+        report = event_loop.run_until_complete(client.generate_order_status_report(cmd))
+
+        # Verify Futu SDK was called with correct params
+        mock_trade_ctx.history_order_list_query.assert_called_once()
+        call_kwargs = mock_trade_ctx.history_order_list_query.call_args.kwargs
+        assert call_kwargs["code"] == "US.TSLA"  # Futu security code
+        assert call_kwargs["trd_env"] == TrdEnv.SIMULATE
+        # acc_id should be the current account (FUTU-1 placeholder before discovery)
+        assert "acc_id" in call_kwargs
+
+        assert report is not None
+        assert report.venue_order_id.value == "67890"
+
+    def test_generate_order_status_report_futu_failure_returns_none(
+        self, event_loop, make_client, mock_trade_ctx
+    ):
+        """Futu SDK failure returns None gracefully."""
+        mock_trade_ctx.history_order_list_query.return_value = (-1, "Error")
+        client = make_client()
+        from nautilus_trader.execution.messages import GenerateOrderStatusReport
+
+        cmd = GenerateOrderStatusReport.from_dict(
+            {
+                "instrument_id": "AAPL.NASDAQ",
+                "client_order_id": "O-001",
+                "venue_order_id": "12345",
+                "command_id": str(UUID4()),
+                "ts_init": 0,
+            }
+        )
+        report = event_loop.run_until_complete(client.generate_order_status_report(cmd))
+
+        assert report is None
+
+    def test_generate_order_status_report_none_instrument_returns_none(
+        self, event_loop, make_client, mock_trade_ctx
+    ):
+        """None instrument_id returns None without calling Futu SDK."""
+        client = make_client()
+        from nautilus_trader.execution.messages import GenerateOrderStatusReport
+
+        cmd = GenerateOrderStatusReport.from_dict(
+            {
+                "instrument_id": None,
+                "client_order_id": "O-001",
+                "venue_order_id": "12345",
+                "command_id": str(UUID4()),
+                "ts_init": 0,
+            }
+        )
+        report = event_loop.run_until_complete(client.generate_order_status_report(cmd))
+
+        assert report is None
+        # Should NOT call Futu SDK when instrument_id is None
+        mock_trade_ctx.history_order_list_query.assert_not_called()
 
     def test_generate_fill_reports(self, event_loop, make_client, mock_trade_ctx):
         mock_trade_ctx.history_deal_list_query.return_value = (

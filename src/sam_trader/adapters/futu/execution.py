@@ -26,6 +26,7 @@ from nautilus_trader.core.uuid import UUID4
 from nautilus_trader.execution.messages import (
     CancelOrder,
     GenerateFillReports,
+    GenerateOrderStatusReport,
     GenerateOrderStatusReports,
     GeneratePositionStatusReports,
     ModifyOrder,
@@ -968,6 +969,73 @@ class FutuLiveExecutionClient(LiveExecutionClient):
     # -----------------------------------------------------------------------
     # Reconciliation reports (required by LiveExecutionClient)
     # -----------------------------------------------------------------------
+
+    async def generate_order_status_report(
+        self,
+        command: GenerateOrderStatusReport,
+    ) -> OrderStatusReport | None:
+        """Query Futu for a single order status report.
+
+        Uses ``history_order_list_query`` to retrieve recent orders for
+        the instrument and filters by ``client_order_id`` or
+        ``venue_order_id``.
+
+        Parameters
+        ----------
+        command : GenerateOrderStatusReport
+            The reconciliation command with instrument_id, client_order_id,
+            and optional venue_order_id.
+
+        Returns
+        -------
+        OrderStatusReport or None
+
+        """
+        if self._trade_ctx is None or command.instrument_id is None:
+            return None
+
+        trd_env = TrdEnv.SIMULATE if self._config.trd_env == "SIMULATE" else TrdEnv.REAL
+        acc_id = int(self._account_id.get_id())
+
+        code = ""
+        try:
+            code = instrument_id_to_futu_security(command.instrument_id)
+        except ValueError:
+            pass
+
+        try:
+            ret, data = self._trade_ctx.history_order_list_query(
+                code=code,
+                trd_env=trd_env,
+                acc_id=acc_id,
+            )
+            if ret != RET_OK or data is None or data.empty:
+                return None
+
+            for _, row in data.iterrows():
+                try:
+                    order_dict = row.to_dict()
+                    report = parse_futu_order_to_report(order_dict, self._account_id)
+
+                    # Match by venue_order_id first (most precise)
+                    if (
+                        command.venue_order_id is not None
+                        and report.venue_order_id == command.venue_order_id
+                    ):
+                        return report
+
+                    # Match by client_order_id
+                    if (
+                        command.client_order_id is not None
+                        and report.client_order_id == command.client_order_id
+                    ):
+                        return report
+                except Exception:
+                    continue
+        except Exception as e:
+            self._log.exception(f"Failed to generate order status report: {e}", e)
+
+        return None
 
     async def generate_order_status_reports(
         self,
