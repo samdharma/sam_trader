@@ -601,13 +601,13 @@ def _cmd_performance(args: argparse.Namespace) -> int:
 ### 13.1 Futu OpenD Healthcheck L3 — False Unhealthy
 
 **Ticket:** \`sam_trader-2vj\`  
-**Symptom:** \`sam-futu-opend\` container marked unhealthy despite OpenD running and logged in.  
-**Root cause:** \`docker/futu-opend/healthcheck.sh\` L3 greps for \`"Login successful"\` only in the **single most recent** GTWLog file. Futu rotates log files during operation; newer files (connection/keepalive activity) don't contain the login entry from startup.  
-**Fix:** Change L3 to scan **all** GTWLog files: \`grep -lq "Login successful" "$LOG_DIR"/GTWLog_*\`.
+**Symptom:** \`sam-futu-opend\` container intermittently unhealthy despite OpenD running and connected to Futu servers.  
+**Root cause:** \`docker/futu-opend/healthcheck.sh\` L3 greps for \`"Login successful"\` only in the **single most recent** GTWLog file. Futu rotates log files during operation; newer files don't contain the startup login entry. If no relogin happens for hours, the container stays unhealthy.  
+**Fix:** Replace log-file grep with a **telnet \`ping\`** command. Connects to \`localhost:22222\`, sends \`ping\`, and parses per-server Success/Failed counts. Directly verifies OpenD connectivity to Futu servers without fragile log parsing.
 
 ### 13.2 Dashboard Equity Curve — SQL Binding Mismatch
 
 **Ticket:** \`sam_trader-mud\`  
 **Symptom:** \`WARNING: equity curve query failed: invalid input syntax for type interval: "%s days"\` in sam-services logs.  
-**Root cause:** \`dashboard.py\` lines 1228 and 1267 use \`INTERVAL '%s days'\` (psycopg2 syntax) with asyncpg. asyncpg requires \`$1\` positional binding. The literal string \`%s days\` is passed to PostgreSQL unsubstituted.  
-**Fix:** Replace with \`$1::int * INTERVAL '1 day'\` — asyncpg-compatible interval construction.
+**Root cause:** \`dashboard.py\` lines 1228 and 1267 use \`INTERVAL '%s days'\` (psycopg2 syntax) with asyncpg. asyncpg uses \`$1\`, \`$2\` positional binding — the literal string \`%s days\` reaches PostgreSQL unsubstituted.  
+**Fix:** Replace with \`$1::int * INTERVAL '1 day'\` — asyncpg-compatible interval construction using integer multiplication. For the benchmark query (line 1267), adjust parameter indices: \`$1\` = days, \`$2\` = instrument_id.
