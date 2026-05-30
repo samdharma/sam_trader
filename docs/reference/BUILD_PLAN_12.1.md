@@ -436,4 +436,63 @@ tests/
 
 ---
 
-*Last updated: 2026-05-27 — created from BUILD_PHASE_12_FUTURE.md §1*
+## 10. Phase D — Dashboard UX & Walk-Forward Integration (NEW)
+
+> **Status:** Planned — 8 tickets  
+> **Depends on:** Phase 12.1 A–C (complete)
+
+### 10.1 Ticket Breakdown
+
+| # | Ticket | Type | Dependencies |
+|---|--------|------|-------------|
+| 12.1.13 | Strategy catalog API + dashboard \`<select>\` | task | — (root) |
+| 12.1.14 | Empty catalog graceful error messaging | task | — (root, parallel) |
+| 12.1.15 | Date pre-fill from catalog range | task | — (root, parallel) |
+| 12.1.16 | Wire walk-forward to dashboard API | task | 12.1.13 |
+| 12.1.17 | Wire parameter sweep to dashboard API | task | 12.1.16 |
+| 12.1.18 | WF/Sweep result display panels | task | 12.1.17 |
+| 12.1.19 | Fix \`_discover_bar_types\` bar type naming | bug | — (root, parallel) |
+| 12.1.20 | [E2E] Download AAPL 3yr + validate backtest | task | 12.1.15, 12.1.18, 12.1.19 |
+
+### 10.2 Build Order (Dependency Graph)
+
+```
+Track A (Usability):
+  12.1.13 (strategy dropdown) ──► 12.1.16 (wire WF) ──► 12.1.17 (wire sweep) ──► 12.1.18 (panels)
+                                                                                         │
+Track B (Data UX):                                                                       │
+  12.1.14 (empty catalog msg) ───────────────────────────────────────────────────────────┤
+  12.1.15 (date pre-fill) ───────────────────────────────────────────────────────────────┤
+                                                                                         │
+Track C (Bug fix):                                                                       │
+  12.1.19 (bar type naming) ─────────────────────────────────────────────────────────────┤
+                                                                                         ▼
+                                                                              12.1.20 (E2E AAPL)
+```
+
+### 10.3 Key Design Decisions
+
+| # | Decision | Rationale |
+|---|----------|----------|
+| D1 | Strategy dropdown reads from \`bundles.yaml\` via \`load_bundles()\` | Single source of truth. No duplication. |
+| D2 | Walk-forward sends \`train_days\`/\`test_days\` from UI to backend | User controls OOS duration. Defaults: 90/30. |
+| D3 | Parameter sweep rows dynamically added/removed in UI | Flexible grid search without config files. |
+| D4 | WF + Sweep combined mode supported | WalkForward.run() already accepts param_grid. Most powerful analysis mode. |
+| D5 | AAPL 3yr as E2E validation standard | Liquid, well-known instrument. 3yr covers bull/bear/sideways regimes. |
+| D6 | Date pre-fill from \`oldest_bar\`/\`newest_bar\` | Uses existing catalog status endpoint. User can still override. |
+
+### 10.4 Files — New & Modified
+
+| File | Change |
+|------|--------|
+| \`src/sam_trader/services/backtest/dashboard_api.py\` | New handlers: strategies list, WF routing, sweep routing |
+| \`src/sam_trader/services/backtest/results.py\` | WF/sweep result persistence |
+| \`src/sam_trader/services/dashboard.py\` | UI: dropdown, date pre-fill, WF/sweep panels, error messages |
+| \`src/sam_trader/services/backtest/walk_forward.py\` | Wire async/thread for dashboard API |
+| \`src/sam_trader/services/backtest/sweep.py\` | Wire async/thread for dashboard API |
+| \`config/bundles.yaml\` | Add \`aapl-orb-5m-test\` bundle (12.1.20 only) |
+| \`tests/unit/services/backtest/test_dashboard_api.py\` | New tests for strategies, bar types |
+
+---
+
+*Last updated: 2026-05-30 — Phase D planned (8 tickets), E2E AAPL validation added*
