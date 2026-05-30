@@ -272,7 +272,7 @@ class BacktestEngineWrapper:
         """Construct a :class:`BacktestDataConfig` pointing at the catalog."""
         return BacktestDataConfig(
             catalog_path=self._catalog_path,
-            data_cls="nautilus_trader.model.data.Bar",
+            data_cls="nautilus_trader.model.data:Bar",
             instrument_ids=instrument_ids,
             bar_types=bar_types,
             start_time=start,
