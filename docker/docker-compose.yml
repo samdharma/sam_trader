@@ -183,6 +183,7 @@ services:
     volumes:
       - ../config:/opt/sam_trader/config:ro
       - ../logs:/opt/sam_trader/logs:rw
+      - ../data/catalog:/opt/sam_trader/data/catalog:rw
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ../.env:/opt/sam_trader/.env:rw
       - ../docker/futu-opend/futu.pem:/.futu/futu.pem:ro
