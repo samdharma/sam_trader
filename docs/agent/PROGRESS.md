@@ -2457,3 +2457,17 @@
 - **Files Changed**: `src/sam_trader/services/backtest/dashboard_api.py` (+130 lines: handle_backtest_run_panels), `src/sam_trader/services/dashboard.py` (+130 lines: CSS, JS render functions, HTTP route), `tests/unit/services/backtest/test_dashboard_api.py` (+220 lines: 10 tests)
 - **Validation Result**: PASS (RALPH_GATE_PASSED — 78/78 targeted tests, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: E2E validation in sandbox by human (Sam Dharma). Bug tickets will be filed for any E2E issues found.
+
+## Iteration 156
+- **Task**: 12.1.19: Fix catalog instrument discovery — filesystem fallback + bar type naming
+- **Task ID**: sam_trader-9z3.13.1.19
+- **Status**: COMPLETE
+- **Decisions**:
+  1. Part A: Added `_discover_instruments_from_filesystem()` that scans `data/catalog/data/bar/` for parquet files (and directories), extracts unique instrument IDs using `InstrumentId.from_str()` with shortest-prefix-first matching, and returns instruments with their bar types.
+  2. Part B: Already completed in Iteration 153 — `_discover_bar_types` returns full bar type strings including instrument ID prefix.
+  3. Updated `handle_backtest_catalog_instruments()` to try `catalog.instruments()` first, then fall back to filesystem discovery when the catalog API returns empty or raises an exception.
+  4. Fallback path still calls `_discover_bar_types()` and `_catalog_date_range()` for each discovered instrument, so date ranges are populated.
+  5. Fixed the task's suggested algorithm (iterate shortest-to-longest prefix instead of longest-to-shortest) because Nautilus `InstrumentId.from_str` accepts dash-containing strings, which would otherwise match the full filename as an instrument ID with an empty bar type.
+- **Files Changed**: `src/sam_trader/services/backtest/dashboard_api.py`, `tests/unit/services/backtest/test_dashboard_api.py`
+- **Validation Result**: PASS (RALPH_GATE_PASSED — 89/89 backtest dashboard API tests, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ticket ready to close.

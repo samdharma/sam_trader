@@ -14,6 +14,7 @@ from sam_trader.services.backtest.dashboard_api import (
     _build_strategy_from_body,
     _derive_config_path_from_strategy_path,
     _discover_bar_types,
+    _discover_instruments_from_filesystem,
     _generate_run_id,
     _get_catalog,
     _lookup_strategies_from_bundles,
@@ -729,6 +730,94 @@ class TestHandleBacktestCatalogInstruments:
 
         assert result == []
 
+    def test_filesystem_fallback_when_catalog_empty(self, tmp_path: Path) -> None:
+        """When catalog.instruments() returns empty, fallback scans filesystem."""
+        bar_dir = tmp_path / "data" / "bar"
+        bar_dir.mkdir(parents=True)
+        (bar_dir / "TSLA.NASDAQ-5-MINUTE-LAST-EXTERNAL.parquet").write_text("")
+        (bar_dir / "TSLA.NASDAQ-1-HOUR-LAST-EXTERNAL.parquet").write_text("")
+        (bar_dir / "AAPL.NASDAQ-5-MINUTE-LAST-EXTERNAL.parquet").write_text("")
+
+        mock_catalog = MagicMock()
+        mock_catalog.instruments.return_value = []
+        mock_catalog.path = str(tmp_path)
+        mock_catalog.query_first_timestamp.return_value = "2024-01-01T00:00:00"
+        mock_catalog.query_last_timestamp.return_value = "2024-06-30T00:00:00"
+
+        with patch(
+            "sam_trader.services.backtest.dashboard_api._get_catalog",
+            return_value=mock_catalog,
+        ):
+            result = handle_backtest_catalog_instruments(catalog_path=str(tmp_path))
+
+        assert len(result) == 2
+        ids = {r["instrument_id"] for r in result}
+        assert "TSLA.NASDAQ" in ids
+        assert "AAPL.NASDAQ" in ids
+
+        tsla = next(r for r in result if r["instrument_id"] == "TSLA.NASDAQ")
+        assert len(tsla["bar_types"]) == 2
+        assert "TSLA.NASDAQ-5-MINUTE-LAST-EXTERNAL" in tsla["bar_types"]
+        assert "TSLA.NASDAQ-1-HOUR-LAST-EXTERNAL" in tsla["bar_types"]
+        assert tsla["first_bar"] == "2024-01-01T00:00:00"
+        assert tsla["last_bar"] == "2024-06-30T00:00:00"
+
+    def test_filesystem_fallback_hk_instrument(self, tmp_path: Path) -> None:
+        """Fallback discovers HK instruments like 00700.HKEX."""
+        bar_dir = tmp_path / "data" / "bar"
+        bar_dir.mkdir(parents=True)
+        (bar_dir / "00700.HKEX-1-MINUTE-LAST-EXTERNAL.parquet").write_text("")
+        (bar_dir / "00700.HKEX-5-MINUTE-LAST-EXTERNAL.parquet").write_text("")
+
+        mock_catalog = MagicMock()
+        mock_catalog.instruments.return_value = []
+        mock_catalog.path = str(tmp_path)
+        mock_catalog.query_first_timestamp.return_value = "2024-03-01T00:00:00"
+        mock_catalog.query_last_timestamp.return_value = "2024-05-01T00:00:00"
+
+        with patch(
+            "sam_trader.services.backtest.dashboard_api._get_catalog",
+            return_value=mock_catalog,
+        ):
+            result = handle_backtest_catalog_instruments(catalog_path=str(tmp_path))
+
+        assert len(result) == 1
+        assert result[0]["instrument_id"] == "00700.HKEX"
+        assert result[0]["bar_types"] == [
+            "00700.HKEX-1-MINUTE-LAST-EXTERNAL",
+            "00700.HKEX-5-MINUTE-LAST-EXTERNAL",
+        ]
+        assert result[0]["first_bar"] == "2024-03-01T00:00:00"
+        assert result[0]["last_bar"] == "2024-05-01T00:00:00"
+
+    def test_catalog_api_preferred_over_filesystem(self, tmp_path: Path) -> None:
+        """When catalog.instruments() returns data, filesystem is not used."""
+        bar_dir = tmp_path / "data" / "bar"
+        bar_dir.mkdir(parents=True)
+        (bar_dir / "TSLA.NASDAQ-5-MINUTE-LAST-EXTERNAL.parquet").write_text("")
+
+        mock_catalog = MagicMock()
+        mock_instr = MagicMock()
+        mock_instr.id = "AAPL.NASDAQ"
+        mock_catalog.instruments.return_value = [mock_instr]
+        mock_catalog.path = str(tmp_path)
+        mock_catalog.query_first_timestamp.return_value = "2024-02-01T00:00:00"
+        mock_catalog.query_last_timestamp.return_value = "2024-07-01T00:00:00"
+
+        with patch(
+            "sam_trader.services.backtest.dashboard_api._get_catalog",
+            return_value=mock_catalog,
+        ):
+            with patch(
+                "sam_trader.services.backtest.dashboard_api._discover_bar_types",
+                return_value=["AAPL.NASDAQ-5-MINUTE-LAST-EXTERNAL"],
+            ):
+                result = handle_backtest_catalog_instruments(catalog_path=str(tmp_path))
+
+        # Only AAPL from catalog API, not TSLA from filesystem
+        assert len(result) == 1
+        assert result[0]["instrument_id"] == "AAPL.NASDAQ"
+
 
 # ---------------------------------------------------------------------------
 # handle_backtest_catalog_strategies
@@ -1193,6 +1282,95 @@ class TestDiscoverBarTypes:
 # ---------------------------------------------------------------------------
 # Walk-forward tests
 # ---------------------------------------------------------------------------
+
+
+class TestDiscoverInstrumentsFromFilesystem:
+    """Tests for _discover_instruments_from_filesystem."""
+
+    def test_empty_bar_dir(self, tmp_path: Path) -> None:
+        """Empty bar directory returns empty list."""
+        bar_dir = tmp_path / "data" / "bar"
+        bar_dir.mkdir(parents=True)
+        result = _discover_instruments_from_filesystem(str(tmp_path))
+        assert result == []
+
+    def test_no_bar_dir(self, tmp_path: Path) -> None:
+        """Missing bar directory returns empty list."""
+        result = _discover_instruments_from_filesystem(str(tmp_path))
+        assert result == []
+
+    def test_single_instrument_multiple_bar_types(self, tmp_path: Path) -> None:
+        """Discovers one instrument with multiple bar types."""
+        bar_dir = tmp_path / "data" / "bar"
+        bar_dir.mkdir(parents=True)
+        (bar_dir / "TSLA.NASDAQ-5-MINUTE-LAST-EXTERNAL.parquet").write_text("")
+        (bar_dir / "TSLA.NASDAQ-1-HOUR-LAST-EXTERNAL.parquet").write_text("")
+
+        result = _discover_instruments_from_filesystem(str(tmp_path))
+        assert len(result) == 1
+        assert result[0]["instrument_id"] == "TSLA.NASDAQ"
+        assert result[0]["bar_types"] == [
+            "1-HOUR-LAST-EXTERNAL",
+            "5-MINUTE-LAST-EXTERNAL",
+        ]
+
+    def test_multiple_instruments(self, tmp_path: Path) -> None:
+        """Discovers multiple instruments sorted by ID."""
+        bar_dir = tmp_path / "data" / "bar"
+        bar_dir.mkdir(parents=True)
+        (bar_dir / "NVDA.NASDAQ-5-MINUTE-LAST-EXTERNAL.parquet").write_text("")
+        (bar_dir / "AAPL.NASDAQ-5-MINUTE-LAST-EXTERNAL.parquet").write_text("")
+
+        result = _discover_instruments_from_filesystem(str(tmp_path))
+        assert len(result) == 2
+        assert result[0]["instrument_id"] == "AAPL.NASDAQ"
+        assert result[1]["instrument_id"] == "NVDA.NASDAQ"
+
+    def test_hk_instrument(self, tmp_path: Path) -> None:
+        """Discovers HK instrument with numeric symbol."""
+        bar_dir = tmp_path / "data" / "bar"
+        bar_dir.mkdir(parents=True)
+        (bar_dir / "00700.HKEX-1-MINUTE-LAST-EXTERNAL.parquet").write_text("")
+
+        result = _discover_instruments_from_filesystem(str(tmp_path))
+        assert len(result) == 1
+        assert result[0]["instrument_id"] == "00700.HKEX"
+        assert result[0]["bar_types"] == ["1-MINUTE-LAST-EXTERNAL"]
+
+    def test_ignores_non_parquet_files(self, tmp_path: Path) -> None:
+        """Non-parquet files in bar dir are ignored."""
+        bar_dir = tmp_path / "data" / "bar"
+        bar_dir.mkdir(parents=True)
+        (bar_dir / "TSLA.NASDAQ-5-MINUTE-LAST-EXTERNAL.parquet").write_text("")
+        (bar_dir / "README.txt").write_text("hello")
+        (bar_dir / "data.csv").write_text("a,b")
+
+        result = _discover_instruments_from_filesystem(str(tmp_path))
+        assert len(result) == 1
+        assert result[0]["instrument_id"] == "TSLA.NASDAQ"
+
+    def test_skips_files_without_bar_type_suffix(self, tmp_path: Path) -> None:
+        """Parquet files with no bar type suffix are skipped."""
+        bar_dir = tmp_path / "data" / "bar"
+        bar_dir.mkdir(parents=True)
+        (bar_dir / "TSLA.NASDAQ.parquet").write_text("")
+        (bar_dir / "AAPL.NASDAQ-5-MINUTE-LAST-EXTERNAL.parquet").write_text("")
+
+        result = _discover_instruments_from_filesystem(str(tmp_path))
+        assert len(result) == 1
+        assert result[0]["instrument_id"] == "AAPL.NASDAQ"
+
+    def test_discovers_from_directories(self, tmp_path: Path) -> None:
+        """Directory names in bar dir are also scanned."""
+        bar_dir = tmp_path / "data" / "bar"
+        bar_dir.mkdir(parents=True)
+        (bar_dir / "TSLA.NASDAQ-5-MINUTE-LAST-EXTERNAL").mkdir()
+        (bar_dir / "AAPL.NASDAQ-1-HOUR-LAST-EXTERNAL").mkdir()
+
+        result = _discover_instruments_from_filesystem(str(tmp_path))
+        assert len(result) == 2
+        ids = {r["instrument_id"] for r in result}
+        assert ids == {"AAPL.NASDAQ", "TSLA.NASDAQ"}
 
 
 class TestHandleBacktestRunWalkForward:

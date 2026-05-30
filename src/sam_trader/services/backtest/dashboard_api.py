@@ -28,6 +28,7 @@ from typing import Any
 
 from nautilus_trader.backtest.results import BacktestResult
 from nautilus_trader.model.data import Bar
+from nautilus_trader.model.identifiers import InstrumentId
 from nautilus_trader.persistence.catalog.parquet import ParquetDataCatalog
 from nautilus_trader.trading.config import ImportableStrategyConfig
 
@@ -70,6 +71,64 @@ def _get_catalog(catalog_path: str = "data/catalog") -> ParquetDataCatalog | Non
     except Exception as exc:
         logger.warning("Failed to open catalog at %s: %s", catalog_path, exc)
         return None
+
+
+def _discover_instruments_from_filesystem(catalog_path: str) -> list[dict[str, Any]]:
+    """Scan bar directory to discover instruments when catalog.instruments() fails.
+
+    Nautilus ``ParquetDataCatalog.instruments()`` cannot discover instruments
+    when only bar parquet files exist (no instrument metadata).  This helper
+    scans ``<catalog_path>/data/bar/`` and extracts unique instrument IDs
+    from filenames (e.g. ``AAPL.NASDAQ-5-MINUTE-LAST-EXTERNAL.parquet``)
+    or directory names.
+
+    Parameters
+    ----------
+    catalog_path : str
+        Path to the ParquetDataCatalog root.
+
+    Returns
+    -------
+    list[dict[str, Any]]
+        Each entry: ``instrument_id``, ``bar_types``, ``first_bar``,
+        ``last_bar`` (dates are ``None`` — caller should populate via
+        :func:`_catalog_date_range`).
+
+    """
+    bar_dir = Path(catalog_path) / "data" / "bar"
+    if not bar_dir.exists():
+        return []
+
+    instruments: dict[str, set[str]] = {}  # instrument_id -> {bar_types}
+    for entry in bar_dir.iterdir():
+        if entry.is_file() and entry.suffix != ".parquet":
+            continue
+        name = entry.stem if entry.is_file() else entry.name
+        if not name:
+            continue
+        parts = name.split("-")
+        # Try progressively longer prefixes to find the shortest valid
+        # instrument ID (e.g. AAPL.NASDAQ before AAPL.NASDAQ-5-MINUTE...).
+        for i in range(1, len(parts)):
+            candidate = "-".join(parts[:i])
+            try:
+                InstrumentId.from_str(candidate)
+                bar_type = "-".join(parts[i:])
+                if bar_type:
+                    instruments.setdefault(candidate, set()).add(bar_type)
+                break
+            except ValueError:
+                continue
+
+    return [
+        {
+            "instrument_id": iid,
+            "bar_types": sorted(bar_types),
+            "first_bar": None,
+            "last_bar": None,
+        }
+        for iid, bar_types in sorted(instruments.items())
+    ]
 
 
 def _discover_bar_types(catalog: ParquetDataCatalog, instrument_id: str) -> list[str]:
@@ -1223,21 +1282,38 @@ def handle_backtest_catalog_instruments(
         return []
 
     instruments: list[dict[str, Any]] = []
+    catalog_instruments: list[Any] = []
     try:
-        for instr in catalog.instruments():
-            iid = str(instr.id) if hasattr(instr, "id") else str(instr)
-            bar_types = _discover_bar_types(catalog, iid)
-            date_range = _catalog_date_range(catalog, iid)
-            instruments.append(
-                {
-                    "instrument_id": iid,
-                    "bar_types": bar_types,
-                    "first_bar": date_range.get("first_bar"),
-                    "last_bar": date_range.get("last_bar"),
-                }
-            )
+        catalog_instruments = list(catalog.instruments())
     except Exception as exc:
         logger.warning("Failed to enumerate catalog instruments: %s", exc)
+
+    if catalog_instruments:
+        try:
+            for instr in catalog_instruments:
+                iid = str(instr.id) if hasattr(instr, "id") else str(instr)
+                bar_types = _discover_bar_types(catalog, iid)
+                date_range = _catalog_date_range(catalog, iid)
+                instruments.append(
+                    {
+                        "instrument_id": iid,
+                        "bar_types": bar_types,
+                        "first_bar": date_range.get("first_bar"),
+                        "last_bar": date_range.get("last_bar"),
+                    }
+                )
+        except Exception as exc:
+            logger.warning("Failed to process catalog instruments: %s", exc)
+    else:
+        # Fallback: discover from filesystem when catalog API returns empty
+        instruments = _discover_instruments_from_filesystem(catalog_path)
+        for inst in instruments:
+            iid = inst["instrument_id"]
+            bar_types = _discover_bar_types(catalog, iid)
+            date_range = _catalog_date_range(catalog, iid)
+            inst["bar_types"] = bar_types
+            inst["first_bar"] = date_range.get("first_bar")
+            inst["last_bar"] = date_range.get("last_bar")
 
     return instruments
 
