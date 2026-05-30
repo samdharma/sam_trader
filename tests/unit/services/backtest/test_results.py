@@ -320,6 +320,134 @@ class TestSave:
 
 
 # ---------------------------------------------------------------------------
+# Test: save_walk_forward()
+# ---------------------------------------------------------------------------
+
+
+class TestSaveWalkForward:
+    """Tests for BacktestResultStore.save_walk_forward()."""
+
+    def test_saves_walk_forward_result(
+        self,
+        store: BacktestResultStore,
+    ) -> None:
+        """save_walk_forward inserts a row with aggregate stats."""
+        pool = _make_mock_pool()
+
+        with patch("asyncpg.create_pool", AsyncMock(return_value=pool)):
+            import asyncio
+
+            run_id = asyncio.run(
+                store.save_walk_forward(
+                    run_id="wf-001",
+                    strategy_id="tsla-orb",
+                    instrument_id="TSLA.NASDAQ",
+                    bar_type="TSLA.NASDAQ-5-MINUTE-LAST-EXTERNAL",
+                    start_date=date(2024, 1, 1),
+                    end_date=date(2024, 12, 31),
+                    overall_sharpe=1.25,
+                    overall_pnl=5000.0,
+                    profitable_windows=3,
+                    total_windows=4,
+                    param_stability={"stop_loss_ticks": {"5": 3, "10": 1}},
+                    window_results=[
+                        {
+                            "train_start": "2024-01-01",
+                            "train_end": "2024-03-31",
+                            "test_start": "2024-04-01",
+                            "test_end": "2024-06-30",
+                            "best_params": {"stop_loss_ticks": 5},
+                            "train_sharpe": 1.5,
+                            "test_sharpe": 1.2,
+                            "test_pnl": 1200.0,
+                            "test_win_rate": 0.55,
+                            "test_max_dd": -0.08,
+                            "test_trades": 20,
+                            "error": None,
+                        }
+                    ],
+                    elapsed_secs=45.5,
+                    strategy_family="ORB",
+                )
+            )
+
+        assert run_id == "wf-001"
+        pool.acquire.assert_called_once()
+        conn = pool.acquire.return_value.__aenter__.return_value
+        conn.execute.assert_called_once()
+
+        call_args = conn.execute.call_args
+        sql, *params = call_args[0]
+        assert "INSERT INTO backtest_results" in sql
+        assert params[0] == "wf-001"
+        assert params[2] == "tsla-orb"
+        assert params[7] == "completed"
+
+        # Verify JSONB columns contain walk-forward data
+        stats_returns = json.loads(params[13])
+        assert stats_returns["overall_sharpe"] == 1.25
+        assert stats_returns["profitable_windows"] == 3
+        assert stats_returns["total_windows"] == 4
+
+        stats_pnls = json.loads(params[12])
+        assert stats_pnls["overall_pnl"] == 5000.0
+
+        tags = json.loads(params[17])
+        assert tags["mode"] == "walk_forward"
+        assert tags["param_stability"]["stop_loss_ticks"]["5"] == 3
+
+    def test_save_walk_forward_with_error(
+        self,
+        store: BacktestResultStore,
+    ) -> None:
+        """Failed walk-forward stores status=failed and error_message."""
+        pool = _make_mock_pool()
+
+        with patch("asyncpg.create_pool", AsyncMock(return_value=pool)):
+            import asyncio
+
+            asyncio.run(
+                store.save_walk_forward(
+                    run_id="wf-002",
+                    strategy_id="tsla-orb",
+                    instrument_id="TSLA.NASDAQ",
+                    bar_type="TSLA.NASDAQ-5-MINUTE-LAST-EXTERNAL",
+                    start_date=date(2024, 1, 1),
+                    end_date=date(2024, 12, 31),
+                    error_message="Catalog not found",
+                )
+            )
+
+        conn = pool.acquire.return_value.__aenter__.return_value
+        _, *params = conn.execute.call_args[0]
+        assert params[7] == "failed"
+        assert params[18] == "Catalog not found"
+
+    def test_pool_closed_after_save_walk_forward(
+        self,
+        store: BacktestResultStore,
+    ) -> None:
+        """Pool is closed after save_walk_forward."""
+        pool = _make_mock_pool()
+
+        with patch("asyncpg.create_pool", AsyncMock(return_value=pool)):
+            import asyncio
+
+            asyncio.run(
+                store.save_walk_forward(
+                    run_id="wf-003",
+                    strategy_id="test",
+                    instrument_id="TEST.X",
+                    bar_type="TEST.X-1-MINUTE-LAST-EXTERNAL",
+                    start_date=date(2024, 1, 1),
+                    end_date=date(2024, 1, 2),
+                )
+            )
+
+        pool.close.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
 # Test: get_by_strategy()
 # ---------------------------------------------------------------------------
 

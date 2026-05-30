@@ -1190,6 +1190,163 @@ class TestDiscoverBarTypes:
         ]
 
 
+# ---------------------------------------------------------------------------
+# Walk-forward tests
+# ---------------------------------------------------------------------------
+
+
+class TestHandleBacktestRunWalkForward:
+    """Tests for POST /api/backtest/run with walk_forward=true."""
+
+    @staticmethod
+    def _make_importable_strategy(
+        strategy_path: str = "sam_trader.strategies.orb:OrbStrategy",
+        config_path: str = "sam_trader.strategies.orb:OrbStrategyConfig",
+        config: dict[str, Any] | None = None,
+    ) -> ImportableStrategyConfig:
+        return ImportableStrategyConfig(
+            strategy_path=strategy_path,
+            config_path=config_path,
+            config=config or {"bundle_id": "tsla-orb", "strategy_id": "US-tsla-orb"},
+        )
+
+    def test_walk_forward_returns_mode(self) -> None:
+        """Walk-forward request returns mode=walk_forward."""
+        body = {
+            "strategy_id": "tsla-orb",
+            "instrument_ids": ["TSLA.NASDAQ"],
+            "start": "2024-01-01",
+            "end": "2024-12-31",
+            "walk_forward": True,
+            "train_days": 90,
+            "test_days": 30,
+            "sweep_flags": ["stop_loss_ticks=5,10"],
+        }
+        _clear_run_registry()
+        strategy = self._make_importable_strategy()
+        with patch(
+            "sam_trader.services.backtest.dashboard_api._resolve_strategies",
+            return_value=([strategy], None),
+        ):
+            with patch(
+                "sam_trader.services.backtest.dashboard_api._get_catalog",
+                return_value=None,
+            ):
+                with patch(
+                    "sam_trader.services.backtest.dashboard_api.threading.Thread",
+                ) as mock_thread:
+                    result = handle_backtest_run(body, catalog_path="data/catalog")
+
+        assert result["run_id"].startswith("bt-")
+        assert result["status"] == "started"
+        assert result["mode"] == "walk_forward"
+        assert mock_thread.called
+
+    def test_walk_forward_missing_sweep_flags(self) -> None:
+        """Walk-forward without sweep parameters returns error."""
+        body = {
+            "strategy_id": "tsla-orb",
+            "instrument_ids": ["TSLA.NASDAQ"],
+            "start": "2024-01-01",
+            "end": "2024-12-31",
+            "walk_forward": True,
+            "train_days": 90,
+            "test_days": 30,
+        }
+        strategy = self._make_importable_strategy()
+        with patch(
+            "sam_trader.services.backtest.dashboard_api._resolve_strategies",
+            return_value=([strategy], None),
+        ):
+            result = handle_backtest_run(body)
+
+        assert "error" in result
+        assert "sweep" in result["error"].lower()
+
+    def test_walk_forward_invalid_train_days(self) -> None:
+        """Walk-forward with non-numeric train_days returns error."""
+        body = {
+            "strategy_id": "tsla-orb",
+            "instrument_ids": ["TSLA.NASDAQ"],
+            "start": "2024-01-01",
+            "end": "2024-12-31",
+            "walk_forward": True,
+            "train_days": "abc",
+            "test_days": 30,
+            "sweep_flags": ["stop_loss_ticks=5,10"],
+        }
+        strategy = self._make_importable_strategy()
+        with patch(
+            "sam_trader.services.backtest.dashboard_api._resolve_strategies",
+            return_value=([strategy], None),
+        ):
+            result = handle_backtest_run(body)
+
+        assert "error" in result
+        assert "Invalid" in result["error"]
+
+    def test_plain_backtest_returns_mode_backtest(self) -> None:
+        """Plain backtest returns mode=backtest."""
+        body = {
+            "strategy_id": "tsla-orb",
+            "instrument_ids": ["TSLA.NASDAQ"],
+            "start": "2024-01-01",
+            "end": "2024-06-30",
+        }
+        _clear_run_registry()
+        strategy = self._make_importable_strategy()
+        with patch(
+            "sam_trader.services.backtest.dashboard_api._resolve_strategies",
+            return_value=([strategy], None),
+        ):
+            with patch(
+                "sam_trader.services.backtest.dashboard_api._get_catalog",
+                return_value=None,
+            ):
+                with patch(
+                    "sam_trader.services.backtest.dashboard_api.threading.Thread",
+                ):
+                    result = handle_backtest_run(body)
+
+        assert result["run_id"].startswith("bt-")
+        assert result["status"] == "started"
+        assert result.get("mode") == "backtest"
+
+
+class TestParseSweepBody:
+    """Tests for _parse_sweep_body."""
+
+    def test_sweep_flags_format(self) -> None:
+        """CLI-style sweep_flags are parsed into a param grid."""
+        from sam_trader.services.backtest.dashboard_api import _parse_sweep_body
+
+        body = {"sweep_flags": ["stop_loss_ticks=5,10,15", "take_profit_ticks=20,30"]}
+        grid = _parse_sweep_body(body)
+        assert grid == {"stop_loss_ticks": [5, 10, 15], "take_profit_ticks": [20, 30]}
+
+    def test_sweep_params_format(self) -> None:
+        """Pre-parsed sweep_params dict is returned as-is."""
+        from sam_trader.services.backtest.dashboard_api import _parse_sweep_body
+
+        body = {"sweep_params": {"foo": [1, 2], "bar": ["a", "b"]}}
+        grid = _parse_sweep_body(body)
+        assert grid == {"foo": [1, 2], "bar": ["a", "b"]}
+
+    def test_empty_body(self) -> None:
+        """Missing sweep fields return empty dict."""
+        from sam_trader.services.backtest.dashboard_api import _parse_sweep_body
+
+        assert _parse_sweep_body({}) == {}
+
+    def test_invalid_sweep_flags_logged(self) -> None:
+        """Invalid sweep_flags are logged and return empty dict."""
+        from sam_trader.services.backtest.dashboard_api import _parse_sweep_body
+
+        body = {"sweep_flags": ["no_equals_sign"]}
+        grid = _parse_sweep_body(body)
+        assert grid == {}
+
+
 class TestRunRegistryThreadSafety:
     """Tests for the in-memory run registry thread safety."""
 

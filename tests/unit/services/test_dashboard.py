@@ -1637,6 +1637,24 @@ class TestBacktestDashboardUI:
         assert 'id="bt-wf-train"' in html
         assert 'id="bt-wf-test"' in html
 
+    def test_submit_backtest_includes_walk_forward_fields(self) -> None:
+        """submitBacktest sends walk_forward, train_days, test_days when checked."""
+        html = self._render_dashboard()
+        assert "body.walk_forward=true" in html
+        assert "body.train_days=" in html
+        assert "body.test_days=" in html
+        assert "document.getElementById('bt-wf-train').value" in html
+        assert "document.getElementById('bt-wf-test').value" in html
+
+    def test_submit_backtest_collects_sweep_params(self) -> None:
+        """submitBacktest collects sweep params from DOM rows."""
+        html = self._render_dashboard()
+        assert "sweepFlags" in html
+        assert "bt-sweep-key" in html
+        assert "bt-sweep-vals" in html
+        assert "body.sweep_flags=sweepFlags" in html
+        assert "k+'='+v" in html
+
     def test_export_buttons_present(self) -> None:
         """Export buttons (CSV/JSON) are rendered in results tab."""
         html = self._render_dashboard()

@@ -608,6 +608,27 @@ function submitBacktest(){
   var body={strategy_id:sid,instrument_ids:instIds,start:start,end:end};
   var sweepCheck=document.getElementById('bt-sweep-toggle').checked;
   var wfCheck=document.getElementById('bt-wf-toggle').checked;
+  // Collect sweep parameters
+  var sweepFlags=[];
+  if(sweepCheck||wfCheck){
+    var rows=document.querySelectorAll('#bt-sweep-params .bt-sweep-row');
+    for(var ri=0;ri<rows.length;ri++){
+      var row=rows[ri];
+      var key=row.querySelector('.bt-sweep-key');
+      var vals=row.querySelector('.bt-sweep-vals');
+      if(key&&vals){
+        var k=key.value.trim();
+        var v=vals.value.trim();
+        if(k&&v){sweepFlags.push(k+'='+v);}
+      }
+    }
+  }
+  if(sweepFlags.length>0){body.sweep_flags=sweepFlags;}
+  if(wfCheck){
+    body.walk_forward=true;
+    body.train_days=parseInt(document.getElementById('bt-wf-train').value,10)||90;
+    body.test_days=parseInt(document.getElementById('bt-wf-test').value,10)||30;
+  }
   fetch('/api/backtest/run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
     .then(function(r){return r.json();})
     .then(function(d){

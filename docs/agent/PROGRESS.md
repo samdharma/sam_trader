@@ -1,3 +1,16 @@
+## Iteration 153
+- **Task**: 12.1.16: Wire walk-forward to dashboard API
+- **Task ID**: sam_trader-9z3.13.1.16
+- **Status**: COMPLETE
+- **Decisions**: 
+  1. Frontend: `submitBacktest()` now collects sweep params from `.bt-sweep-row` DOM elements (key + comma-separated values). When walk-forward toggle is checked, it sends `{walk_forward: true, train_days: N, test_days: N, sweep_flags: [...]}` in the POST body.
+  2. Backend: `handle_backtest_run()` detects `body.walk_forward`, validates train/test days, parses sweep flags into param_grid via `parse_sweep_flags()`, and launches `_run_walk_forward_in_thread()` instead of plain backtest. Returns `{"run_id", "status": "started", "mode": "walk_forward"}`.
+  3. Walk-forward thread instantiates `WalkForward`, runs `wf.run(param_grid)`, persists `WalkForwardResult` to PG via new `BacktestResultStore.save_walk_forward()`, and updates the in-memory run registry with aggregate stats.
+  4. Plain backtest returns `"mode": "backtest"` for explicitness.
+- **Files Changed**: `src/sam_trader/services/dashboard.py` (+22 lines: sweep param collection, walk-forward body fields), `src/sam_trader/services/backtest/dashboard_api.py` (+130 lines: _parse_sweep_body, handle_backtest_run walk-forward branch, _run_walk_forward_in_thread), `src/sam_trader/services/backtest/results.py` (+95 lines: save_walk_forward method), `tests/unit/services/backtest/test_dashboard_api.py` (+95 lines: 7 tests), `tests/unit/services/backtest/test_results.py` (+75 lines: 3 tests), `tests/unit/services/test_dashboard.py` (+18 lines: 2 tests)
+- **Validation Result**: PASS (RALPH_GATE_PASSED — 163/163 targeted tests, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None.
+
 ## Iteration 152
 - **Task**: 12.1.13: Strategy catalog API + dashboard dropdown
 - **Task ID**: sam_trader-9z3.13.1.13

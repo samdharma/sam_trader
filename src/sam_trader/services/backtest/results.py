@@ -268,6 +268,149 @@ class BacktestResultStore:
 
         return run_id
 
+    async def save_walk_forward(
+        self,
+        *,
+        run_id: str,
+        strategy_id: str,
+        instrument_id: str,
+        bar_type: str,
+        start_date: date,
+        end_date: date,
+        overall_sharpe: float | None = None,
+        overall_pnl: float | None = None,
+        profitable_windows: int = 0,
+        total_windows: int = 0,
+        param_stability: dict[str, Any] | None = None,
+        window_results: list[dict[str, Any]] | None = None,
+        elapsed_secs: float | None = None,
+        strategy_family: str | None = None,
+        error_message: str | None = None,
+    ) -> str:
+        """Persist a walk-forward optimisation result.
+
+        Stores aggregate metrics in ``stats_returns`` and ``stats_pnls``,
+        with full per-window detail in ``tags``.
+
+        Parameters
+        ----------
+        run_id : str
+            Unique run identifier.
+        strategy_id : str
+            Strategy identifier.
+        instrument_id : str
+            Instrument identifier.
+        bar_type : str
+            Bar type string.
+        start_date : date
+            Data start date.
+        end_date : date
+            Data end date.
+        overall_sharpe : float | None
+            Mean test-period Sharpe across all windows.
+        overall_pnl : float | None
+            Sum of test-period P&L across all windows.
+        profitable_windows : int
+            Number of windows with positive P&L.
+        total_windows : int
+            Total number of windows processed.
+        param_stability : dict | None
+            Parameter selection frequency map.
+        window_results : list[dict] | None
+            Per-window results serialised as dicts.
+        elapsed_secs : float | None
+            Total elapsed time.
+        strategy_family : str | None
+            Strategy family tag.
+        error_message : str | None
+            Error message if the run failed.
+
+        Returns
+        -------
+        str
+            The ``run_id`` of the persisted row.
+
+        """
+        try:
+            import asyncpg
+        except ImportError as exc:
+            raise RuntimeError("asyncpg is required for PG connectivity") from exc
+
+        try:
+            pool = await asyncpg.create_pool(self._pg_dsn, min_size=1, max_size=2)
+        except Exception as exc:
+            raise RuntimeError(f"Failed to connect to PostgreSQL: {exc}") from exc
+
+        stats_returns = {
+            "overall_sharpe": overall_sharpe,
+            "profitable_windows": profitable_windows,
+            "total_windows": total_windows,
+        }
+        stats_pnls = {"overall_pnl": overall_pnl}
+        tags = {
+            "mode": "walk_forward",
+            "param_stability": param_stability,
+            "window_results": window_results,
+        }
+
+        try:
+            async with pool.acquire() as conn:
+                await conn.execute(
+                    """
+                    INSERT INTO backtest_results (
+                        run_id, run_config_id, strategy_id, instrument_id, bar_type,
+                        start_date, end_date, status,
+                        total_events, total_orders, total_positions,
+                        elapsed_secs,
+                        stats_pnls, stats_returns, equity_curve,
+                        strategy_family, strategy_version, tags,
+                        error_message
+                    ) VALUES (
+                        $1, $2, $3, $4, $5,
+                        $6, $7, $8,
+                        $9, $10, $11,
+                        $12,
+                        $13::jsonb, $14::jsonb, $15::jsonb,
+                        $16, $17, $18::jsonb,
+                        $19
+                    )
+                    ON CONFLICT (run_id) DO UPDATE SET
+                        status = EXCLUDED.status,
+                        total_events = EXCLUDED.total_events,
+                        total_orders = EXCLUDED.total_orders,
+                        total_positions = EXCLUDED.total_positions,
+                        elapsed_secs = EXCLUDED.elapsed_secs,
+                        stats_pnls = EXCLUDED.stats_pnls,
+                        stats_returns = EXCLUDED.stats_returns,
+                        equity_curve = EXCLUDED.equity_curve,
+                        error_message = EXCLUDED.error_message
+                    """,
+                    run_id,
+                    "",
+                    strategy_id,
+                    instrument_id,
+                    bar_type,
+                    start_date,
+                    end_date,
+                    "failed" if error_message else "completed",
+                    None,
+                    None,
+                    None,
+                    elapsed_secs,
+                    _serialize_stats(stats_pnls),
+                    _serialize_stats(stats_returns),
+                    "null",
+                    strategy_family,
+                    None,
+                    _serialize_stats(tags),
+                    error_message,
+                )
+                logger.debug("Saved walk-forward result run_id=%s", run_id)
+        finally:
+            await pool.close()
+
+        return run_id
+
     async def get_by_strategy(
         self,
         strategy_id: str,
