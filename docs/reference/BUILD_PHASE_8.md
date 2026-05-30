@@ -32,8 +32,8 @@
 │    └── sam version       →  show deployed version                 │
 ├──────────────────────────────────────────────────────────────────┤
 │  Cron                                                             │
-│    ├── Daily backup        @ 06:00 HKT weekdays                  │
-│    ├── Log rotation        @ 03:00 HKT daily                     │
+│    ├── Daily backup        @ 04:30 HKT weekdays                  │
+│    ├── Log rotation        @ 04:15 HKT daily                     │
 │    ├── Deploy window check @ every 30min, 04:00–09:00 HKT        │
 │    ├── Pipeline slot        @ 08:00 HKT weekdays                 │
 │    └── Performance analysis @ 02:00 HKT daily (NEW)              │
@@ -146,8 +146,8 @@ sam = "sam_trader.services.cli:main"
 
 **Current crontab** (`src/sam_trader/services/crontab`):
 ```
-0 6 * * 1-5 sam ... python3 -m sam_trader.services.backup backup
-0 3 * * * sam ... python3 -m sam_trader.services.rotate_logs
+30 4 * * 1-5 sam ... python3 -m sam_trader.services.backup backup
+15 4 * * * sam ... python3 -m sam_trader.services.rotate_logs
 */30 4-9 * * * sam ... python3 -m sam_trader.services.deploy_window
 0 8 * * 1-5 sam ... python3 -m sam_trader.services.pipeline
 ```
@@ -581,9 +581,9 @@ def _cmd_performance(args: argparse.Namespace) -> int:
 ### Design Notes — Market-Aware Cron
 - US pipeline: 20:30 HKT weekdays (gated on `is_trading_day('US')`)
 - HK pipeline: 07:30 HKT weekdays (gated on `is_trading_day('HK')`)
-- Backup: 05:00 HKT weekdays (within maintenance window)
+- Backup: 04:30 HKT weekdays (right after log rotation, within maintenance window)
 - Performance analysis: 02:00 HKT daily
-- Log rotation: 03:00 HKT (unchanged)
+- Log rotation: 04:15 HKT daily (right after US close at 04:00 HKT)
 - All pipeline cron entries check `MarketCalendarService.is_trading_day()` before execution
 
 ### Nautilus Types / Patterns Used
