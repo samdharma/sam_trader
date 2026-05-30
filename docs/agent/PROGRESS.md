@@ -1,5 +1,14 @@
 > **Note: see first-entry Iteration 20 for Phase 2 config dataclasses.**
 
+## Iteration 150
+- **Task**: Futu ExecClient: missing generate_order_status_report (singular) causes NotImplementedError and forced order cancellations
+- **Task ID**: sam_trader-0yy
+- **Status**: COMPLETE
+- **Decisions**: Implemented `generate_order_status_report` (singular) on `FutuLiveExecutionClient`. The method queries Futu via `history_order_list_query` for the instrument and filters the returned rows by `venue_order_id` or `client_order_id`. Returns `OrderStatusReport` on match, `None` otherwise. Early return when `instrument_id` is None or `trade_ctx` unavailable (no unnecessary SDK calls). Matching by venue_order_id first (most precise), client_order_id second (defense in depth — though Futu reports currently don't populate client_order_id from `parse_futu_order_to_report`).
+- **Files Changed**: `src/sam_trader/adapters/futu/execution.py` (+65 lines: import, method), `tests/unit/adapters/futu/test_execution.py` (+172 lines: 5 new tests, TrdEnv import)
+- **Validation Result**: PASS (RALPH_GATE_PASSED — 120/120 targeted tests, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: The `parse_futu_order_to_report` function doesn't set `client_order_id` on OrderStatusReport (Futu SDK doesn't return it), so client_order_id matching is a no-op in practice. The venue_order_id path is what Nautilus primarily uses during reconciliation. This eliminates the NotImplementedError that caused prior-session orders to be force-canceled on every restart.
+
 ## Iteration 149
 - **Task**: Portfolio account registration: discovered acc_id not registered
 - **Task ID**: sam_trader-9z3.4.13
