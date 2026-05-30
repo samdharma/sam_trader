@@ -411,6 +411,136 @@ class BacktestResultStore:
 
         return run_id
 
+    async def save_sweep(
+        self,
+        *,
+        run_id: str,
+        strategy_id: str,
+        instrument_id: str,
+        bar_type: str,
+        start_date: date,
+        end_date: date,
+        sweep_results: list[dict[str, Any]] | None = None,
+        elapsed_secs: float | None = None,
+        strategy_family: str | None = None,
+        error_message: str | None = None,
+    ) -> str:
+        """Persist a parameter sweep result.
+
+        Stores the top result's Sharpe in ``stats_returns``, top P&L in
+        ``stats_pnls``, and the full ranked sweep results in ``tags``.
+
+        Parameters
+        ----------
+        run_id : str
+            Unique run identifier.
+        strategy_id : str
+            Strategy identifier.
+        instrument_id : str
+            Instrument identifier.
+        bar_type : str
+            Bar type string.
+        start_date : date
+            Data start date.
+        end_date : date
+            Data end date.
+        sweep_results : list[dict] | None
+            Ranked sweep results from :meth:`ParameterSweep.run`.
+        elapsed_secs : float | None
+            Total elapsed time.
+        strategy_family : str | None
+            Strategy family tag.
+        error_message : str | None
+            Error message if the run failed.
+
+        Returns
+        -------
+        str
+            The ``run_id`` of the persisted row.
+
+        """
+        try:
+            import asyncpg
+        except ImportError as exc:
+            raise RuntimeError("asyncpg is required for PG connectivity") from exc
+
+        try:
+            pool = await asyncpg.create_pool(self._pg_dsn, min_size=1, max_size=2)
+        except Exception as exc:
+            raise RuntimeError(f"Failed to connect to PostgreSQL: {exc}") from exc
+
+        top_sharpe: float | None = None
+        top_pnl: float | None = None
+        if sweep_results:
+            top = sweep_results[0]
+            top_sharpe = top.get("sharpe")
+            top_pnl = top.get("net_pnl")
+
+        stats_returns = {"sharpe_ratio": top_sharpe}
+        stats_pnls = {"overall_pnl": top_pnl}
+        tags: dict[str, Any] = {
+            "mode": "sweep",
+            "sweep_results": sweep_results,
+        }
+
+        try:
+            async with pool.acquire() as conn:
+                await conn.execute(
+                    """
+                    INSERT INTO backtest_results (
+                        run_id, run_config_id, strategy_id, instrument_id, bar_type,
+                        start_date, end_date, status,
+                        total_events, total_orders, total_positions,
+                        elapsed_secs,
+                        stats_pnls, stats_returns, equity_curve,
+                        strategy_family, strategy_version, tags,
+                        error_message
+                    ) VALUES (
+                        $1, $2, $3, $4, $5,
+                        $6, $7, $8,
+                        $9, $10, $11,
+                        $12,
+                        $13::jsonb, $14::jsonb, $15::jsonb,
+                        $16, $17, $18::jsonb,
+                        $19
+                    )
+                    ON CONFLICT (run_id) DO UPDATE SET
+                        status = EXCLUDED.status,
+                        total_events = EXCLUDED.total_events,
+                        total_orders = EXCLUDED.total_orders,
+                        total_positions = EXCLUDED.total_positions,
+                        elapsed_secs = EXCLUDED.elapsed_secs,
+                        stats_pnls = EXCLUDED.stats_pnls,
+                        stats_returns = EXCLUDED.stats_returns,
+                        equity_curve = EXCLUDED.equity_curve,
+                        error_message = EXCLUDED.error_message
+                    """,
+                    run_id,
+                    "",
+                    strategy_id,
+                    instrument_id,
+                    bar_type,
+                    start_date,
+                    end_date,
+                    "failed" if error_message else "completed",
+                    None,
+                    None,
+                    None,
+                    elapsed_secs,
+                    _serialize_stats(stats_pnls),
+                    _serialize_stats(stats_returns),
+                    "null",
+                    strategy_family,
+                    None,
+                    _serialize_stats(tags),
+                    error_message,
+                )
+                logger.debug("Saved sweep result run_id=%s", run_id)
+        finally:
+            await pool.close()
+
+        return run_id
+
     async def get_by_strategy(
         self,
         strategy_id: str,

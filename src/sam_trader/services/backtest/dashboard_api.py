@@ -37,7 +37,7 @@ from sam_trader.services.backtest.engine import (
     BacktestEngineWrapper,
 )
 from sam_trader.services.backtest.results import BacktestResultStore, _build_pg_dsn
-from sam_trader.services.backtest.sweep import parse_sweep_flags
+from sam_trader.services.backtest.sweep import ParameterSweep, parse_sweep_flags
 from sam_trader.services.backtest.walk_forward import WalkForward, parse_days_flag
 
 logger = logging.getLogger(__name__)
@@ -493,6 +493,103 @@ def _run_walk_forward_in_thread(
         _update_run_status(run_id, "failed", error=str(exc))
 
 
+def _run_sweep_in_thread(
+    run_id: str,
+    catalog_path: str,
+    strategies: list[dict[str, Any]],
+    strategy_id: str,
+    instrument_ids: list[str],
+    bar_types: list[str],
+    start: str,
+    end: str,
+    param_grid: dict[str, list],
+    pg_dsn: str,
+) -> None:
+    """Run a parameter sweep in a background thread and persist results."""
+    import time
+
+    try:
+        _update_run_status(run_id, "running", progress_pct=0)
+
+        # Rebuild ImportableStrategyConfig objects
+        strategy_configs: list[ImportableStrategyConfig] = []
+        for s in strategies:
+            strategy_configs.append(
+                ImportableStrategyConfig(
+                    strategy_path=s["strategy_path"],
+                    config_path=s["config_path"],
+                    config=s["config"],
+                )
+            )
+
+        wrapper = BacktestEngineWrapper(catalog_path=catalog_path)
+        sweeper = ParameterSweep(
+            wrapper=wrapper,
+            base_strategies=strategy_configs,
+            instrument_ids=instrument_ids,
+            bar_types=bar_types,
+            start=start,
+            end=end,
+        )
+
+        _update_run_status(run_id, "running", progress_pct=50)
+
+        t0 = time.monotonic()
+        try:
+            sweep_results = sweeper.run(param_grid=param_grid)
+        except Exception as exc:
+            logger.exception("Sweep %s failed during run", run_id)
+            _update_run_status(run_id, "failed", error=str(exc))
+            return
+        elapsed = time.monotonic() - t0
+
+        _update_run_status(run_id, "running", progress_pct=80)
+
+        # Persist
+        store = BacktestResultStore(pg_dsn=pg_dsn)
+        try:
+            import asyncio
+
+            loop = asyncio.new_event_loop()
+            try:
+                loop.run_until_complete(
+                    store.save_sweep(
+                        run_id=run_id,
+                        strategy_id=strategy_id,
+                        instrument_id=instrument_ids[0],
+                        bar_type=bar_types[0] if bar_types else "",
+                        start_date=date.fromisoformat(start),
+                        end_date=date.fromisoformat(end),
+                        sweep_results=sweep_results,
+                        elapsed_secs=round(elapsed, 2),
+                        strategy_family=(
+                            strategy_configs[0].config.get("family")
+                            if strategy_configs
+                            else None
+                        ),
+                    )
+                )
+            finally:
+                loop.close()
+        except Exception as exc:
+            logger.exception("Failed to persist sweep result run_id=%s", run_id)
+            _update_run_status(run_id, "failed", error=f"Persistence error: {exc}")
+            return
+
+        # Extract stats for registry
+        stats = {
+            "sweep_result_count": len(sweep_results),
+            "top_sharpe": sweep_results[0].get("sharpe") if sweep_results else None,
+            "top_pnl": sweep_results[0].get("net_pnl") if sweep_results else None,
+            "top_params": sweep_results[0].get("combo") if sweep_results else None,
+        }
+        _update_run_status(run_id, "completed", progress_pct=100, result=stats)
+
+    except Exception as exc:
+        logger.exception("Sweep %s failed with unexpected error", run_id)
+        _update_run_status(run_id, "failed", error=str(exc))
+
+
 def _update_run_status(
     run_id: str,
     status: str,
@@ -626,10 +723,16 @@ def handle_backtest_run(
     - ``test_days`` (int) — test window in days
     - ``sweep_flags`` (list[str]) — parameter sweep flags
 
+    **Parameter sweep mode** (optional):
+
+    - ``sweep_flags`` (list[str]) — parameter sweep flags
+    - ``sweep_params`` (dict[str, list]) — pre-parsed parameter grid
+
     Returns
     -------
     dict
-        ``{"run_id": str, "status": "started", "mode": "backtest"|"walk_forward"}``
+        ``{"run_id": str, "status": "started", "mode":
+        "backtest"|"walk_forward"|"sweep"}``
 
     """
     strategy_id: str = body.get("strategy_id", "")
@@ -693,6 +796,8 @@ def handle_backtest_run(
             }
         )
 
+    param_grid = _parse_sweep_body(body)
+
     if walk_forward:
         train_days_raw: str | int = body.get("train_days", 90)
         test_days_raw: str | int = body.get("test_days", 30)
@@ -710,7 +815,6 @@ def handle_backtest_run(
         except ValueError as exc:
             return {"error": f"Invalid walk-forward days: {exc}"}
 
-        param_grid = _parse_sweep_body(body)
         if not param_grid:
             return {
                 "error": "Walk-forward requires sweep parameters. "
@@ -738,6 +842,27 @@ def handle_backtest_run(
         )
         thread.start()
         return {"run_id": run_id, "status": "started", "mode": "walk_forward"}
+
+    if param_grid:
+        thread = threading.Thread(
+            target=_run_sweep_in_thread,
+            args=(
+                run_id,
+                catalog_path,
+                strategies_serialised,
+                strategy_id,
+                instrument_ids,
+                bar_types,
+                start,
+                end,
+                param_grid,
+                dsn,
+            ),
+            daemon=True,
+            name=f"bt-{run_id}",
+        )
+        thread.start()
+        return {"run_id": run_id, "status": "started", "mode": "sweep"}
 
     thread = threading.Thread(
         target=_run_backtest_in_thread,
