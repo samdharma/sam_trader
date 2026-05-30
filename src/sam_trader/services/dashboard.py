@@ -705,7 +705,7 @@ function renderResultsTable(rows){
       '<td>'+escHtml(r.end_date||'')+'</td>'+
       '<td>'+badge+'</td>'+
       '<td>'+(r.elapsed_secs!=null?parseFloat(r.elapsed_secs).toFixed(1)+'s':'—')+'</td>'+
-      '<td><button class="bt-btn-small" onclick="showRunDetail(\''+escHtml(r.run_id||'')+'\')">Detail</button></td>'+
+      '<td><button class="bt-btn-small" onclick="showRunDetail(' + escHtml(r.run_id||'') + ')">Detail</button></td>'+
     '</tr>';
   }).join('');
 }
