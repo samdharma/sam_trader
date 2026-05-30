@@ -217,6 +217,75 @@ class TestBarDownloaderDownload:
         assert "network error" in result.results[0].error
         mock_catalog.write_data.assert_not_called()
 
+    @patch("sam_trader.services.bar_downloader.get_cached_futu_quote_context")
+    @patch("sam_trader.services.bar_downloader.ParquetDataCatalog")
+    def test_explicit_start_end_dates(
+        self,
+        mock_catalog_cls: Any,
+        mock_get_ctx: Any,
+        downloader: BarDownloader,
+    ) -> None:
+        """Download with explicit start_date/end_date uses them directly."""
+        mock_catalog = MagicMock()
+        mock_catalog.query_last_timestamp.return_value = None
+        mock_catalog_cls.return_value = mock_catalog
+
+        mock_ctx = MagicMock()
+        mock_df = pd.DataFrame(
+            {
+                "time_key": ["2023-06-01 09:30:00", "2023-06-01 09:35:00"],
+                "open": [100.0, 101.0],
+                "close": [101.0, 102.0],
+                "high": [102.0, 103.0],
+                "low": [99.0, 100.0],
+                "volume": [1000, 2000],
+            }
+        )
+        mock_ctx.request_history_kline.return_value = (0, mock_df, None)
+        mock_get_ctx.return_value = mock_ctx
+
+        from datetime import date
+
+        result = asyncio.run(
+            downloader.download(
+                instrument_ids=["TSLA.NASDAQ"],
+                bar_type_spec="5-MINUTE",
+                start_date=date(2023, 1, 1),
+                end_date=date(2024, 12, 31),
+            )
+        )
+
+        assert result.total_bars_written == 2
+        call_args = mock_ctx.request_history_kline.call_args[1]
+        assert call_args["start"] == "2023-01-01"
+        assert call_args["end"] == "2024-12-31"
+
+    def test_only_start_date_raises(self, downloader: BarDownloader) -> None:
+        """Providing only start_date without end_date raises BarDownloaderError."""
+        from datetime import date
+
+        with pytest.raises(BarDownloaderError, match="start_date and end_date"):
+            asyncio.run(
+                downloader.download(
+                    instrument_ids=["TSLA.NASDAQ"],
+                    bar_type_spec="5-MINUTE",
+                    start_date=date(2023, 1, 1),
+                )
+            )
+
+    def test_only_end_date_raises(self, downloader: BarDownloader) -> None:
+        """Providing only end_date without start_date raises BarDownloaderError."""
+        from datetime import date
+
+        with pytest.raises(BarDownloaderError, match="start_date and end_date"):
+            asyncio.run(
+                downloader.download(
+                    instrument_ids=["TSLA.NASDAQ"],
+                    bar_type_spec="5-MINUTE",
+                    end_date=date(2024, 12, 31),
+                )
+            )
+
     def test_unsupported_bar_type_raises(self, downloader: BarDownloader) -> None:
         """Unsupported bar type raises BarDownloaderError immediately."""
         with pytest.raises(BarDownloaderError, match="Unsupported bar_type_spec"):

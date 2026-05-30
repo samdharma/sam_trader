@@ -2396,7 +2396,16 @@ class TestDownloadBarsCommand:
         mock_downloader.download = _mock_download
         mock_cls.return_value = mock_downloader
 
-        rc = main(["--json", "download-bars", "--instrument", "TSLA.NASDAQ"])
+        rc = main(
+            [
+                "--json",
+                "download-bars",
+                "--instrument",
+                "TSLA.NASDAQ",
+                "--lookback",
+                "365",
+            ]
+        )
         captured = capsys.readouterr()
         assert rc == 0
         data = json.loads(captured.out)
@@ -2408,13 +2417,131 @@ class TestDownloadBarsCommand:
         self, mock_get_inst: Any, capsys: Any
     ) -> None:
         mock_get_inst.return_value = []
-        rc = main(["download-bars"])
+        rc = main(["download-bars", "--lookback", "365"])
         captured = capsys.readouterr()
         assert rc == 1
         assert (
             "No enabled FUTU instruments" in captured.out
             or "No enabled FUTU instruments" in captured.err
         )
+
+    @patch("sam_trader.services.cli.BarDownloader")
+    def test_download_bars_with_start_end(self, mock_cls: Any, capsys: Any) -> None:
+        mock_downloader = MagicMock()
+        mock_result = MagicMock()
+        mock_result.total_bars_downloaded = 100
+        mock_result.total_bars_written = 100
+        mock_result.instruments_failed = []
+        mock_result.results = [
+            MagicMock(
+                instrument_id="TSLA.NASDAQ",
+                bars_downloaded=100,
+                bars_written=100,
+                start_date="2023-01-01",
+                end_date="2024-12-31",
+                error=None,
+            )
+        ]
+
+        mock_downloader.download = AsyncMock(return_value=mock_result)
+        mock_cls.return_value = mock_downloader
+
+        rc = main(
+            [
+                "download-bars",
+                "--instrument",
+                "TSLA.NASDAQ",
+                "--bar-type",
+                "5-MINUTE",
+                "--start",
+                "2023-01-01",
+                "--end",
+                "2024-12-31",
+            ]
+        )
+        captured = capsys.readouterr()
+        assert rc == 0
+        assert "TSLA.NASDAQ" in captured.out
+        assert "OK" in captured.out
+        assert "2023-01-01" in captured.out
+        mock_cls.assert_called_once_with(catalog_path="data/catalog")
+        # Verify start_date and end_date were passed to download()
+        call_kwargs = mock_downloader.download.call_args[1]
+        assert call_kwargs["start_date"].isoformat() == "2023-01-01"
+        assert call_kwargs["end_date"].isoformat() == "2024-12-31"
+
+    def test_download_bars_mutual_exclusive_date_and_lookback(
+        self, capsys: Any
+    ) -> None:
+        rc = main(
+            [
+                "download-bars",
+                "--instrument",
+                "TSLA.NASDAQ",
+                "--lookback",
+                "30",
+                "--start",
+                "2023-01-01",
+                "--end",
+                "2024-12-31",
+            ]
+        )
+        captured = capsys.readouterr()
+        assert rc == 1
+        assert "mutually exclusive" in captured.err.lower()
+
+    def test_download_bars_start_without_end(self, capsys: Any) -> None:
+        rc = main(
+            [
+                "download-bars",
+                "--instrument",
+                "TSLA.NASDAQ",
+                "--start",
+                "2023-01-01",
+            ]
+        )
+        captured = capsys.readouterr()
+        assert rc == 1
+        assert "--start and --end must be provided together" in captured.err
+
+    def test_download_bars_end_without_start(self, capsys: Any) -> None:
+        rc = main(
+            [
+                "download-bars",
+                "--instrument",
+                "TSLA.NASDAQ",
+                "--end",
+                "2024-12-31",
+            ]
+        )
+        captured = capsys.readouterr()
+        assert rc == 1
+        assert "--start and --end must be provided together" in captured.err
+
+    def test_download_bars_neither_lookback_nor_dates(self, capsys: Any) -> None:
+        rc = main(["download-bars", "--instrument", "TSLA.NASDAQ"])
+        captured = capsys.readouterr()
+        assert rc == 1
+        assert (
+            "must provide either --lookback or both --start and --end"
+            in captured.err.lower()
+        )
+
+    def test_download_bars_invalid_date_format(self, capsys: Any) -> None:
+        rc = main(
+            [
+                "download-bars",
+                "--instrument",
+                "TSLA.NASDAQ",
+                "--start",
+                "not-a-date",
+                "--end",
+                "2024-12-31",
+            ]
+        )
+        captured = capsys.readouterr()
+        assert rc == 1
+        assert "invalid date format" in captured.err.lower()
 
 
 class TestBacktestCommand:

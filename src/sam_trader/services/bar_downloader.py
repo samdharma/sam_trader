@@ -121,6 +121,8 @@ class BarDownloader:
         instrument_ids: list[str],
         bar_type_spec: str = "5-MINUTE",
         lookback_days: int = 365,
+        start_date: date | None = None,
+        end_date: date | None = None,
     ) -> BatchDownloadResult:
         """Download bars for multiple instruments.
 
@@ -132,6 +134,11 @@ class BarDownloader:
             One of ``1-MINUTE``, ``5-MINUTE``, ``15-MINUTE``, ``1-HOUR``, ``DAY``.
         lookback_days : int, optional
             Number of calendar days to look back from today.
+            Ignored when *start_date* and *end_date* are provided.
+        start_date : date, optional
+            Explicit start date (inclusive). Must be provided with *end_date*.
+        end_date : date, optional
+            Explicit end date (inclusive). Must be provided with *start_date*.
 
         Returns
         -------
@@ -150,8 +157,15 @@ class BarDownloader:
                 f"Supported: {list(_BAR_TYPE_TO_KL_TYPE.keys())}"
             )
 
-        end_date = datetime.now(timezone.utc).date()
-        start_date = end_date - timedelta(days=lookback_days)
+        if start_date is not None and end_date is not None:
+            pass
+        elif start_date is None and end_date is None:
+            end_date = datetime.now(timezone.utc).date()
+            start_date = end_date - timedelta(days=lookback_days)
+        else:
+            raise BarDownloaderError(
+                "start_date and end_date must both be provided or both be omitted."
+            )
 
         results: list[DownloadResult] = []
         total_downloaded = 0

@@ -3697,9 +3697,21 @@ def backtest(
 )
 @click.option(
     "--lookback",
-    default=365,
+    default=None,
     type=int,
     help="Number of calendar days to look back (default 365).",
+)
+@click.option(
+    "--start",
+    "start_date",
+    default=None,
+    help="Start date (ISO format, e.g., 2023-01-01). Must be used with --end.",
+)
+@click.option(
+    "--end",
+    "end_date",
+    default=None,
+    help="End date (ISO format, e.g., 2024-12-31). Must be used with --start.",
 )
 @click.option(
     "--catalog",
@@ -3712,14 +3724,48 @@ def download_bars(
     ctx: click.Context,
     instrument: str | None,
     bar_type_spec: str,
-    lookback: int,
+    lookback: int | None,
+    start_date: str | None,
+    end_date: str | None,
     catalog_path: str,
 ) -> None:
     """Download historical bars from Futu OpenD to Parquet catalog.
 
     Defaults to all enabled FUTU instruments from config/bundles.yaml when
     --instrument is not specified.
+
+    Use either --lookback OR both --start and --end.
     """
+    from datetime import date as _date
+
+    # Validate date args
+    has_range = start_date is not None or end_date is not None
+    has_lookback = lookback is not None
+
+    if has_range and has_lookback:
+        raise click.ClickException(
+            "--start/--end and --lookback are mutually exclusive. "
+            "Use one or the other."
+        )
+
+    if not has_range and not has_lookback:
+        raise click.ClickException(
+            "Must provide either --lookback or both --start and --end."
+        )
+
+    parsed_start: _date | None = None
+    parsed_end: _date | None = None
+    if has_range:
+        if start_date is None or end_date is None:
+            raise click.ClickException("--start and --end must be provided together.")
+        try:
+            parsed_start = _date.fromisoformat(start_date)
+            parsed_end = _date.fromisoformat(end_date)
+        except ValueError as exc:
+            raise click.ClickException(
+                f"Invalid date format: {exc}. Use ISO format (YYYY-MM-DD)."
+            )
+
     if instrument:
         instrument_ids = [instrument]
     else:
@@ -3739,7 +3785,9 @@ def download_bars(
             downloader.download(
                 instrument_ids=instrument_ids,
                 bar_type_spec=bar_type_spec,
-                lookback_days=lookback,
+                lookback_days=lookback if lookback is not None else 365,
+                start_date=parsed_start,
+                end_date=parsed_end,
             )
         )
     except BarDownloaderError as exc:
@@ -3748,20 +3796,28 @@ def download_bars(
     summary: dict[str, Any] = {
         "command": "download-bars",
         "bar_type": bar_type_spec,
-        "lookback_days": lookback,
         "instruments": instrument_ids,
         "total_bars_downloaded": result.total_bars_downloaded,
         "total_bars_written": result.total_bars_written,
         "failed": result.instruments_failed,
     }
+    if lookback is not None:
+        summary["lookback_days"] = lookback
+    if parsed_start is not None:
+        summary["start_date"] = str(parsed_start)
+    if parsed_end is not None:
+        summary["end_date"] = str(parsed_end)
 
     if ctx.obj.get("json"):
         _out(ctx, summary)
     else:
-        lines = [
-            f"Download Bars: {bar_type_spec} (lookback={lookback}d)",
-            "=" * 50,
-        ]
+        if lookback is not None:
+            header = f"Download Bars: {bar_type_spec} (lookback={lookback}d)"
+        else:
+            header = (
+                f"Download Bars: {bar_type_spec} " f"({parsed_start} → {parsed_end})"
+            )
+        lines = [header, "=" * 50]
         for r in result.results:
             if r.error:
                 lines.append(f"{r.instrument_id:<20} [FAIL] {r.error}")
