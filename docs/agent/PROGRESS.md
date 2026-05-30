@@ -2485,3 +2485,16 @@
 - **Files Changed**: `src/sam_trader/services/cli.py` (+210 lines: `_infer_bar_type_from_catalog`, `_build_adhoc_strategy`, ad-hoc validation logic), `tests/unit/services/test_cli.py` (+190 lines: 9 new tests)
 - **Validation Result**: PASS (RALPH_GATE_PASSED — 119/119 targeted tests, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ticket ready to close.
+
+## Iteration 158
+- **Task**: 12.1.22: download-bars — add --start/--end date flags (no more lookback math)
+- **Task ID**: sam_trader-9z3.13.1.22
+- **Status**: COMPLETE
+- **Decisions**:
+  1. `BarDownloader.download()` now accepts optional `start_date` and `end_date` params (`date` objects). When both provided, they override `lookback_days`. When only one is provided, `BarDownloaderError` is raised.
+  2. CLI `download-bars` adds `--start` and `--end` options (ISO format YYYY-MM-DD). They are mutually exclusive with `--lookback`. At least one of (`--start`+`--end`) or `--lookback` must be provided.
+  3. `--lookback` default changed from `365` to `None` so the CLI can distinguish whether the user explicitly provided it or not, enabling proper mutual exclusivity validation.
+  4. JSON output and table header updated to show date range when `--start`/`--end` are used instead of lookback.
+- **Files Changed**: `src/sam_trader/services/bar_downloader.py`, `src/sam_trader/services/cli.py`, `tests/unit/services/test_bar_downloader.py`, `tests/unit/services/test_cli.py`
+- **Validation Result**: PASS (RALPH_GATE_PASSED — 140/140 targeted tests, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ticket ready to close.
