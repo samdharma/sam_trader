@@ -306,7 +306,7 @@ psql -h localhost -p 5432 -U sam -d sam_trader -c "
 ### 3.4 Backup
 
 ```bash
-# Automated backup (runs at 06:00 HKT weekdays via cron)
+# Automated backup (runs at 04:30 HKT weekdays via cron)
 docker exec sam-services sam backup
 
 # Restore from a specific date (if needed)
@@ -604,8 +604,8 @@ docker exec sam-redis redis-cli dbsize
 | Time (HKT) | Command | Purpose |
 |------------|---------|---------|
 | 02:00 | `sam safety-monitor` | Nightly circuit-breaker check |
-| 03:00 | `sam rotate-logs` | Log rotation and cleanup |
-| 06:00 | `sam backup` | Daily backup (weekdays) |
+| 04:15 | `sam rotate-logs` | Log rotation and cleanup (post US close) |
+| 04:30 | `sam backup` | Daily backup (weekdays) |
 | 06:30 | `sam performance` | Nightly performance analysis |
 | 08:00 | `sam readiness-report` | Pre-market pipeline |
 | 08:00 | `sam readiness --market US` | SOD readiness check (from Redis) |

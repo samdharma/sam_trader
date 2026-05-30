@@ -2318,3 +2318,16 @@
 - **Files Changed**: `config/market_config.yaml` (+2 entries), `src/sam_trader/market_config.py` (+5 lines docstring, +1 field), `src/sam_trader/strategies/orb.py` (+80 lines resolution, -5 GTC), `src/sam_trader/strategies/momentum.py` (+80 lines resolution, -5 GTC), `src/sam_trader/adapters/futu/execution.py` (+9 lines SIMULATE defense), `.env.example` (+5 lines DEFAULT_TIME_IN_FORCE doc), `tests/unit/strategies/test_orb.py` (+86 lines TIF tests)
 - **Validation Result**: PASS (280/280 targeted tests — orb + momentum + template + common + market_config + execution adapter; black/isort/flake8/mypy all green; 11 pre-existing test_restart_subscriber.py failures + 4 pre-existing test_samtrader_config.py failures unrelated)
 - **Blockers / Notes**: The `futu_paper_account_id` field in SamTraderConfig is missing from 4 test helpers in `test_samtrader_config.py` — pre-existing, filed separately. The sandbox should no longer trip the GTC circuit breaker after this fix.
+
+## Iteration 148
+- **Task**: P8: Update default cron schedules — log rotation 04:15, backup 04:30 HKT
+- **Task ID**: sam_trader-ei8
+- **Status**: COMPLETE
+- **Decisions**: Straightforward schedule alignment per BUILD_PHASE_8.md §12:
+  1. Log rotation: `0 3 * * *` → `15 4 * * *` (right after US close at 04:00 HKT)
+  2. Backup: `0 5 * * 1-5` → `30 4 * * 1-5` (after rotation, still in maintenance window)
+  3. Comments updated with rationale documenting US close alignment
+  4. OPERATOR_GUIDE.md §3.4 and §5.5 updated; DMM_PLAN.md timeline updated
+- **Files Changed**: `src/sam_trader/services/crontab`, `tests/unit/test_crontab.py`, `tests/unit/services/test_cron.py`, `docs/user/OPERATOR_GUIDE.md`, `docs/user/DYNAMIC_MULTI_MARKET_PLAN.md`
+- **Validation Result**: PASS (15/15 tests, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None

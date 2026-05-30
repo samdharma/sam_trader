@@ -172,7 +172,8 @@ HKT Time   Event                                              Actor/Service
 04:00      US EOD report generated                            EndOfDayReporterActor
 04:00–07:00 *** MAINTENANCE WINDOW ***                        MarketSchedulerActor
 04:05      sam-trader restarts with MARKET=HK                 Restart Orchestrator
-05:00      Daily backup                                       Cron (sam-services)
+04:15      Log rotation                                       Cron (sam-services)
+04:30      Daily backup                                       Cron (sam-services)
 07:00      HK SOD readiness check                             ReadinessCheckerActor
 07:30      HK pre-market pipeline (gap scan → AI → bundles)   sam-services pipeline
 07:35      BundleController loads HK bundles                  BundleController

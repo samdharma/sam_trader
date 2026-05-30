@@ -18,8 +18,8 @@ def crontab_text() -> str:
 def test_crontab_has_all_entries(crontab_text: str) -> None:
     """Verify all required cron entries are present."""
     entries = [
-        ("backup", "sam_trader.services.backup backup", "0 5 * * 1-5"),
-        ("log rotation", "sam_trader.services.rotate_logs", "0 3 * * *"),
+        ("backup", "sam_trader.services.backup backup", "30 4 * * 1-5"),
+        ("log rotation", "sam_trader.services.rotate_logs", "15 4 * * *"),
         ("deploy window", "sam_trader.services.deploy_window", "*/30 4-9 * * *"),
         ("hk pipeline", "sam_trader.services.pipeline --market HK", "30 7 * * 1-5"),
         ("us pipeline", "sam_trader.services.pipeline --market US", "30 20 * * 1-5"),

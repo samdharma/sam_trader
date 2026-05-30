@@ -5,15 +5,19 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 TZ=Asia/Hong_Kong
 
 # ---------------------------------------------------------------------------
-# Daily backup at 05:00 HKT on weekdays (within maintenance window).
+# Daily backup at 04:30 HKT on weekdays — right after log rotation (04:15)
+# and US market close (04:00 HKT). Captures freshest EOD state while still
+# within maintenance window (04:00-07:00 HKT).
 # Skips US/HK trading holidays via script logic in backup.py.
 # ---------------------------------------------------------------------------
-0 5 * * 1-5 sam . /opt/sam_trader/.env_cron && cd /opt/sam_trader && /usr/local/bin/python3 -m sam_trader.services.backup backup >> /opt/sam_trader/logs/backup.log 2>&1
+30 4 * * 1-5 sam . /opt/sam_trader/.env_cron && cd /opt/sam_trader && /usr/local/bin/python3 -m sam_trader.services.backup backup >> /opt/sam_trader/logs/backup.log 2>&1
 
 # ---------------------------------------------------------------------------
-# Log rotation at 03:00 HKT daily.
+# Log rotation at 04:15 HKT daily — right after US market close (04:00 HKT),
+# ensuring full-session logs are captured before rotation. Runs before backup
+# (04:30 HKT) so backup archives freshly rotated logs.
 # ---------------------------------------------------------------------------
-0 3 * * * sam . /opt/sam_trader/.env_cron && cd /opt/sam_trader && /usr/local/bin/python3 -m sam_trader.services.rotate_logs >> /opt/sam_trader/logs/rotate.log 2>&1
+15 4 * * * sam . /opt/sam_trader/.env_cron && cd /opt/sam_trader && /usr/local/bin/python3 -m sam_trader.services.rotate_logs >> /opt/sam_trader/logs/rotate.log 2>&1
 
 # ---------------------------------------------------------------------------
 # Deployment window check (configurable via DEPLOY_WINDOW, default 05:00-08:00

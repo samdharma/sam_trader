@@ -17,15 +17,15 @@ def crontab_text() -> str:
 @pytest.mark.unit
 def test_backup_schedule_present(crontab_text: str) -> None:
     assert "sam_trader.services.backup backup" in crontab_text
-    # 05:00 HKT on weekdays (within maintenance window)
-    assert "0 5 * * 1-5" in crontab_text
+    # 04:30 HKT on weekdays (after US close, within maintenance window)
+    assert "30 4 * * 1-5" in crontab_text
 
 
 @pytest.mark.unit
 def test_log_rotation_schedule_present(crontab_text: str) -> None:
     assert "sam_trader.services.rotate_logs" in crontab_text
-    # 03:00 HKT daily
-    assert "0 3 * * *" in crontab_text
+    # 04:15 HKT daily (right after US close at 04:00 HKT)
+    assert "15 4 * * *" in crontab_text
 
 
 @pytest.mark.unit
