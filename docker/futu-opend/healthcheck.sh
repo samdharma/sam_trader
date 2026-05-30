@@ -4,7 +4,7 @@ set -e
 # 3-layer health check for Futu OpenD
 # L1: Process check — verify FutuOpenD is running
 # L2: Socket check — verify API port is accepting connections
-# L3: Protocol check — verify most recent GTWLog contains "Login successful"
+# L3: Protocol check — verify "Login successful" exists in any GTWLog file
 
 # --- L1: Process check ---
 if ! pgrep -x "FutuOpenD" > /dev/null 2>&1; then
@@ -18,31 +18,29 @@ if ! true > /dev/tcp/localhost/11111 2>/dev/null; then
     exit 1
 fi
 
-# --- L3: Verify login success in most recent GTWLog ---
+# --- L3: Verify login success across ALL GTWLog files ---
 LOG_DIR="/home/futu/.com.futunn.FutuOpenD/Log"
 if [ ! -d "$LOG_DIR" ]; then
     echo "UNHEALTHY: FutuOpenD log directory not found"
     exit 1
 fi
 
-# Find the most recently modified GTWLog file (portable: ls -t works on GNU and BSD)
-# Filter to GTWLog_* only — .ftlog and Monitor.log don't contain "Login successful"
-MOST_RECENT_LOG=$(ls -t "$LOG_DIR"/GTWLog_* 2>/dev/null | head -n 1)
-
-if [ -z "$MOST_RECENT_LOG" ] || [ ! -f "$MOST_RECENT_LOG" ]; then
-    echo "UNHEALTHY: No FutuOpenD log files found"
+# Check that GTWLog files exist at all
+if ! ls "$LOG_DIR"/GTWLog_* >/dev/null 2>&1; then
+    echo "UNHEALTHY: No FutuOpenD GTWLog files found"
     exit 1
 fi
 
-# Positively verify "Login successful" in the most recent log
-if ! grep -q "Login successful" "$MOST_RECENT_LOG" 2>/dev/null; then
-    echo "UNHEALTHY: Login successful not found in most recent GTWLog"
+# Positively verify "Login successful" in ANY GTWLog file
+# grep -lq stops at the first match across all files — correct even after log rotation
+if ! grep -lq "Login successful" "$LOG_DIR"/GTWLog_* 2>/dev/null; then
+    echo "UNHEALTHY: Login successful not found in any GTWLog"
     exit 1
 fi
 
-# Retain failure-pattern scan as defense-in-depth (most recent log only)
-if grep -iE "login fail|login failed|conn failed|authentication fail|auth fail|account login" "$MOST_RECENT_LOG" > /dev/null 2>&1; then
-    echo "UNHEALTHY: Login failure pattern detected in most recent GTWLog"
+# Retain failure-pattern scan as defense-in-depth (scan ALL GTWLog files)
+if grep -liE "login fail|login failed|conn failed|authentication fail|auth fail|account login" "$LOG_DIR"/GTWLog_* > /dev/null 2>&1; then
+    echo "UNHEALTHY: Login failure pattern detected in GTWLog"
     exit 1
 fi
 
