@@ -77,7 +77,7 @@ def _make_row(
     equity_curve: list[dict] | None = None,
     strategy_family: str | None = "ORB",
     strategy_version: str | None = "1.0",
-    tags: list[str] | None = None,
+    tags: list[str] | dict[str, Any] | None = None,
     created_at: datetime | None = None,
 ) -> dict[str, Any]:
     return {
@@ -1487,3 +1487,327 @@ class TestRunRegistryThreadSafety:
         assert len(errors) == 0  # noqa: S101
         with _run_registry_lock:
             assert len(_run_registry) == 400
+
+
+# ---------------------------------------------------------------------------
+# handle_backtest_run_panels (GET /api/backtest/runs/<id>/panels)
+# ---------------------------------------------------------------------------
+
+
+class TestHandleBacktestRunPanels:
+    """Tests for GET /api/backtest/runs/<id>/panels — WF/sweep display data."""
+
+    # ------------------------------------------------------------------
+    # Walk-forward panels
+    # ------------------------------------------------------------------
+
+    def test_walk_forward_panels(self) -> None:
+        """WF run returns structured panel data with summary, windows, stability."""
+        from sam_trader.services.backtest.dashboard_api import (
+            handle_backtest_run_panels,
+        )
+
+        row = _make_row(
+            stats_returns={
+                "overall_sharpe": 1.23,
+                "profitable_windows": 5,
+                "total_windows": 7,
+            },
+            stats_pnls={"overall_pnl": 15000.0},
+            tags={
+                "mode": "walk_forward",
+                "window_results": [
+                    {
+                        "train_start": "2024-01-01",
+                        "train_end": "2024-03-31",
+                        "test_start": "2024-04-01",
+                        "test_end": "2024-04-30",
+                        "best_params": {"stop_loss_ticks": 5},
+                        "train_sharpe": 1.8,
+                        "test_sharpe": 1.2,
+                        "test_pnl": 2000.0,
+                        "test_win_rate": 0.55,
+                        "test_max_dd": 0.05,
+                        "test_trades": 30,
+                        "error": None,
+                    },
+                    {
+                        "train_start": "2024-02-01",
+                        "train_end": "2024-04-30",
+                        "test_start": "2024-05-01",
+                        "test_end": "2024-05-31",
+                        "best_params": {"stop_loss_ticks": 10},
+                        "train_sharpe": 1.5,
+                        "test_sharpe": 0.9,
+                        "test_pnl": -500.0,
+                        "test_win_rate": 0.40,
+                        "test_max_dd": 0.12,
+                        "test_trades": 25,
+                        "error": None,
+                    },
+                ],
+                "param_stability": {
+                    "stop_loss_ticks=5": 4,
+                    "stop_loss_ticks=10": 3,
+                },
+            },
+        )
+        store = _mock_store_rows(row)
+        with patch(
+            "sam_trader.services.backtest.dashboard_api.BacktestResultStore",
+            return_value=store,
+        ):
+            result = handle_backtest_run_panels("bt-001")
+
+        assert result["mode"] == "walk_forward"
+        wf = result["walk_forward"]
+        assert wf is not None
+
+        # Summary
+        s = wf["summary"]
+        assert s["overall_sharpe"] == 1.23
+        assert s["overall_pnl"] == 15000.0
+        assert s["profitable_windows"] == 5
+        assert s["total_windows"] == 7
+
+        # Windows
+        windows = wf["windows"]
+        assert len(windows) == 2
+        assert windows[0]["train_start"] == "2024-01-01"
+        assert windows[0]["train_sharpe"] == 1.8
+        assert windows[0]["test_sharpe"] == 1.2
+        assert windows[0]["test_pnl"] == 2000.0
+        assert windows[0]["test_win_rate"] == 0.55
+        assert windows[0]["test_max_dd"] == 0.05
+        assert windows[0]["test_trades"] == 30
+        assert windows[0]["error"] is None
+        assert windows[1]["test_pnl"] == -500.0
+
+        # Parameter stability
+        ps = wf["param_stability"]
+        assert ps["stop_loss_ticks=5"] == 4
+        assert ps["stop_loss_ticks=10"] == 3
+
+    def test_walk_forward_empty_tags(self) -> None:
+        """WF run with missing tags fields gracefully returns defaults."""
+        from sam_trader.services.backtest.dashboard_api import (
+            handle_backtest_run_panels,
+        )
+
+        row = _make_row(
+            tags={"mode": "walk_forward"},
+        )
+        store = _mock_store_rows(row)
+        with patch(
+            "sam_trader.services.backtest.dashboard_api.BacktestResultStore",
+            return_value=store,
+        ):
+            result = handle_backtest_run_panels("bt-001")
+
+        assert result["mode"] == "walk_forward"
+        wf = result["walk_forward"]
+        assert wf is not None
+        assert wf["summary"]["overall_sharpe"] is None
+        assert wf["summary"]["overall_pnl"] is None
+        assert wf["summary"]["profitable_windows"] == 0
+        assert wf["summary"]["total_windows"] == 0
+        assert wf["windows"] == []
+        assert wf["param_stability"] == {}
+
+    # ------------------------------------------------------------------
+    # Sweep panels
+    # ------------------------------------------------------------------
+
+    def test_sweep_panels(self) -> None:
+        """Sweep run returns ranked table with best row first."""
+        from sam_trader.services.backtest.dashboard_api import (
+            handle_backtest_run_panels,
+        )
+
+        row = _make_row(
+            tags={
+                "mode": "sweep",
+                "sweep_results": [
+                    {
+                        "combo": {"stop_loss_ticks": 5, "take_profit_ticks": 30},
+                        "sharpe": 2.1,
+                        "net_pnl": 12000.0,
+                        "win_rate": 0.62,
+                        "max_dd": 0.08,
+                        "total_trades": 40,
+                        "profit_factor": 2.5,
+                        "expectancy": 150.0,
+                    },
+                    {
+                        "combo": {"stop_loss_ticks": 10, "take_profit_ticks": 20},
+                        "sharpe": 1.5,
+                        "net_pnl": 8000.0,
+                        "win_rate": 0.55,
+                        "max_dd": 0.12,
+                        "total_trades": 35,
+                        "profit_factor": 1.8,
+                        "expectancy": 100.0,
+                    },
+                    {
+                        "combo": {"stop_loss_ticks": 15, "take_profit_ticks": 30},
+                        "sharpe": 0.8,
+                        "net_pnl": -2000.0,
+                        "win_rate": 0.40,
+                        "max_dd": 0.22,
+                        "total_trades": 30,
+                        "profit_factor": 0.9,
+                        "expectancy": -50.0,
+                    },
+                ],
+            },
+        )
+        store = _mock_store_rows(row)
+        with patch(
+            "sam_trader.services.backtest.dashboard_api.BacktestResultStore",
+            return_value=store,
+        ):
+            result = handle_backtest_run_panels("bt-001")
+
+        assert result["mode"] == "sweep"
+        sw = result["sweep"]
+        assert sw is not None
+        assert sw["total_combinations"] == 3
+
+        results = sw["results"]
+        assert len(results) == 3
+
+        # Best row
+        r0 = results[0]
+        assert r0["rank"] == 1
+        assert r0["sharpe"] == 2.1
+        assert r0["net_pnl"] == 12000.0
+        assert r0["win_rate"] == 0.62
+        assert r0["max_dd"] == 0.08
+        assert r0["total_trades"] == 40
+        assert r0["profit_factor"] == 2.5
+        assert r0["expectancy"] == 150.0
+        assert r0["combo"]["stop_loss_ticks"] == 5
+
+        # Last row
+        r2 = results[2]
+        assert r2["rank"] == 3
+        assert r2["net_pnl"] == -2000.0
+
+    def test_sweep_empty_results(self) -> None:
+        """Sweep run with no results returns empty list."""
+        from sam_trader.services.backtest.dashboard_api import (
+            handle_backtest_run_panels,
+        )
+
+        row = _make_row(
+            tags={"mode": "sweep", "sweep_results": []},
+        )
+        store = _mock_store_rows(row)
+        with patch(
+            "sam_trader.services.backtest.dashboard_api.BacktestResultStore",
+            return_value=store,
+        ):
+            result = handle_backtest_run_panels("bt-001")
+
+        assert result["mode"] == "sweep"
+        sw = result["sweep"]
+        assert sw is not None
+        assert sw["results"] == []
+        assert sw["total_combinations"] == 0
+
+    # ------------------------------------------------------------------
+    # Plain backtest (no panels)
+    # ------------------------------------------------------------------
+
+    def test_plain_backtest_no_panels(self) -> None:
+        """Plain backtest returns mode=backtest with no panel data."""
+        from sam_trader.services.backtest.dashboard_api import (
+            handle_backtest_run_panels,
+        )
+
+        row = _make_row(tags={"mode": "backtest"})
+        store = _mock_store_rows(row)
+        with patch(
+            "sam_trader.services.backtest.dashboard_api.BacktestResultStore",
+            return_value=store,
+        ):
+            result = handle_backtest_run_panels("bt-001")
+
+        assert result["mode"] == "backtest"
+        assert result["walk_forward"] is None
+        assert result["sweep"] is None
+
+    def test_tags_is_list_not_dict(self) -> None:
+        """When tags is a list (legacy data), defaults to backtest mode."""
+        from sam_trader.services.backtest.dashboard_api import (
+            handle_backtest_run_panels,
+        )
+
+        row = _make_row(tags=["some", "old", "format"])
+        store = _mock_store_rows(row)
+        with patch(
+            "sam_trader.services.backtest.dashboard_api.BacktestResultStore",
+            return_value=store,
+        ):
+            result = handle_backtest_run_panels("bt-001")
+
+        assert result["mode"] == "backtest"
+        assert result["walk_forward"] is None
+        assert result["sweep"] is None
+
+    def test_tags_is_none(self) -> None:
+        """When tags is None, defaults to backtest mode."""
+        from sam_trader.services.backtest.dashboard_api import (
+            handle_backtest_run_panels,
+        )
+
+        row = _make_row(tags=None)
+        store = _mock_store_rows(row)
+        with patch(
+            "sam_trader.services.backtest.dashboard_api.BacktestResultStore",
+            return_value=store,
+        ):
+            result = handle_backtest_run_panels("bt-001")
+
+        assert result["mode"] == "backtest"
+
+    # ------------------------------------------------------------------
+    # Error cases
+    # ------------------------------------------------------------------
+
+    def test_unknown_run(self) -> None:
+        """Unknown run_id returns error."""
+        from sam_trader.services.backtest.dashboard_api import (
+            handle_backtest_run_panels,
+        )
+
+        store = _mock_store_rows()
+        with patch(
+            "sam_trader.services.backtest.dashboard_api.BacktestResultStore",
+            return_value=store,
+        ):
+            result = handle_backtest_run_panels("bt-unknown")
+
+        assert "error" in result
+        assert "not found" in result["error"].lower()
+
+    def test_db_error(self) -> None:
+        """Database error returns error dict."""
+        from sam_trader.services.backtest.dashboard_api import (
+            handle_backtest_run_panels,
+        )
+
+        store = MagicMock()
+
+        async def _raise(*_: Any, **__: Any) -> dict | None:
+            raise RuntimeError("DB down")
+
+        store.get_by_run_id.side_effect = _raise
+        with patch(
+            "sam_trader.services.backtest.dashboard_api.BacktestResultStore",
+            return_value=store,
+        ):
+            result = handle_backtest_run_panels("bt-001")
+
+        assert "error" in result
+        assert "Database error" in result["error"]

@@ -23,6 +23,7 @@ from sam_trader.services.backtest.dashboard_api import (
     handle_backtest_catalog_strategies,
     handle_backtest_compare,
     handle_backtest_run,
+    handle_backtest_run_panels,
     handle_backtest_run_status,
     handle_backtest_runs,
     handle_backtest_runs_detail,
@@ -172,6 +173,20 @@ th.sortable.desc::after { content:' \2193'; }
 .bt-status-badge.running { background:rgba(88,166,255,.15); color:var(--accent); }
 .bt-status-badge.failed { background:rgba(248,81,73,.15); color:var(--red); }
 .bt-status-badge.started { background:rgba(139,148,158,.15); color:var(--muted); }
+/* --- WF/Sweep Panels --- */
+.bt-panel-summary { margin-bottom:1rem; }
+.bt-panel-summary .bt-summary-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:.5rem; }
+.bt-summary-card { border:1px solid var(--border); border-radius:4px; padding:.5rem; text-align:center; }
+.bt-summary-card .bt-summary-label { font-size:.7rem; color:var(--muted); text-transform:uppercase; }
+.bt-summary-card .bt-summary-value { font-size:1.1rem; font-weight:700; }
+.bt-stability-chart { margin:1rem 0; }
+.bt-stability-row { display:flex; align-items:center; margin-bottom:.35rem; gap:.5rem; }
+.bt-stability-label { width:120px; font-size:.8rem; color:var(--muted); text-align:right; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.bt-stability-bar-wrap { flex:1; background:#161b22; border-radius:3px; height:18px; position:relative; overflow:hidden; }
+.bt-stability-bar { height:100%; background:var(--accent); border-radius:3px; transition:width .3s; }
+.bt-stability-val { position:absolute; right:4px; top:0; font-size:.7rem; color:#fff; line-height:18px; text-shadow:0 0 2px rgba(0,0,0,.5); }
+.bt-sweep-best td { background:rgba(63,185,80,.08); font-weight:600; }
+.bt-params-display { font-family:ui-monospace,monospace; font-size:.8rem; color:var(--accent); word-break:break-all; }
 .bt-catalog-banner { padding:.75rem 1rem; border-radius:6px; margin-bottom:.75rem; font-weight:600; background:rgba(248,81,73,.15); color:var(--red); border:1px solid var(--red); display:none; }
 .bt-modal-overlay { position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,.7); z-index:100; overflow-y:auto; padding:2rem; }
 .bt-modal-content { max-width:900px; margin:0 auto; background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:1.5rem; }
@@ -760,42 +775,136 @@ function downloadBlob(blob,name){var a=document.createElement('a');a.href=URL.cr
 
 // --- Run Detail Modal ---
 function showRunDetail(runId){
-  fetch('/api/backtest/runs/'+runId)
+  fetch('/api/backtest/runs/'+runId+'/panels')
     .then(function(r){return r.json();})
     .then(function(d){
       if(d.error){alert(d.error);return;}
       document.getElementById('bt-detail-title').textContent='Run: '+runId;
       var body=document.getElementById('bt-detail-body');
-      var sr=d.stats_returns||{};
-      var sp=d.stats_pnls||{};
-      var ec=d.equity_curve||[];
-      var metrics=[
-        ['Sharpe Ratio',fmtNum(sr.sharpe_ratio,3)],
-        ['Sortino',fmtNum(sr.sortino_ratio,3)],
-        ['Max DD',fmtPct(sr.max_drawdown)],
-        ['Win Rate',fmtPct(sr.win_rate)],
-        ['Profit Factor',fmtNum(sr.profit_factor,2)],
-        ['Expectancy',fmtNum(sr.expectancy,4)],
-        ['Total P&L',fmtDollar(sr.total_pnl)],
-        ['CAGR',fmtPct(sr.cagr)],
-        ['Calmar',fmtNum(sr.calmar_ratio,3)],
-        ['Volatility',fmtPct(sr.volatility)],
-        ['Total Events',d.total_events||'—'],
-        ['Total Orders',d.total_orders||'—'],
-        ['Elapsed',d.elapsed_secs!=null?d.elapsed_secs+'s':'—']
-      ];
-      body.innerHTML='<div class="bt-metric-grid">'+metrics.map(function(m){
-        return '<div class="bt-metric-card"><div class="bt-metric-label">'+m[0]+'</div><div class="bt-metric-value">'+m[1]+'</div></div>';
-      }).join('')+'</div>'+
-        '<h4 style="margin:1rem 0 .5rem; color:var(--accent);">Equity Curve</h4>'+
-        '<div class="bt-chart-container" id="bt-detail-chart"><canvas id="bt-detail-canvas"></canvas><div class="bt-chart-tooltip" id="bt-detail-tt"></div></div>'+
-        '<div style="display:flex; gap:.5rem; margin-top:.25rem;">'+
-          '<button class="bt-btn-small" onclick="exportRunJSON(\''+escHtml(runId)+'\')">⬇ JSON</button>'+
-          '<button class="bt-btn-small" onclick="exportRunCSV(\''+escHtml(runId)+'\')">⬇ CSV</button>'+
-        '</div>';
+      if(d.mode==='walk_forward'){
+        body.innerHTML=renderWalkForwardPanel(d.walk_forward||{});
+      }else if(d.mode==='sweep'){
+        body.innerHTML=renderSweepPanel(d.sweep||{});
+      }else{
+        // Plain backtest — fetch full detail for stats
+        fetch('/api/backtest/runs/'+runId)
+          .then(function(r2){return r2.json();})
+          .then(function(d2){
+            if(d2.error){body.innerHTML='<p style=\"color:var(--red);\">Error: '+escHtml(d2.error)+'</p>';return;}
+            body.innerHTML=renderBacktestDetail(d2);
+          }).catch(function(e){body.innerHTML='<p style=\"color:var(--red);\">Error: '+e.message+'</p>';});
+        return;
+      }
       document.getElementById('bt-detail-modal').style.display='block';
-      setTimeout(function(){drawEquityCurve('bt-detail-canvas','bt-detail-tt',ec);},100);
     }).catch(function(e){alert('Error: '+e.message);});
+}
+function renderBacktestDetail(d){
+  var sr=d.stats_returns||{};var ec=d.equity_curve||[];
+  var metrics=[
+    ['Sharpe Ratio',fmtNum(sr.sharpe_ratio,3)],
+    ['Sortino',fmtNum(sr.sortino_ratio,3)],
+    ['Max DD',fmtPct(sr.max_drawdown)],
+    ['Win Rate',fmtPct(sr.win_rate)],
+    ['Profit Factor',fmtNum(sr.profit_factor,2)],
+    ['Expectancy',fmtNum(sr.expectancy,4)],
+    ['Total P&L',fmtDollar(sr.total_pnl)],
+    ['CAGR',fmtPct(sr.cagr)],
+    ['Calmar',fmtNum(sr.calmar_ratio,3)],
+    ['Volatility',fmtPct(sr.volatility)],
+    ['Total Events',d.total_events||'—'],
+    ['Total Orders',d.total_orders||'—'],
+    ['Elapsed',d.elapsed_secs!=null?d.elapsed_secs+'s':'—']
+  ];
+  var html='<div class="bt-metric-grid">'+metrics.map(function(m){
+    return '<div class="bt-metric-card"><div class="bt-metric-label">'+m[0]+'</div><div class="bt-metric-value">'+m[1]+'</div></div>';
+  }).join('')+'</div>'+
+    '<h4 style="margin:1rem 0 .5rem; color:var(--accent);">Equity Curve</h4>'+
+    '<div class="bt-chart-container" id="bt-detail-chart"><canvas id="bt-detail-canvas"></canvas><div class="bt-chart-tooltip" id="bt-detail-tt"></div></div>'+
+    '<div style="display:flex; gap:.5rem; margin-top:.25rem;">'+
+      '<button class="bt-btn-small" onclick="exportRunJSON(\''+escHtml(d.run_id||'')+'\')">⬇ JSON</button>'+
+      '<button class="bt-btn-small" onclick="exportRunCSV(\''+escHtml(d.run_id||'')+'\')">⬇ CSV</button>'+
+    '</div>';
+  setTimeout(function(){drawEquityCurve('bt-detail-canvas','bt-detail-tt',ec);},100);
+  return html;
+}
+function fmtParams(obj){
+  if(!obj||typeof obj!=='object')return'—';
+  var keys=Object.keys(obj);if(!keys.length)return'—';
+  return keys.map(function(k){return k+'='+obj[k];}).join(', ');
+}
+// --- Walk-Forward Panel ---
+function renderWalkForwardPanel(wf){
+  var s=wf.summary||{};var windows=wf.windows||[];var stab=wf.param_stability||{};
+  var html='';
+  // Summary
+  html+='<div class="bt-panel-summary"><div class="bt-summary-grid">'+
+    '<div class="bt-summary-card"><div class="bt-summary-label">Overall Sharpe</div><div class="bt-summary-value">'+fmtNum(s.overall_sharpe,3)+'</div></div>'+
+    '<div class="bt-summary-card"><div class="bt-summary-label">Total Test P&L</div><div class="bt-summary-value">'+fmtDollar(s.overall_pnl)+'</div></div>'+
+    '<div class="bt-summary-card"><div class="bt-summary-label">Profitable Windows</div><div class="bt-summary-value">'+(s.profitable_windows||0)+' / '+(s.total_windows||0)+'</div></div>'+
+  '</div></div>';
+  // Per-window table
+  html+='<h4 style="margin:1rem 0 .5rem; color:var(--accent);">Per-Window Results</h4>';
+  html+='<div style="overflow-x:auto; max-height:400px; overflow-y:auto;"><table><thead><tr>'+
+    '<th>Train Range</th><th>Test Range</th><th>Best Params</th><th>Train Sharpe</th><th>Test Sharpe</th><th>Test P&L</th><th>Win Rate</th><th>Max DD</th><th>Trades</th>'+
+  '</tr></thead><tbody>';
+  windows.forEach(function(w){
+    var trainRange=(w.train_start||'')+' → '+(w.train_end||'');
+    var testRange=(w.test_start||'')+' → '+(w.test_end||'');
+    html+='<tr>'+
+      '<td>'+escHtml(trainRange)+'</td>'+
+      '<td>'+escHtml(testRange)+'</td>'+
+      '<td class="bt-params-display">'+escHtml(fmtParams(w.best_params))+'</td>'+
+      '<td>'+fmtNum(w.train_sharpe,3)+'</td>'+
+      '<td>'+fmtNum(w.test_sharpe,3)+'</td>'+
+      '<td class="'+(w.test_pnl>=0?'positive':'negative')+'">'+fmtDollar(w.test_pnl)+'</td>'+
+      '<td>'+fmtPct(w.test_win_rate)+'</td>'+
+      '<td>'+fmtPct(w.test_max_dd)+'</td>'+
+      '<td>'+((w.test_trades!=null)?w.test_trades:'—')+'</td>'+
+    '</tr>';
+  });
+  html+='</tbody></table></div>';
+  // Parameter stability chart
+  var stabKeys=Object.keys(stab);
+  if(stabKeys.length>0){
+    var maxCount=0;stabKeys.forEach(function(k){if(stab[k]>maxCount)maxCount=stab[k];});
+    html+='<h4 style="margin:1rem 0 .5rem; color:var(--accent);">Parameter Stability</h4>';
+    html+='<div class="bt-stability-chart">';
+    stabKeys.sort(function(a,b){return(stab[b]||0)-(stab[a]||0);}).forEach(function(k){
+      var pct=maxCount>0?((stab[k]||0)/maxCount*100):0;
+      html+='<div class="bt-stability-row">'+
+        '<div class="bt-stability-label" title="'+escHtml(k)+'">'+escHtml(k)+'</div>'+
+        '<div class="bt-stability-bar-wrap"><div class="bt-stability-bar" style="width:'+pct+'%;"></div>'+
+        '<span class="bt-stability-val">'+stab[k]+'/'+maxCount+'</span></div>'+
+      '</div>';
+    });
+    html+='</div>';
+  }
+  return html;
+}
+// --- Sweep Panel ---
+function renderSweepPanel(sw){
+  var results=sw.results||[];
+  var html='';
+  html+='<h4 style="margin:0 0 .5rem; color:var(--accent);">Parameter Sweep Results ('+results.length+' combinations)</h4>';
+  html+='<div style="overflow-x:auto; max-height:500px; overflow-y:auto;"><table><thead><tr>'+
+    '<th>Rank</th><th>Parameters</th><th>Sharpe</th><th>P&L</th><th>Win Rate</th><th>Max DD</th><th>Trades</th><th>Profit Factor</th><th>Expectancy</th>'+
+  '</tr></thead><tbody>';
+  results.forEach(function(r,i){
+    var cls=i===0?' class="bt-sweep-best"':'';
+    html+='<tr'+cls+'>'+
+      '<td>'+(r.rank||(i+1))+'</td>'+
+      '<td class="bt-params-display">'+escHtml(fmtParams(r.combo))+'</td>'+
+      '<td>'+fmtNum(r.sharpe,3)+'</td>'+
+      '<td class="'+(r.net_pnl>=0?'positive':'negative')+'">'+fmtDollar(r.net_pnl)+'</td>'+
+      '<td>'+fmtPct(r.win_rate)+'</td>'+
+      '<td>'+fmtPct(r.max_dd)+'</td>'+
+      '<td>'+((r.total_trades!=null)?r.total_trades:'—')+'</td>'+
+      '<td>'+fmtNum(r.profit_factor,2)+'</td>'+
+      '<td>'+fmtDollar(r.expectancy)+'</td>'+
+    '</tr>';
+  });
+  html+='</tbody></table></div>';
+  return html;
 }
 function closeDetail(){document.getElementById('bt-detail-modal').style.display='none';}
 function fmtNum(v,dec){if(v==null)return'—';return Number(v).toFixed(dec);}
@@ -2145,11 +2254,16 @@ class DashboardHandler(BaseHTTPRequestHandler):
             data = handle_backtest_runs(limit=limit)  # type: ignore[assignment]
             self._send_json(200, data)
         elif path.startswith("/api/backtest/runs/"):
-            # /api/backtest/runs/<id>
+            # /api/backtest/runs/<id> or /api/backtest/runs/<id>/panels
             parts = path.split("/")
             if len(parts) == 5:
                 run_id = parts[-1]
                 data = handle_backtest_runs_detail(run_id)
+                status_code = 200 if "error" not in data else 404
+                self._send_json(status_code, data)
+            elif len(parts) == 6 and parts[-1] == "panels":
+                run_id = parts[-2]
+                data = handle_backtest_run_panels(run_id)
                 status_code = 200 if "error" not in data else 404
                 self._send_json(status_code, data)
             else:

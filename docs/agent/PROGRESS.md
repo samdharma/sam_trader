@@ -2443,3 +2443,17 @@
 - **Files Changed**: `src/sam_trader/services/backtest/results.py`, `src/sam_trader/services/backtest/dashboard_api.py`, `tests/unit/services/backtest/test_dashboard_api.py`
 - **Validation Result**: PASS (RALPH_GATE_PASSED — 69/69 targeted tests, 179/179 backtest unit tests, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None.
+
+## Iteration 155
+- **Task**: 12.1.18: WF/Sweep result display panels
+- **Task ID**: sam_trader-9z3.13.1.18
+- **Status**: COMPLETE
+- **Decisions**:
+  1. New API endpoint `GET /api/backtest/runs/<id>/panels` returns structured WF/sweep panel data extracted from PG `tags` JSONB. Detects mode from `tags.mode` field.
+  2. WF panel: Summary (Overall Sharpe, Total Test P&L, Profitable Windows X/Y), per-window table (Train/Test Range, Best Params, Train/Test Sharpe, P&L, Win Rate, Max DD, Trades), and parameter stability bar chart (CSS-based bars showing frequency of each param value selected).
+  3. Sweep panel: Ranked table (Rank, Params combo, Sharpe, P&L, Win Rate, Max DD, Trades, Profit Factor, Expectancy) with best row highlighted via `bt-sweep-best` CSS class.
+  4. Frontend `showRunDetail()` updated to detect mode from panels endpoint: walk_forward → `renderWalkForwardPanel()`, sweep → `renderSweepPanel()`, backtest → existing `renderBacktestDetail()`. Plain backtest Results tab is unchanged (no regression).
+  5. Original kimi agent session (e4cca7ba) was blocked at Step 1 by LLM content filter — zero work completed before this manual implementation.
+- **Files Changed**: `src/sam_trader/services/backtest/dashboard_api.py` (+130 lines: handle_backtest_run_panels), `src/sam_trader/services/dashboard.py` (+130 lines: CSS, JS render functions, HTTP route), `tests/unit/services/backtest/test_dashboard_api.py` (+220 lines: 10 tests)
+- **Validation Result**: PASS (RALPH_GATE_PASSED — 78/78 targeted tests, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: E2E validation in sandbox by human (Sam Dharma). Bug tickets will be filed for any E2E issues found.

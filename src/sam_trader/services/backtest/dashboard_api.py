@@ -1243,6 +1243,145 @@ def handle_backtest_catalog_instruments(
 
 
 # ---------------------------------------------------------------------------
+# GET /api/backtest/runs/<id>/panels
+# ---------------------------------------------------------------------------
+
+
+def handle_backtest_run_panels(
+    run_id: str,
+    *,
+    pg_dsn: str | None = None,
+) -> dict[str, Any]:
+    """Handle GET /api/backtest/runs/<id>/panels — WF/sweep display data.
+
+    Returns structured data for the walk-forward or sweep display panels.
+    Detects the mode from the ``tags`` JSONB column and returns
+    appropriately formatted data for the frontend.
+
+    Parameters
+    ----------
+    run_id : str
+        The run_id to look up in PG.
+    pg_dsn : str | None
+        PostgreSQL DSN.
+
+    Returns
+    -------
+    dict
+        For walk-forward runs: ``mode``, ``walk_forward`` (summary, windows,
+        param_stability).
+        For sweep runs: ``mode``, ``sweep`` (ranked results list).
+        For plain backtest runs: ``mode`` = ``"backtest"`` (no panels).
+        On error: ``error`` key with message.
+
+    """
+    dsn = pg_dsn or _build_pg_dsn()
+    store = BacktestResultStore(pg_dsn=dsn)
+
+    try:
+        import asyncio
+
+        loop = asyncio.new_event_loop()
+        try:
+            row = loop.run_until_complete(store.get_by_run_id(run_id))
+        finally:
+            loop.close()
+    except Exception as exc:
+        logger.warning("Failed to query panels for run_id=%s: %s", run_id, exc)
+        return {"error": f"Database error: {exc}"}
+
+    if row is None:
+        return {"error": f"Run not found: {run_id}"}
+
+    tags: dict[str, Any] = row.get("tags") or {}
+    if not isinstance(tags, dict):
+        tags = {}
+
+    mode: str = tags.get("mode", "backtest")
+    stats_returns: dict[str, Any] = row.get("stats_returns") or {}
+    stats_pnls: dict[str, Any] = row.get("stats_pnls") or {}
+
+    # --- Walk-Forward panel ---
+    if mode == "walk_forward":
+        window_results: list[dict[str, Any]] = tags.get("window_results") or []
+
+        # Summary
+        overall_sharpe = stats_returns.get("overall_sharpe")
+        overall_pnl = stats_pnls.get("overall_pnl")
+        profitable_windows = stats_returns.get("profitable_windows", 0)
+        total_windows = stats_returns.get("total_windows", 0)
+
+        # Per-window table rows
+        windows: list[dict[str, Any]] = []
+        for w in window_results:
+            windows.append(
+                {
+                    "train_start": w.get("train_start"),
+                    "train_end": w.get("train_end"),
+                    "test_start": w.get("test_start"),
+                    "test_end": w.get("test_end"),
+                    "best_params": w.get("best_params"),
+                    "train_sharpe": w.get("train_sharpe"),
+                    "test_sharpe": w.get("test_sharpe"),
+                    "test_pnl": w.get("test_pnl"),
+                    "test_win_rate": w.get("test_win_rate"),
+                    "test_max_dd": w.get("test_max_dd"),
+                    "test_trades": w.get("test_trades"),
+                    "error": w.get("error"),
+                }
+            )
+
+        # Parameter stability
+        param_stability: dict[str, Any] = tags.get("param_stability") or {}
+
+        return {
+            "mode": "walk_forward",
+            "walk_forward": {
+                "summary": {
+                    "overall_sharpe": overall_sharpe,
+                    "overall_pnl": overall_pnl,
+                    "profitable_windows": profitable_windows,
+                    "total_windows": total_windows,
+                },
+                "windows": windows,
+                "param_stability": param_stability,
+            },
+        }
+
+    # --- Sweep panel ---
+    if mode == "sweep":
+        sweep_results: list[dict[str, Any]] = tags.get("sweep_results") or []
+
+        # Build ranked table rows
+        ranked: list[dict[str, Any]] = []
+        for i, sr in enumerate(sweep_results):
+            ranked.append(
+                {
+                    "rank": i + 1,
+                    "combo": sr.get("combo"),
+                    "sharpe": sr.get("sharpe"),
+                    "net_pnl": sr.get("net_pnl"),
+                    "win_rate": sr.get("win_rate"),
+                    "max_dd": sr.get("max_dd"),
+                    "total_trades": sr.get("total_trades"),
+                    "profit_factor": sr.get("profit_factor"),
+                    "expectancy": sr.get("expectancy"),
+                }
+            )
+
+        return {
+            "mode": "sweep",
+            "sweep": {
+                "results": ranked,
+                "total_combinations": len(ranked),
+            },
+        }
+
+    # Plain backtest — no panels
+    return {"mode": "backtest", "walk_forward": None, "sweep": None}
+
+
+# ---------------------------------------------------------------------------
 # GET /api/backtest/catalog/strategies
 # ---------------------------------------------------------------------------
 
