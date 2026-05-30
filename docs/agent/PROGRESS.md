@@ -1,5 +1,14 @@
 > **Note: see first-entry Iteration 20 for Phase 2 config dataclasses.**
 
+## Iteration 151
+- **Task**: P8: Futu OpenD healthcheck L3 — scan all GTWLog files, not just newest
+- **Task ID**: sam_trader-2vj
+- **Status**: COMPLETE
+- **Decisions**: Replaced single-file `grep -q` on newest GTWLog with `grep -lq` across all `GTWLog_*` files. Futu OpenD rotates GTWLog files during operation, and "Login successful" only exists in the startup file. The new approach stops at the first match across all files — as fast as before but correct across log rotations. Failure-pattern scan also updated to scan all GTWLog files (`grep -liE`).
+- **Files Changed**: `docker/futu-opend/healthcheck.sh` (+12/-14 lines)
+- **Validation Result**: PASS (RALPH_GATE_PASSED — no Python changes, no tests needed)
+- **Blockers / Notes**: None.
+
 ## Iteration 150
 - **Task**: Futu ExecClient: missing generate_order_status_report (singular) causes NotImplementedError and forced order cancellations
 - **Task ID**: sam_trader-0yy
