@@ -1646,6 +1646,23 @@ class TestBacktestDashboardUI:
         assert "exportRunJSON" in html
         assert "exportRunCSV" in html
 
+    def test_catalog_status_fetch_js_present(self) -> None:
+        """Runner tab fetches catalog status to pre-fill dates."""
+        html = self._render_dashboard()
+        assert "fetch('/api/backtest/catalog/status')" in html
+
+    def test_date_prefill_js_present(self) -> None:
+        """Runner tab sets bt-start/bt-end from catalog status response."""
+        html = self._render_dashboard()
+        assert "document.getElementById('bt-start').value=d.oldest_bar" in html
+        assert "document.getElementById('bt-end').value=d.newest_bar" in html
+
+    def test_date_prefill_null_guard_js_present(self) -> None:
+        """Runner tab guards against null dates when catalog is empty."""
+        html = self._render_dashboard()
+        assert "if(d&&d.oldest_bar)" in html
+        assert "if(d&&d.newest_bar)" in html
+
     def test_template_renders_without_errors(self) -> None:
         """Full template renders without exceptions."""
         html = self._render_dashboard()

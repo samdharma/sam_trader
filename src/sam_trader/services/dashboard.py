@@ -532,11 +532,17 @@ function switchBtTab(name) {
 }
 
 // --- Instruments ---
-(function(){fetch('/api/backtest/catalog/instruments').then(function(r){return r.json();}).then(function(d){
-  var s=document.getElementById('bt-instruments');s.innerHTML='';
-  (d||[]).forEach(function(i){var o=document.createElement('option');
-    o.value=i.instrument_id;o.textContent=i.instrument_id+'  ('+(i.bar_types||[]).join(', ')+')';s.appendChild(o);});
-}).catch(function(){});})();
+(function(){
+  fetch('/api/backtest/catalog/instruments').then(function(r){return r.json();}).then(function(d){
+    var s=document.getElementById('bt-instruments');s.innerHTML='';
+    (d||[]).forEach(function(i){var o=document.createElement('option');
+      o.value=i.instrument_id;o.textContent=i.instrument_id+'  ('+(i.bar_types||[]).join(', ')+')';s.appendChild(o);});
+  }).catch(function(){});
+  fetch('/api/backtest/catalog/status').then(function(r){return r.json();}).then(function(d){
+    if(d&&d.oldest_bar){document.getElementById('bt-start').value=d.oldest_bar;}
+    if(d&&d.newest_bar){document.getElementById('bt-end').value=d.newest_bar;}
+  }).catch(function(){});
+})();
 
 // --- Sweep Params ---
 function toggleSweepParams(){
