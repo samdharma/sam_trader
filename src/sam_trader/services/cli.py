@@ -3239,6 +3239,127 @@ def _build_backtest_summary(
     }
 
 
+def _infer_bar_type_from_catalog(catalog_path: str, instrument_id: str) -> str | None:
+    """Infer a bar type for an instrument from the Parquet catalog.
+
+    Scans the catalog for available bar data matching the instrument.
+    Prefers ``5-MINUTE`` bar types if present; otherwise returns the
+    first available bar type.  Returns ``None`` if no data is found.
+
+    Parameters
+    ----------
+    catalog_path : str
+        Path to the Nautilus ParquetDataCatalog directory.
+    instrument_id : str
+        Instrument ID (e.g. ``"TSLA.NASDAQ"``).
+
+    Returns
+    -------
+    str | None
+        A Nautilus bar-type string (e.g.
+        ``"TSLA.NASDAQ-5-MINUTE-LAST-EXTERNAL"``) or ``None``.
+
+    """
+    from nautilus_trader.model.data import Bar
+    from nautilus_trader.persistence.catalog.parquet import ParquetDataCatalog
+
+    try:
+        catalog = ParquetDataCatalog(path=catalog_path)
+        files = catalog.get_file_list_from_data_cls(Bar)
+    except Exception:
+        return None
+
+    prefix = f"{instrument_id}-"
+    candidates: list[str] = []
+    for filepath in files:
+        # Files live under .../data/bar/<BAR_TYPE>/...
+        parts = filepath.split("/")
+        for idx, part in enumerate(parts):
+            if part == "bar" and idx + 1 < len(parts):
+                bar_type = parts[idx + 1]
+                if bar_type.startswith(prefix):
+                    candidates.append(bar_type)
+                break
+
+    if not candidates:
+        return None
+
+    # Prefer 5-MINUTE, then 1-MINUTE, then first available
+    for preferred in ("5-MINUTE", "1-MINUTE", "15-MINUTE", "1-HOUR", "1-DAY"):
+        for candidate in candidates:
+            if preferred in candidate:
+                return candidate
+
+    return candidates[0]
+
+
+def _build_adhoc_strategy(
+    instrument_id: str,
+    strategy_path: str,
+    bar_type: str,
+) -> Any:
+    """Build an ad-hoc :class:`ImportableStrategyConfig` from CLI args.
+
+    Generates sensible bracket and risk defaults so the user does not
+    need a ``bundles.yaml`` entry for quick experiments.
+
+    Parameters
+    ----------
+    instrument_id : str
+        Instrument ID (e.g. ``"TSLA.NASDAQ"``).
+    strategy_path : str
+        Fully-qualified strategy class path (e.g.
+        ``"sam_trader.strategies.orb:OrbStrategy"``).
+    bar_type : str
+        Nautilus bar-type string.
+
+    Returns
+    -------
+    ImportableStrategyConfig
+        A strategy config ready for the backtest engine.
+
+    """
+    from nautilus_trader.model.identifiers import InstrumentId
+    from nautilus_trader.trading.config import ImportableStrategyConfig
+
+    # Derive config class path:  module:ClassName → module:ClassNameConfig
+    module, class_name = strategy_path.split(":", 1)
+    config_path = f"{module}:{class_name}Config"
+
+    # Derive venue from instrument; default to IB for unknown venues
+    try:
+        venue = str(InstrumentId.from_str(instrument_id).venue)
+    except (ValueError, AttributeError):
+        venue = "NASDAQ"
+
+    # Map exchange venue to broker venue
+    broker_venue = "FUTU" if venue == "FUTU" else "IB"
+    market = "HK" if venue in {"HKEX", "SEHK"} else "US"
+
+    bundle_id = f"ad-hoc-{instrument_id.lower().replace('.', '-')}"
+    strategy_id = f"{market}-{bundle_id}"
+
+    config: dict[str, Any] = {
+        "instrument_id": instrument_id,
+        "bar_type": bar_type,
+        "stop_loss_ticks": 10,
+        "take_profit_ticks": 30,
+        "venue": broker_venue,
+        "market": market,
+        "bundle_id": bundle_id,
+        "strategy_id": strategy_id,
+    }
+
+    if broker_venue == "IB":
+        config["exchange"] = "SMART"
+
+    return ImportableStrategyConfig(
+        strategy_path=strategy_path,
+        config_path=config_path,
+        config=config,
+    )
+
+
 @cli.command("backtest")
 @click.argument("bundle_id", required=False)
 @click.option(
@@ -3265,6 +3386,28 @@ def _build_backtest_summary(
     "catalog_path",
     default="data/catalog",
     help="Path to Parquet data catalog.",
+)
+@click.option(
+    "--instrument",
+    "instrument_id",
+    help="Instrument ID for ad-hoc backtest (e.g., TSLA.NASDAQ).",
+)
+@click.option(
+    "--strategy-path",
+    "strategy_path",
+    help=(
+        "Strategy class path for ad-hoc backtest "
+        '(e.g., "sam_trader.strategies.orb:OrbStrategy").'
+    ),
+)
+@click.option(
+    "--bar-type",
+    "bar_type_override",
+    help=(
+        "Bar type for ad-hoc backtest "
+        '(e.g., "TSLA.NASDAQ-5-MINUTE-LAST-EXTERNAL"). '
+        "Inferred from catalog if omitted."
+    ),
 )
 @click.option(
     "--sweep",
@@ -3301,6 +3444,9 @@ def backtest(
     start_date: str,
     end_date: str,
     catalog_path: str,
+    instrument_id: str | None,
+    strategy_path: str | None,
+    bar_type_override: str | None,
     sweep_flags: tuple[str, ...],
     walk_forward: bool,
     train_days: str,
@@ -3314,18 +3460,24 @@ def backtest(
 
         sam backtest --bundles config/bundles.yaml --start 2024-01-01 --end 2024-06-30
 
+    AD-HOC EXAMPLES:
+
+        sam backtest --instrument AAPL.NASDAQ \\
+                     --strategy-path sam_trader.strategies.orb:OrbStrategy \\
+                     --start 2023-01-01 --end 2024-12-31
+
     SWEEP EXAMPLES:
 
-        sam backtest --sweep stop_loss_ticks=5,10,15 \
-            --sweep take_profit_ticks=20,30,40 \
-            --bundles config/bundles.yaml \
+        sam backtest --sweep stop_loss_ticks=5,10,15 \\
+            --sweep take_profit_ticks=20,30,40 \\
+            --bundles config/bundles.yaml \\
             --start 2024-01-01 --end 2024-06-30
 
     WALK-FORWARD EXAMPLES:
 
-        sam backtest --walk-forward --train 90d --test 30d \
-            --sweep stop_loss_ticks=5,10,15 \
-            --bundles config/bundles.yaml \
+        sam backtest --walk-forward --train 90d --test 30d \\
+            --sweep stop_loss_ticks=5,10,15 \\
+            --bundles config/bundles.yaml \\
             --start 2024-01-01 --end 2024-12-31
 
     """
@@ -3335,31 +3487,71 @@ def backtest(
         BacktestEngineWrapper,
     )
 
-    # Load bundles
-    if not bundles_path.exists():
-        raise click.ClickException(f"Bundles file not found: {bundles_path}")
+    # --- Ad-hoc mode validation ---
+    adhoc_mode = instrument_id is not None or strategy_path is not None
 
-    try:
-        all_bundles = load_bundles(bundles_path)
-    except BundleLoaderError as exc:
-        raise click.ClickException(f"Failed to load bundles: {exc}")
-
-    if not all_bundles:
+    if adhoc_mode and bundle_id:
         raise click.ClickException(
-            "No enabled bundles found. Check config/bundles.yaml."
+            "Cannot use both BUNDLE_ID argument and --instrument/--strategy-path. "
+            "They are mutually exclusive."
         )
 
-    # Filter to single bundle_id if provided
-    if bundle_id:
-        matching = [b for b in all_bundles if b.config.get("bundle_id") == bundle_id]
-        if not matching:
-            available = [b.config.get("bundle_id", "?") for b in all_bundles]
+    if instrument_id and not strategy_path:
+        raise click.ClickException(
+            "--instrument requires --strategy-path for ad-hoc backtests."
+        )
+
+    if strategy_path and not instrument_id:
+        raise click.ClickException(
+            "--strategy-path requires --instrument for ad-hoc backtests."
+        )
+
+    if adhoc_mode:
+        # At this point both instrument_id and strategy_path are non-None
+        # (validated above), but mypy needs a nudge.
+        assert instrument_id is not None
+        assert strategy_path is not None
+
+        # Resolve bar type
+        bar_type = bar_type_override
+        if bar_type is None:
+            bar_type = _infer_bar_type_from_catalog(catalog_path, instrument_id)
+        if bar_type is None:
             raise click.ClickException(
-                f"Bundle '{bundle_id}' not found. " f"Available: {', '.join(available)}"
+                f"Could not infer bar type for {instrument_id} from catalog. "
+                f"Use --bar-type to specify explicitly."
             )
-        strategies = matching
+
+        strategies = [_build_adhoc_strategy(instrument_id, strategy_path, bar_type)]
     else:
-        strategies = all_bundles
+        # Load bundles
+        if not bundles_path.exists():
+            raise click.ClickException(f"Bundles file not found: {bundles_path}")
+
+        try:
+            all_bundles = load_bundles(bundles_path)
+        except BundleLoaderError as exc:
+            raise click.ClickException(f"Failed to load bundles: {exc}")
+
+        if not all_bundles:
+            raise click.ClickException(
+                "No enabled bundles found. Check config/bundles.yaml."
+            )
+
+        # Filter to single bundle_id if provided
+        if bundle_id:
+            matching = [
+                b for b in all_bundles if b.config.get("bundle_id") == bundle_id
+            ]
+            if not matching:
+                available = [b.config.get("bundle_id", "?") for b in all_bundles]
+                raise click.ClickException(
+                    f"Bundle '{bundle_id}' not found. "
+                    f"Available: {', '.join(available)}"
+                )
+            strategies = matching
+        else:
+            strategies = all_bundles
 
     # Extract instrument_ids and bar_types from strategy configs
     instrument_ids: list[str] = []

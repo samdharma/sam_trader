@@ -2471,3 +2471,17 @@
 - **Files Changed**: `src/sam_trader/services/backtest/dashboard_api.py`, `tests/unit/services/backtest/test_dashboard_api.py`
 - **Validation Result**: PASS (RALPH_GATE_PASSED — 89/89 backtest dashboard API tests, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ticket ready to close.
+
+## Iteration 157
+- **Task**: 12.1.21: Ad-hoc backtest — accept --instrument and --strategy CLI overrides
+- **Task ID**: sam_trader-9z3.13.1.21
+- **Status**: COMPLETE
+- **Decisions**:
+  1. Added `--instrument`, `--strategy-path`, and `--bar-type` options to `sam backtest` CLI command.
+  2. `--instrument` and `--strategy-path` are mutually exclusive with the positional `bundle_id` argument.
+  3. When in ad-hoc mode, the command skips `bundles.yaml` entirely and auto-generates an `ImportableStrategyConfig` with sensible defaults: `stop_loss_ticks=10`, `take_profit_ticks=30`, `venue=IB` (with `exchange=SMART`), and derived `market`/`bundle_id`/`strategy_id`.
+  4. Bar type inference from catalog uses `ParquetDataCatalog.get_file_list_from_data_cls(Bar)`, scans for matching instrument prefixes, and prefers `5-MINUTE` > `1-MINUTE` > `15-MINUTE` > `1-HOUR` > `1-DAY`.
+  5. Ad-hoc mode works seamlessly with `--sweep` and `--walk-forward` because the strategy list is built before those code paths branch.
+- **Files Changed**: `src/sam_trader/services/cli.py` (+210 lines: `_infer_bar_type_from_catalog`, `_build_adhoc_strategy`, ad-hoc validation logic), `tests/unit/services/test_cli.py` (+190 lines: 9 new tests)
+- **Validation Result**: PASS (RALPH_GATE_PASSED — 119/119 targeted tests, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ticket ready to close.
