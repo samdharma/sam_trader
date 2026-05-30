@@ -57,7 +57,6 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta http-equiv="refresh" content="30">
 <title>SAM Trader Dashboard</title>
 <style>
 :root {
@@ -194,6 +193,8 @@ th.sortable.desc::after { content:' \2193'; }
 .bt-metric-card { border:1px solid var(--border); border-radius:4px; padding:.5rem; text-align:center; }
 .bt-metric-card .bt-metric-label { font-size:.7rem; color:var(--muted); text-transform:uppercase; }
 .bt-metric-card .bt-metric-value { font-size:1.1rem; font-weight:700; }
+.bt-refresh-indicator { display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--green); margin-right:.25rem; transition:background .3s; }
+.bt-refresh-indicator.polling { background:var(--accent); }
 .footer {
   margin-top:2rem; font-size:.75rem; color:var(--muted);
   border-top:1px solid var(--border); padding-top:.5rem;
@@ -212,27 +213,27 @@ th.sortable.desc::after { content:' \2193'; }
 <div class="card">
 <h2>PERFORMANCE KPIs</h2>
 <div class="kpi-grid">
-  <div class="kpi-card">
+  <div class="kpi-card" id="kpi-net-pnl">
     <div class="kpi-label">Net P&L</div>
     <div class="kpi-value {{kpi_net_pnl_class}}">{{kpi_net_pnl}}</div>
     <div class="kpi-delta {{kpi_net_pnl_delta_class}}">{{kpi_net_pnl_delta}}</div>
   </div>
-  <div class="kpi-card">
+  <div class="kpi-card" id="kpi-win-rate">
     <div class="kpi-label">Win Rate</div>
     <div class="kpi-value">{{kpi_win_rate}}</div>
     <div class="kpi-delta {{kpi_win_rate_delta_class}}">{{kpi_win_rate_delta}}</div>
   </div>
-  <div class="kpi-card">
+  <div class="kpi-card" id="kpi-sharpe">
     <div class="kpi-label">Sharpe 20d</div>
     <div class="kpi-value">{{kpi_sharpe}}</div>
     <div class="kpi-delta {{kpi_sharpe_delta_class}}">{{kpi_sharpe_delta}}</div>
   </div>
-  <div class="kpi-card">
+  <div class="kpi-card" id="kpi-max-dd">
     <div class="kpi-label">Max DD</div>
     <div class="kpi-value negative">{{kpi_max_dd}}</div>
     <div class="kpi-delta {{kpi_max_dd_delta_class}}">{{kpi_max_dd_delta}}</div>
   </div>
-  <div class="kpi-card">
+  <div class="kpi-card" id="kpi-expectancy">
     <div class="kpi-label">Expectancy</div>
     <div class="kpi-value {{kpi_expectancy_class}}">{{kpi_expectancy}}</div>
     <div class="kpi-delta {{kpi_expectancy_delta_class}}">{{kpi_expectancy_delta}}</div>
@@ -258,16 +259,16 @@ th.sortable.desc::after { content:' \2193'; }
 <h2>SYSTEM HEALTH</h2>
 <div class="health-grid">
   <div class="health-item">
-    <span class="status {{pg_status_class}}"></span>PG: {{pg_status}}
+    <span id="status-postgres" class="status {{pg_status_class}}"></span><span id="status-text-postgres">PG: {{pg_status}}</span>
   </div>
   <div class="health-item">
-    <span class="status {{redis_status_class}}"></span>Redis: {{redis_status}}
+    <span id="status-redis" class="status {{redis_status_class}}"></span><span id="status-text-redis">Redis: {{redis_status}}</span>
   </div>
   <div class="health-item">
-    <span class="status {{futu_status_class}}"></span>Futu OpenD: {{futu_status}}
+    <span id="status-futu_opend" class="status {{futu_status_class}}"></span><span id="status-text-futu_opend">Futu OpenD: {{futu_status}}</span>
   </div>
   <div class="health-item">
-    <span class="status {{trader_status_class}}"></span>sam-trader: {{trader_status}}
+    <span id="status-sam_trader" class="status {{trader_status_class}}"></span><span id="status-text-sam_trader">sam-trader: {{trader_status}}</span>
   </div>
 </div>
 </div>
@@ -308,7 +309,7 @@ th.sortable.desc::after { content:' \2193'; }
 
 <div class="card">
 <h2>TODAY'S FILLS (last 20)</h2>
-<table>
+<table id="fills-table">
 <thead>
   <tr>
     <th>Time</th><th>Symbol</th><th>Side</th><th>Qty</th>
@@ -323,7 +324,7 @@ th.sortable.desc::after { content:' \2193'; }
 
 <div class="card">
 <h2>CURRENT POSITIONS</h2>
-<table>
+<table id="positions-table">
 <thead>
   <tr>
     <th>Symbol</th><th>Venue</th><th>Qty</th>
@@ -338,7 +339,7 @@ th.sortable.desc::after { content:' \2193'; }
 
 <div class="card">
 <h2>P&L SUMMARY</h2>
-<table>
+<table id="pnl-table">
 <thead><tr><th>Strategy</th><th>Realized P&L</th></tr></thead>
 <tbody>
 {{pnl_rows}}
@@ -346,7 +347,7 @@ th.sortable.desc::after { content:' \2193'; }
 <tfoot>
   <tr>
     <td><strong>TOTAL REALIZED</strong></td>
-    <td class="{{total_pnl_class}}"><strong>{{total_pnl}}</strong></td>
+    <td id="pnl-total" class="{{total_pnl_class}}"><strong>{{total_pnl}}</strong></td>
   </tr>
 </tfoot>
 </table>
@@ -463,9 +464,191 @@ th.sortable.desc::after { content:' \2193'; }
 </div>
 
 <div class="footer">
-Refreshed: {{now}} UTC &nbsp;|&nbsp; Auto-refresh every 30s
+<span id="live-refresh-indicator" class="bt-refresh-indicator"></span>
+Last updated: <span id="live-last-update">{{now}}</span> UTC &nbsp;|&nbsp; Live auto-refresh every 30s
 </div>
-<script>
+// ===== LIVE POLLING (replaces meta-refresh — preserves form state) =====
+var _livePollTimer = null;
+var _livePolling = false;
+
+function startLivePolling() {
+  if (_livePollTimer) return;
+  _livePollTimer = setInterval(pollLiveData, 30000);
+  pollLiveData(); // immediate first poll
+}
+
+function pollLiveData() {
+  if (_livePolling) return;
+  _livePolling = true;
+  var indicator = document.getElementById('live-refresh-indicator');
+  if (indicator) indicator.classList.add('polling');
+
+  fetch('/api/dashboard')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      updateLiveUI(data);
+      if (indicator) indicator.classList.remove('polling');
+      document.getElementById('live-last-update').textContent =
+        new Date().toISOString().replace('T',' ').split('.')[0];
+    })
+    .catch(function() {
+      if (indicator) { indicator.classList.remove('polling'); indicator.style.background = 'var(--red)'; }
+    })
+    .finally(function() { _livePolling = false; });
+}
+
+function updateLiveUI(data) {
+  // Health
+  var health = data.health || {};
+  var svcs = health.services || {};
+  updateHealthDot('postgres', svcs);
+  updateHealthDot('redis', svcs);
+  updateHealthDot('futu_opend', svcs);
+  updateHealthDot('sam_trader', svcs);
+
+  // Fills table
+  var fills = data.fills || [];
+  var fillsTbody = document.querySelector('#fills-table tbody');
+  if (fillsTbody) {
+    if (!fills.length) {
+      fillsTbody.innerHTML = '<tr><td colspan="8">No fills today</td></tr>';
+    } else {
+      fillsTbody.innerHTML = fills.map(function(f) {
+        var sideCls = f.side === 'BUY' ? 'buy' : 'sell';
+        return '<tr>' +
+          '<td>' + (f.time || '') + '</td>' +
+          '<td>' + (f.symbol || '') + '</td>' +
+          '<td class="' + sideCls + '">' + (f.side || '') + '</td>' +
+          '<td>' + fmtNum(f.qty) + '</td>' +
+          '<td>' + fmtNum(f.price) + '</td>' +
+          '<td>' + (f.venue || '') + '</td>' +
+          '<td>' + fmtNum(f.slippage) + '</td>' +
+          '<td>' + (f.strategy || '') + '</td>' +
+        '</tr>';
+      }).join('');
+    }
+  }
+
+  // Positions
+  var positions = data.positions || [];
+  var posTbody = document.querySelector('#positions-table tbody');
+  if (posTbody) {
+    if (!positions.length) {
+      posTbody.innerHTML = '<tr><td colspan="7">No open positions</td></tr>';
+    } else {
+      posTbody.innerHTML = positions.map(function(p) {
+        var qty = parseFloat(p.net_qty) || 0;
+        var avgPx = parseFloat(p.avg_px) || 0;
+        var upnl = p.unrealized_pnl != null ? parseFloat(p.unrealized_pnl) : 0;
+        var upnlCls = upnl >= 0 ? 'positive' : 'negative';
+        var mark = (qty !== 0 && avgPx !== 0) ? (avgPx + upnl / qty) : 0;
+        var pnlPct = (qty !== 0 && avgPx !== 0) ? (upnl / (Math.abs(qty) * avgPx) * 100) : 0;
+        return '<tr>' +
+          '<td>' + (p.symbol || '') + '</td>' +
+          '<td>' + (p.venue || '') + '</td>' +
+          '<td>' + fmtNum(p.net_qty) + '</td>' +
+          '<td>' + fmtNum(p.avg_px) + '</td>' +
+          '<td>' + fmtNumVal(mark) + '</td>' +
+          '<td class="' + upnlCls + '">' + fmtNumVal(upnl) + '</td>' +
+          '<td class="' + upnlCls + '">' + (pnlPct >= 0 ? '+' : '') + pnlPct.toFixed(2) + '%</td>' +
+        '</tr>';
+      }).join('');
+    }
+  }
+
+  // P&L table
+  var pnl = data.pnl || {};
+  var pnlStrategies = pnl.strategies || {};
+  var pnlTbody = document.querySelector('#pnl-table tbody');
+  if (pnlTbody) {
+    var stratKeys = Object.keys(pnlStrategies);
+    if (!stratKeys.length) {
+      pnlTbody.innerHTML = '<tr><td colspan="2">No P&L data</td></tr>';
+    } else {
+      pnlTbody.innerHTML = stratKeys.map(function(s) {
+        var v = pnlStrategies[s];
+        var cls = v >= 0 ? 'positive' : 'negative';
+        var sign = v >= 0 ? '+' : '';
+        return '<tr><td>' + s + '</td><td class="' + cls + '">' + sign + '$' + v.toFixed(2) + '</td></tr>';
+      }).join('');
+    }
+  }
+  // Total P&L
+  var totalPnl = pnl.total != null ? pnl.total : 0;
+  var totalEl = document.getElementById('pnl-total');
+  if (totalEl) {
+    var sign = totalPnl >= 0 ? '+' : '';
+    totalEl.textContent = sign + '$' + totalPnl.toFixed(2);
+    totalEl.className = totalPnl >= 0 ? 'positive' : 'negative';
+  }
+
+  // KPI cards
+  var perf = data.performance || {};
+  updateKPICard('kpi-net-pnl', perf.net_pnl, perf.net_pnl_delta, true);
+  updateKPICard('kpi-win-rate', perf.win_rate, perf.win_rate_delta, false, '%', 1);
+  updateKPICard('kpi-sharpe', perf.sharpe_20d, perf.sharpe_20d_delta, false, '', 2);
+  updateKPICard('kpi-max-dd', perf.max_drawdown_pct, perf.max_drawdown_delta, false, '%', 2, true);
+  updateKPICard('kpi-expectancy', perf.expectancy, perf.expectancy_delta, true);
+
+  // Market data summary (lightweight)
+  var md = data.market_data || {};
+  var mdSummary = document.getElementById('md-summary-text');
+  if (mdSummary && md.instruments) {
+    var count = md.instruments.length;
+    var ages = md.instruments.map(function(i) { return i.age_seconds || 9999; });
+    var minAge = Math.min.apply(null, ages);
+    mdSummary.textContent = count + ' instrument' + (count !== 1 ? 's' : '') + ' | last bar ' + minAge + 's ago';
+  }
+}
+
+function updateHealthDot(name, svcs) {
+  var s = svcs[name] || {};
+  var st = s.status || 'unknown';
+  var el = document.getElementById('status-' + name);
+  var txt = document.getElementById('status-text-' + name);
+  var isUp = st === 'UP' || st === 'running' || st === 'healthy';
+  if (el) el.className = 'status ' + (isUp ? 'up' : 'down');
+  if (txt) txt.textContent = name === 'futu_opend' ? 'Futu OpenD: ' + st.toUpperCase() :
+    (name === 'sam_trader' ? 'sam-trader: ' + st.toUpperCase() : st.toUpperCase());
+}
+
+function updateKPICard(id, value, delta, isDollar, suffix, decimals, isNegative) {
+  var card = document.getElementById(id);
+  if (!card) return;
+  var valEl = card.querySelector('.kpi-value');
+  var deltaEl = card.querySelector('.kpi-delta');
+  suffix = suffix || '';
+  decimals = decimals != null ? decimals : 2;
+  if (valEl) {
+    if (value == null) { valEl.textContent = '—'; valEl.className = 'kpi-value'; }
+    else if (isDollar) {
+      var sign = value >= 0 ? '+' : '';
+      valEl.textContent = sign + '$' + value.toFixed(decimals);
+      valEl.className = 'kpi-value ' + (value >= 0 ? 'positive' : 'negative');
+    } else if (isNegative) {
+      valEl.textContent = value.toFixed(decimals) + suffix;
+      valEl.className = 'kpi-value negative';
+    } else {
+      valEl.textContent = value.toFixed(decimals) + suffix;
+      valEl.className = 'kpi-value';
+    }
+  }
+  if (deltaEl) {
+    if (delta == null) { deltaEl.textContent = '—'; deltaEl.className = 'kpi-delta'; }
+    else {
+      var ds = delta >= 0 ? '+' : '';
+      deltaEl.textContent = ds + delta.toFixed(2) + ' vs prior';
+      deltaEl.className = 'kpi-delta ' + (delta >= 0 ? 'positive' : 'negative');
+    }
+  }
+}
+
+function fmtNum(v) { if (v == null) return '—'; var n = parseFloat(v); return isNaN(n) ? String(v) : n.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}); }
+function fmtNumVal(v) { if (v == null) return '—'; var n = parseFloat(v); return isNaN(n) ? String(v) : n.toFixed(2); }
+
+// --- Initialize live polling on load ---
+startLivePolling();
+
 (function(){
   var mdExpanded = sessionStorage.getItem('mdExpanded') === 'true';
   var summary = document.getElementById('market-data-summary');

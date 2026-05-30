@@ -117,8 +117,9 @@ class TestBuildRunConfig:
         )
 
         assert isinstance(result, BacktestRunConfig)
+        # Venue is derived from instrument: TSLA.NASDAQ → venue NASDAQ
         assert len(result.venues) == 1
-        assert result.venues[0].name == "SIM"
+        assert str(result.venues[0].name) == "NASDAQ"
         assert result.venues[0].oms_type == "NETTING"
         assert result.venues[0].account_type == "MARGIN"
         assert result.venues[0].starting_balances == ["100000 USD"]
@@ -135,21 +136,20 @@ class TestBuildRunConfig:
             orb_strategy_config
         ]
 
-    def test_custom_venue_name(
+    def test_venue_derived_from_instruments(
         self,
         wrapper: BacktestEngineWrapper,
         orb_strategy_config: ImportableStrategyConfig,
     ) -> None:
-        """Custom venue_name is respected."""
+        """Venue name is derived from instrument IDs, not hardcoded."""
         result = wrapper.build_run_config(
             strategies=[orb_strategy_config],
             instrument_ids=["TSLA.NASDAQ"],
             bar_types=["TSLA.NASDAQ-5-MINUTE-LAST-EXTERNAL"],
             start="2024-01-01",
             end="2024-06-30",
-            venue_name="NASDAQ",
         )
-        assert result.venues[0].name == "NASDAQ"
+        assert str(result.venues[0].name) == "NASDAQ"
 
     def test_hedging_oms_type(
         self,
@@ -245,37 +245,37 @@ class TestBuildRunConfig:
 # ---------------------------------------------------------------------------
 
 
-class TestDeriveVenueFromInstruments:
-    """Tests for _derive_venue_from_instruments."""
+class TestDeriveVenuesFromInstruments:
+    """Tests for _derive_venues_from_instruments."""
 
     def test_single_nasdaq_instrument(self) -> None:
-        """Single NASDAQ instrument returns NASDAQ."""
-        result = BacktestEngineWrapper._derive_venue_from_instruments(["TSLA.NASDAQ"])
-        assert str(result) == "NASDAQ"
+        """Single NASDAQ instrument returns [NASDAQ]."""
+        result = BacktestEngineWrapper._derive_venues_from_instruments(["TSLA.NASDAQ"])
+        assert result == ["NASDAQ"]
 
     def test_single_hkex_instrument(self) -> None:
-        """Single HKEX instrument returns HKEX."""
-        result = BacktestEngineWrapper._derive_venue_from_instruments(["00700.HKEX"])
-        assert str(result) == "HKEX"
+        """Single HKEX instrument returns [HKEX]."""
+        result = BacktestEngineWrapper._derive_venues_from_instruments(["00700.HKEX"])
+        assert result == ["HKEX"]
 
-    def test_mixed_venues_returns_majority(self) -> None:
-        """Majority venue wins."""
-        result = BacktestEngineWrapper._derive_venue_from_instruments(
+    def test_mixed_venues_returns_all_unique(self) -> None:
+        """Mixed venues return all unique venues, sorted."""
+        result = BacktestEngineWrapper._derive_venues_from_instruments(
             ["TSLA.NASDAQ", "AAPL.NASDAQ", "00700.HKEX"]
         )
-        assert str(result) == "NASDAQ"
+        assert sorted(result) == ["HKEX", "NASDAQ"]
 
     def test_empty_list_returns_sim(self) -> None:
-        """Empty instrument list defaults to SIM."""
-        result = BacktestEngineWrapper._derive_venue_from_instruments([])
-        assert str(result) == "SIM"
+        """Empty instrument list defaults to [SIM]."""
+        result = BacktestEngineWrapper._derive_venues_from_instruments([])
+        assert result == ["SIM"]
 
     def test_invalid_ids_returns_sim(self) -> None:
-        """Invalid instrument IDs default to SIM."""
-        result = BacktestEngineWrapper._derive_venue_from_instruments(
+        """Invalid instrument IDs default to [SIM]."""
+        result = BacktestEngineWrapper._derive_venues_from_instruments(
             ["not-a-valid-id", "also-invalid"]
         )
-        assert str(result) == "SIM"
+        assert result == ["SIM"]
 
 
 # ---------------------------------------------------------------------------

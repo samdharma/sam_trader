@@ -662,16 +662,14 @@ class TestCrossComponentDataFlow:
         assert combos == [{}]
 
     def test_venue_derivation_handles_nasdaq(self) -> None:
-        """_derive_venue_from_instruments correctly resolves venues."""
-        assert (
-            str(BacktestEngineWrapper._derive_venue_from_instruments(["TSLA.NASDAQ"]))
-            == "NASDAQ"
-        )
-        assert (
-            str(BacktestEngineWrapper._derive_venue_from_instruments(["00700.HKEX"]))
-            == "HKEX"
-        )
-        assert str(BacktestEngineWrapper._derive_venue_from_instruments([])) == "SIM"
+        """_derive_venues_from_instruments correctly resolves venues."""
+        assert BacktestEngineWrapper._derive_venues_from_instruments(
+            ["TSLA.NASDAQ"]
+        ) == ["NASDAQ"]
+        assert BacktestEngineWrapper._derive_venues_from_instruments(
+            ["00700.HKEX"]
+        ) == ["HKEX"]
+        assert BacktestEngineWrapper._derive_venues_from_instruments([]) == ["SIM"]
 
     def test_engine_config_default_values(self) -> None:
         """build_run_config defaults produce sensible config."""
@@ -683,7 +681,7 @@ class TestCrossComponentDataFlow:
             start="2024-01-01",
             end="2024-06-30",
         )
-        assert cfg.venues[0].name == "SIM"
+        assert str(cfg.venues[0].name) == "NASDAQ"
         assert cfg.venues[0].oms_type == "NETTING"
         assert cfg.venues[0].starting_balances == ["100000 USD"]
         assert cfg.engine is not None and cfg.engine.run_analysis is True

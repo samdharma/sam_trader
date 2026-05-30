@@ -439,7 +439,7 @@ class TestHtmlRendering:
         assert "BUY" in html
         assert "tsla-orb" in html
         assert "+$255.20" in html
-        assert "Auto-refresh every 30s" in html  # auto-refresh meta
+        assert "Live auto-refresh every 30s" in html  # AJAX live polling
 
     def test_html_shows_no_data_messages(self) -> None:
         """Empty data sets render informative no-data rows."""

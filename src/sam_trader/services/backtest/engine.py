@@ -211,46 +211,56 @@ class BacktestEngineWrapper:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _derive_venue_from_instruments(
+    def _derive_venues_from_instruments(
         instrument_ids: list[str],
-    ) -> str:
-        """Derive a venue name from instrument IDs.
+    ) -> list[str]:
+        """Derive unique venue names from instrument IDs.
 
-        Returns the most common venue across all instruments, falling back
-        to ``"SIM"`` when instruments have no venue or are heterogeneous.
+        Returns a list of unique venue names as strings (e.g.
+        ``["NASDAQ"]`` from ``["TSLA.NASDAQ", "AAPL.NASDAQ"]``),
+        falling back to ``["SIM"]`` when instruments have no venue.
 
         """
-        venues: dict[str, int] = {}
+        venues: set[str] = set()
         for iid_str in instrument_ids:
             try:
                 venue = InstrumentId.from_str(iid_str).venue
                 if venue:
-                    venues[venue] = venues.get(venue, 0) + 1
+                    venues.add(str(venue))
             except (ValueError, AttributeError):
                 continue
 
         if not venues:
-            return "SIM"
+            return ["SIM"]
 
-        return max(venues, key=venues.get)  # type: ignore[arg-type]
+        return sorted(venues)
 
-    def _build_venue_config(
+    def _build_venue_configs(
         self,
-        venue_name: str,
+        venue_names: list[str],
         oms_type: str,
         account_type: str,
         starting_balances: list[str] | None,
-    ) -> BacktestVenueConfig:
-        """Construct a :class:`BacktestVenueConfig` for the backtest."""
+    ) -> list[BacktestVenueConfig]:
+        """Construct :class:`BacktestVenueConfig` objects for each venue.
+
+        Nautilus ``BacktestNode`` validates that every instrument's venue
+        has a matching ``BacktestVenueConfig``.  This method creates one
+        config per unique venue derived from the instruments being tested.
+
+        """
         if starting_balances is None:
             starting_balances = ["100000 USD"]
 
-        return BacktestVenueConfig(
-            name=venue_name,
-            oms_type=oms_type,
-            account_type=account_type,
-            starting_balances=starting_balances,
-        )
+        return [
+            BacktestVenueConfig(
+                name=name,
+                oms_type=oms_type,
+                account_type=account_type,
+                starting_balances=starting_balances,
+            )
+            for name in venue_names
+        ]
 
     def _build_data_config(
         self,
@@ -321,8 +331,12 @@ class BacktestEngineWrapper:
                 "At least one bar_type is required for data loading"
             )
 
-        venue_config = self._build_venue_config(
-            venue_name=venue_name,
+        # Derive venue configs from instrument IDs so Nautilus validation
+        # can match each instrument's venue to a BacktestVenueConfig.
+        # Falls back to ["SIM"] when instruments have no venue.
+        venue_names = self._derive_venues_from_instruments(instrument_ids)
+        venue_configs = self._build_venue_configs(
+            venue_names=venue_names,
             oms_type=oms_type,
             account_type=account_type,
             starting_balances=starting_balances,
@@ -343,7 +357,7 @@ class BacktestEngineWrapper:
         )
 
         return BacktestRunConfig(
-            venues=[venue_config],
+            venues=venue_configs,
             data=[data_config],
             engine=engine_config,
         )
