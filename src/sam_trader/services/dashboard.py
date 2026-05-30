@@ -888,7 +888,7 @@ function renderResultsTable(rows){
       '<td>'+escHtml(r.end_date||'')+'</td>'+
       '<td>'+badge+'</td>'+
       '<td>'+(r.elapsed_secs!=null?parseFloat(r.elapsed_secs).toFixed(1)+'s':'—')+'</td>'+
-      '<td><button class="bt-btn-small" onclick="showRunDetail(' + escHtml(r.run_id||'') + ')">Detail</button></td>'+
+      '<td><button class="bt-btn-small" onclick="showRunDetail(\'' + escHtml(r.run_id||'') + '\')">Detail</button></td>'+
     '</tr>';
   }).join('');
 }
@@ -1004,8 +1004,8 @@ function renderBacktestDetail(d){
     '<h4 style="margin:1rem 0 .5rem; color:var(--accent);">Equity Curve</h4>'+
     '<div class="bt-chart-container" id="bt-detail-chart"><canvas id="bt-detail-canvas"></canvas><div class="bt-chart-tooltip" id="bt-detail-tt"></div></div>'+
     '<div style="display:flex; gap:.5rem; margin-top:.25rem;">'+
-      '<button class="bt-btn-small" onclick="exportRunJSON(' + escHtml(d.run_id||'') + ')">⬇ JSON</button>'+
-      '<button class="bt-btn-small" onclick="exportRunCSV(' + escHtml(d.run_id||'') + ')">⬇ CSV</button>'+
+      '<button class="bt-btn-small" onclick="exportRunJSON(\'' + escHtml(d.run_id||'') + '\')">⬇ JSON</button>'+
+      '<button class="bt-btn-small" onclick="exportRunCSV(\'' + escHtml(d.run_id||'') + '\')">⬇ CSV</button>'+
     '</div>';
   setTimeout(function(){drawEquityCurve('bt-detail-canvas','bt-detail-tt',ec);},100);
   return html;
@@ -2324,8 +2324,13 @@ class DashboardHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(html.encode())
 
+    @staticmethod
+    def _route_path(path: str) -> str:
+        """Strip query string from path for clean route matching."""
+        return urlparse(path).path
+
     def do_POST(self) -> None:  # noqa: N802
-        path = self.path
+        path = self._route_path(self.path)
         if path == "/api/backtest/run":
             try:
                 content_length = int(self.headers.get("Content-Length", 0))
@@ -2340,7 +2345,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self._send_json(404, {"error": "Not found"})
 
     def do_GET(self) -> None:  # noqa: N802
-        path = self.path
+        raw_path = self.path
+        path = self._route_path(raw_path)
         cfg = DashboardConfig()
         if path == "/health":
             health = check_all_services()
@@ -2348,11 +2354,11 @@ class DashboardHandler(BaseHTTPRequestHandler):
         elif path == "/api/dashboard":
             data = get_dashboard_data()
             self._send_json(200, data)
-        elif path.startswith("/api/bars/recent"):
-            data = _handle_bars_recent(path, cfg)
+        elif path == "/api/bars/recent":
+            data = _handle_bars_recent(raw_path, cfg)
             self._send_json(200, data)
-        elif path.startswith("/api/equity-curve"):
-            parsed = urlparse(path)
+        elif path == "/api/equity-curve":
+            parsed = urlparse(raw_path)
             params = parse_qs(parsed.query)
             try:
                 days = int(params.get("days", ["30"])[0])
@@ -2360,8 +2366,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 days = 30
             data = {"points": _get_equity_curve_data(cfg, days)}
             self._send_json(200, data)
-        elif path.startswith("/api/drawdown"):
-            parsed = urlparse(path)
+        elif path == "/api/drawdown":
+            parsed = urlparse(raw_path)
             params = parse_qs(parsed.query)
             try:
                 days = int(params.get("days", ["30"])[0])
@@ -2373,7 +2379,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             data = _get_performance_data(cfg)
             self._send_json(200, data)
         elif path == "/api/monthly-returns":
-            parsed = urlparse(path)
+            parsed = urlparse(raw_path)
             params = parse_qs(parsed.query)
             try:
                 days = int(params.get("days", ["365"])[0])
@@ -2382,7 +2388,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             data = {"months": _get_monthly_returns_data(cfg, days)}
             self._send_json(200, data)
         elif path == "/api/annual-returns":
-            parsed = urlparse(path)
+            parsed = urlparse(raw_path)
             params = parse_qs(parsed.query)
             try:
                 days = int(params.get("days", ["730"])[0])
@@ -2390,8 +2396,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 days = 730
             data = {"years": _get_annual_returns_data(cfg, days)}
             self._send_json(200, data)
-        elif path.startswith("/api/rolling-sharpe"):
-            parsed = urlparse(path)
+        elif path == "/api/rolling-sharpe":
+            parsed = urlparse(raw_path)
             params = parse_qs(parsed.query)
             try:
                 window = int(params.get("window", ["20"])[0])
@@ -2403,8 +2409,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 days = 90
             data = {"points": _get_rolling_sharpe_data(cfg, days, window)}
             self._send_json(200, data)
-        elif path.startswith("/api/rolling-beta"):
-            parsed = urlparse(path)
+        elif path == "/api/rolling-beta":
+            parsed = urlparse(raw_path)
             params = parse_qs(parsed.query)
             try:
                 window = int(params.get("window", ["20"])[0])
@@ -2428,7 +2434,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             else:
                 self._send_json(404, {"error": "Not found"})
         elif path == "/api/backtest/runs":
-            parsed = urlparse(path)
+            parsed = urlparse(raw_path)
             params = parse_qs(parsed.query)
             try:
                 limit = int(params.get("limit", ["50"])[0])
@@ -2451,8 +2457,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 self._send_json(status_code, data)
             else:
                 self._send_json(404, {"error": "Not found"})
-        elif path.startswith("/api/backtest/compare"):
-            parsed = urlparse(path)
+        elif path == "/api/backtest/compare":
+            parsed = urlparse(raw_path)
             params = parse_qs(parsed.query)
             runs_raw = params.get("runs", [""])[0]
             run_ids = [r.strip() for r in runs_raw.split(",") if r.strip()]
