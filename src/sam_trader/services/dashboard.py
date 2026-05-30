@@ -171,6 +171,7 @@ th.sortable.desc::after { content:' \2193'; }
 .bt-status-badge.running { background:rgba(88,166,255,.15); color:var(--accent); }
 .bt-status-badge.failed { background:rgba(248,81,73,.15); color:var(--red); }
 .bt-status-badge.started { background:rgba(139,148,158,.15); color:var(--muted); }
+.bt-catalog-banner { padding:.75rem 1rem; border-radius:6px; margin-bottom:.75rem; font-weight:600; background:rgba(248,81,73,.15); color:var(--red); border:1px solid var(--red); display:none; }
 .bt-modal-overlay { position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,.7); z-index:100; overflow-y:auto; padding:2rem; }
 .bt-modal-content { max-width:900px; margin:0 auto; background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:1.5rem; }
 .bt-metric-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:.5rem; margin-bottom:1rem; }
@@ -346,6 +347,7 @@ th.sortable.desc::after { content:' \2193'; }
 
 <!-- RUNNER -->
 <div id="bt-panel-runner" class="bt-panel active">
+  <div id="bt-catalog-banner" class="bt-catalog-banner"></div>
   <div class="bt-form-grid">
     <div class="bt-form-field">
       <label>Instruments (Ctrl/Cmd+click to multi-select)</label>
@@ -539,6 +541,15 @@ function switchBtTab(name) {
       o.value=i.instrument_id;o.textContent=i.instrument_id+'  ('+(i.bar_types||[]).join(', ')+')';s.appendChild(o);});
   }).catch(function(){});
   fetch('/api/backtest/catalog/status').then(function(r){return r.json();}).then(function(d){
+    var banner=document.getElementById('bt-catalog-banner');
+    var btn=document.getElementById('bt-run-btn');
+    if(d&&d.total_instruments===0){
+      banner.textContent=d.message||'No historical data found.';
+      banner.style.display='block';
+      btn.disabled=true;
+    }else{
+      banner.style.display='none';
+    }
     if(d&&d.oldest_bar){document.getElementById('bt-start').value=d.oldest_bar;}
     if(d&&d.newest_bar){document.getElementById('bt-end').value=d.newest_bar;}
   }).catch(function(){});

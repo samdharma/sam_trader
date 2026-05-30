@@ -1651,6 +1651,20 @@ class TestBacktestDashboardUI:
         html = self._render_dashboard()
         assert "fetch('/api/backtest/catalog/status')" in html
 
+    def test_catalog_banner_present(self) -> None:
+        """Empty catalog banner div is rendered in runner panel."""
+        html = self._render_dashboard()
+        assert 'id="bt-catalog-banner"' in html
+        assert "bt-catalog-banner" in html
+
+    def test_catalog_banner_js_present(self) -> None:
+        """JavaScript shows banner and disables run button when catalog empty."""
+        html = self._render_dashboard()
+        assert "bt-catalog-banner" in html
+        assert "total_instruments===0" in html
+        assert "btn.disabled=true" in html
+        assert "banner.style.display='block'" in html
+
     def test_date_prefill_js_present(self) -> None:
         """Runner tab sets bt-start/bt-end from catalog status response."""
         html = self._render_dashboard()

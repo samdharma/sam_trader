@@ -737,8 +737,8 @@ class TestHandleBacktestCatalogInstruments:
 class TestHandleBacktestCatalogStatus:
     """Tests for GET /api/backtest/catalog/status."""
 
-    def test_empty_catalog(self) -> None:
-        """Empty catalog returns zeros."""
+    def test_missing_catalog_directory(self) -> None:
+        """Missing catalog directory returns catalog_exists=False with message."""
         with patch(
             "sam_trader.services.backtest.dashboard_api._get_catalog",
             return_value=None,
@@ -748,6 +748,24 @@ class TestHandleBacktestCatalogStatus:
         assert result["total_instruments"] == 0
         assert result["oldest_bar"] is None
         assert result["newest_bar"] is None
+        assert result["catalog_exists"] is False
+        assert "sam download-bars" in result["message"]
+
+    def test_empty_catalog_directory(self) -> None:
+        """Empty catalog directory returns catalog_exists=True with message."""
+        mock_catalog = MagicMock()
+        mock_catalog.instruments.return_value = []
+        with patch(
+            "sam_trader.services.backtest.dashboard_api._get_catalog",
+            return_value=mock_catalog,
+        ):
+            result = handle_backtest_catalog_status()
+
+        assert result["total_instruments"] == 0
+        assert result["oldest_bar"] is None
+        assert result["newest_bar"] is None
+        assert result["catalog_exists"] is True
+        assert "sam download-bars" in result["message"]
 
     def test_catalog_with_data(self) -> None:
         """Catalog with instruments returns aggregate stats."""
@@ -772,6 +790,8 @@ class TestHandleBacktestCatalogStatus:
         assert result["total_instruments"] == 1
         assert result["oldest_bar"] is not None
         assert result["newest_bar"] is not None
+        assert result["catalog_exists"] is True
+        assert result["message"] is None
 
 
 # ---------------------------------------------------------------------------

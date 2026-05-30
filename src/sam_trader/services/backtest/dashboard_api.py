@@ -925,9 +925,20 @@ def handle_backtest_catalog_status(
     Returns
     -------
     dict
-        ``{"total_instruments": int, "oldest_bar": str|null, "newest_bar": str|null}``
+        ``{"total_instruments": int, "oldest_bar": str|null,
+        "newest_bar": str|null, "catalog_exists": bool, "message": str|null}``
 
     """
+    catalog = _get_catalog(catalog_path)
+    if catalog is None:
+        return {
+            "total_instruments": 0,
+            "oldest_bar": None,
+            "newest_bar": None,
+            "catalog_exists": False,
+            "message": "Catalog directory not found. Create it with sam download-bars.",
+        }
+
     instruments = handle_backtest_catalog_instruments(catalog_path=catalog_path)
 
     if not instruments:
@@ -935,6 +946,10 @@ def handle_backtest_catalog_status(
             "total_instruments": 0,
             "oldest_bar": None,
             "newest_bar": None,
+            "catalog_exists": True,
+            "message": (
+                "No historical data found. Download bars first — use sam download-bars."
+            ),
         }
 
     total = len(instruments)
@@ -953,4 +968,6 @@ def handle_backtest_catalog_status(
         "total_instruments": total,
         "oldest_bar": oldest,
         "newest_bar": newest,
+        "catalog_exists": True,
+        "message": None,
     }
