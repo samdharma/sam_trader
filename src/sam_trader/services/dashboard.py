@@ -767,10 +767,10 @@ function exportResultsCSV(){
   var headers=['run_id','strategy_id','instrument_id','bar_type','start_date','end_date','status','elapsed_secs','strategy_family','created_at'];
   var lines=[headers.join(',')];
   _btResultsAll.forEach(function(r){lines.push(headers.map(function(h){return csvEscape(r[h]||'');}).join(','));});
-  var blob=new Blob([lines.join('\n')],{type:'text/csv'});
+  var blob=new Blob([lines.join('\\n')],{type:'text/csv'});
   downloadBlob(blob,'backtest_results.csv');
 }
-function csvEscape(v){v=String(v);if(v.indexOf(',')!==-1||v.indexOf('"')!==-1||v.indexOf('\n')!==-1){return'"'+v.replace(/"/g,'""')+'"';}return v;}
+function csvEscape(v){v=String(v);if(v.indexOf(',')!==-1||v.indexOf('"')!==-1||v.indexOf('\\n')!==-1){return'"'+v.replace(/"/g,'""')+'"';}return v;}
 function downloadBlob(blob,name){var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();URL.revokeObjectURL(a.href);}
 
 // --- Run Detail Modal ---
@@ -927,7 +927,7 @@ function exportRunCSV(runId){
     (Array.isArray(ec)?ec:[]).forEach(function(p){
       if(p&&p.length>=2)lines.push(p[0]+','+p[1]);
     });
-    var blob=new Blob([lines.join('\n')],{type:'text/csv'});
+    var blob=new Blob([lines.join('\\n')],{type:'text/csv'});
     downloadBlob(blob,'backtest_'+runId+'.csv');
   });
 }
