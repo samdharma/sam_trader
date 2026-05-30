@@ -159,9 +159,9 @@ def _discover_bar_types(catalog: ParquetDataCatalog, instrument_id: str) -> list
         if bar_data_dir.exists():
             prefix = f"{instrument_id}-"
             for f in bar_data_dir.rglob("*.parquet"):
-                stem = f.stem
-                if stem.startswith(prefix):
-                    bar_types.append(stem)
+                parent = f.parent.name
+                if parent.startswith(prefix):
+                    bar_types.append(parent)
     except Exception as exc:
         logger.debug("Failed to scan bar files for %s: %s", instrument_id, exc)
     return sorted(set(bar_types))
@@ -202,10 +202,10 @@ def _filesystem_date_range(
     for entry in bar_dir.iterdir():
         if not entry.is_dir():
             continue
+        if instrument_id not in entry.name:
+            continue
         for f in entry.rglob("*.parquet"):
             stem = f.stem
-            if instrument_id not in stem:
-                continue
             parts = stem.split("_")
             if len(parts) >= 2:
                 d1 = parts[0][:10]
