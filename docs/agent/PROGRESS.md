@@ -2389,3 +2389,12 @@
 - **Files Changed**: `src/sam_trader/services/backtest/dashboard_api.py`, `tests/unit/services/backtest/test_dashboard_api.py`
 - **Validation Result**: PASS (RALPH_GATE_PASSED — 54/54 tests, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None
+
+## Iteration 152
+- **Task**: 12.1.15: Date pre-fill from catalog range
+- **Task ID**: sam_trader-9z3.13.1.15
+- **Status**: COMPLETE
+- **Decisions**: Extended the existing instrument-loading IIFE in dashboard.py to also fetch `/api/backtest/catalog/status` in parallel. Date inputs (`bt-start`, `bt-end`) are pre-filled with `oldest_bar`/`newest_bar` when present. Null-guard (`if(d&&d.oldest_bar)`) ensures blank inputs on empty catalog — no user override blocking, since we only set `.value` on initial load.
+- **Files Changed**: `src/sam_trader/services/dashboard.py`, `tests/unit/services/test_dashboard.py`
+- **Validation Result**: PASS (RALPH_GATE_PASSED — 70/70 dashboard tests, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None. Ready for next 12.1 ticket.
