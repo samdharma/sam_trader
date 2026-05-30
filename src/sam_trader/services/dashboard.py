@@ -821,8 +821,8 @@ function renderBacktestDetail(d){
     '<h4 style="margin:1rem 0 .5rem; color:var(--accent);">Equity Curve</h4>'+
     '<div class="bt-chart-container" id="bt-detail-chart"><canvas id="bt-detail-canvas"></canvas><div class="bt-chart-tooltip" id="bt-detail-tt"></div></div>'+
     '<div style="display:flex; gap:.5rem; margin-top:.25rem;">'+
-      '<button class="bt-btn-small" onclick="exportRunJSON(\''+escHtml(d.run_id||'')+'\')">⬇ JSON</button>'+
-      '<button class="bt-btn-small" onclick="exportRunCSV(\''+escHtml(d.run_id||'')+'\')">⬇ CSV</button>'+
+      '<button class="bt-btn-small" onclick="exportRunJSON(' + escHtml(d.run_id||'') + ')">⬇ JSON</button>'+
+      '<button class="bt-btn-small" onclick="exportRunCSV(' + escHtml(d.run_id||'') + ')">⬇ CSV</button>'+
     '</div>';
   setTimeout(function(){drawEquityCurve('bt-detail-canvas','bt-detail-tt',ec);},100);
   return html;
