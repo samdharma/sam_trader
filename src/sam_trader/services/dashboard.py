@@ -1225,7 +1225,7 @@ async def _query_daily_pnl_from_fills_async(
                     END
                 ) - SUM(COALESCE(commission, 0)) AS pnl
             FROM fills
-            WHERE ts_event >= CURRENT_DATE - INTERVAL '%s days'
+            WHERE ts_event >= CURRENT_DATE - $1::int * INTERVAL '1 day'
             GROUP BY DATE(ts_event)
             ORDER BY date
             """,
@@ -1264,8 +1264,8 @@ async def _query_benchmark_daily_pnl_from_fills_async(
                     END
                 ) - SUM(COALESCE(commission, 0)) AS pnl
             FROM fills
-            WHERE ts_event >= CURRENT_DATE - INTERVAL '%s days'
-              AND instrument_id = $1
+            WHERE ts_event >= CURRENT_DATE - $1::int * INTERVAL '1 day'
+              AND instrument_id = $2
             GROUP BY DATE(ts_event)
             ORDER BY date
             """,
