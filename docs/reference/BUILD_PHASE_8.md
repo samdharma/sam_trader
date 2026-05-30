@@ -592,4 +592,22 @@ def _cmd_performance(args: argparse.Namespace) -> int:
 - `MarketCalendarService` (already built in Phase 9)
 - PG `daily_reports` table (new)
 
-*Last updated: 2026-05-27 — Dynamic Multi-Market extensions planned*
+*Last updated: 2026-05-30 — Dynamic Multi-Market extensions planned, known bugs documented*
+
+---
+
+## 13. Known Issues (Post-Release)
+
+### 13.1 Futu OpenD Healthcheck L3 — False Unhealthy
+
+**Ticket:** \`sam_trader-2vj\`  
+**Symptom:** \`sam-futu-opend\` container marked unhealthy despite OpenD running and logged in.  
+**Root cause:** \`docker/futu-opend/healthcheck.sh\` L3 greps for \`"Login successful"\` only in the **single most recent** GTWLog file. Futu rotates log files during operation; newer files (connection/keepalive activity) don't contain the login entry from startup.  
+**Fix:** Change L3 to scan **all** GTWLog files: \`grep -lq "Login successful" "$LOG_DIR"/GTWLog_*\`.
+
+### 13.2 Dashboard Equity Curve — SQL Binding Mismatch
+
+**Ticket:** \`sam_trader-mud\`  
+**Symptom:** \`WARNING: equity curve query failed: invalid input syntax for type interval: "%s days"\` in sam-services logs.  
+**Root cause:** \`dashboard.py\` lines 1228 and 1267 use \`INTERVAL '%s days'\` (psycopg2 syntax) with asyncpg. asyncpg requires \`$1\` positional binding. The literal string \`%s days\` is passed to PostgreSQL unsubstituted.  
+**Fix:** Replace with \`$1::int * INTERVAL '1 day'\` — asyncpg-compatible interval construction.

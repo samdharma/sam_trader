@@ -62,7 +62,8 @@ All containers use the **same timing parameters** for consistency:
 | L3 | Log scan of most recent GTWLog for "Login successful" + failure patterns |
 
 > Implemented in `docker/futu-opend/healthcheck.sh` (copied into the image).  
-> Filters to `GTWLog_*` files only — `.ftlog` (internal binary logs) and `Monitor.log` are excluded because they don't contain login status text.
+> Filters to `GTWLog_*` files only — `.ftlog` (internal binary logs) and `Monitor.log` are excluded because they don't contain login status text.  
+> **⚠️ Known issue (sam_trader-2vj):** L3 scans only the single most recent GTWLog file. Futu rotates log files during operation; newer files may not contain "Login successful" from startup, causing false-unhealthy. Fix: scan **all** GTWLog files with `grep -lq`.
 
 ### sam-ib-gateway (IB Gateway)
 
