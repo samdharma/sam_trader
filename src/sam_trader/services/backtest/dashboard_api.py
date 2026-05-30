@@ -158,7 +158,7 @@ def _discover_bar_types(catalog: ParquetDataCatalog, instrument_id: str) -> list
         bar_data_dir = Path(catalog.path) / "data" / "bar"
         if bar_data_dir.exists():
             prefix = f"{instrument_id}-"
-            for f in bar_data_dir.glob("*.parquet"):
+            for f in bar_data_dir.rglob("*.parquet"):
                 stem = f.stem
                 if stem.startswith(prefix):
                     bar_types.append(stem)
@@ -181,6 +181,40 @@ def _catalog_date_range(
     except Exception as exc:
         logger.debug("Failed to query timestamps for %s: %s", instrument_id, exc)
         return {"first_bar": None, "last_bar": None}
+
+
+def _filesystem_date_range(
+    catalog_path: str, instrument_id: str, bar_type: str
+) -> tuple[str | None, str | None]:
+    """Extract first/last bar dates from parquet filenames in the filesystem.
+
+    Parquet files are named like:
+    ``2023-05-31T09-35-00-..._2026-05-29T16-00-00-....parquet``
+    The first 10 chars of each timestamp segment are the date (YYYY-MM-DD).
+    """
+    bar_dir = Path(catalog_path) / "data" / "bar"
+    if not bar_dir.exists():
+        return None, None
+
+    first_date: str | None = None
+    last_date: str | None = None
+
+    for entry in bar_dir.iterdir():
+        if not entry.is_dir():
+            continue
+        for f in entry.rglob("*.parquet"):
+            stem = f.stem
+            if instrument_id not in stem:
+                continue
+            parts = stem.split("_")
+            if len(parts) >= 2:
+                d1 = parts[0][:10]
+                d2 = parts[1][:10]
+                if first_date is None or d1 < first_date:
+                    first_date = d1
+                if last_date is None or d2 > last_date:
+                    last_date = d2
+    return first_date, last_date
 
 
 # ---------------------------------------------------------------------------
@@ -1312,8 +1346,21 @@ def handle_backtest_catalog_instruments(
             bar_types = _discover_bar_types(catalog, iid)
             date_range = _catalog_date_range(catalog, iid)
             inst["bar_types"] = bar_types
-            inst["first_bar"] = date_range.get("first_bar")
-            inst["last_bar"] = date_range.get("last_bar")
+            # Filesystem date range fallback when catalog queries return None
+            if date_range.get("first_bar") is None and date_range.get("last_bar") is None:
+                first_bar = None
+                last_bar = None
+                for bt in bar_types:
+                    fs_first, fs_last = _filesystem_date_range(catalog_path, iid, bt)
+                    if first_bar is None or (fs_first is not None and fs_first < str(first_bar)):
+                        first_bar = fs_first
+                    if last_bar is None or (fs_last is not None and fs_last > str(last_bar)):
+                        last_bar = fs_last
+                inst["first_bar"] = first_bar
+                inst["last_bar"] = last_bar
+            else:
+                inst["first_bar"] = date_range.get("first_bar")
+                inst["last_bar"] = date_range.get("last_bar")
 
     return instruments
 
