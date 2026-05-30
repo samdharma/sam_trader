@@ -2398,3 +2398,12 @@
 - **Files Changed**: `src/sam_trader/services/dashboard.py`, `tests/unit/services/test_dashboard.py`
 - **Validation Result**: PASS (RALPH_GATE_PASSED — 70/70 dashboard tests, black/isort/flake8/mypy all green)
 - **Blockers / Notes**: None. Ready for next 12.1 ticket.
+
+## Iteration 152
+- **Task**: 12.1.14: Empty catalog — graceful error messaging
+- **Task ID**: sam_trader-9z3.13.1.14
+- **Status**: COMPLETE
+- **Decisions**: Modified `handle_backtest_catalog_status()` to return two new fields: `catalog_exists` (bool) and `message` (str|null). This distinguishes "catalog directory missing" from "catalog exists but has no instruments". Dashboard runner-panel JavaScript now checks `total_instruments === 0` after fetching catalog status, shows a red banner with the actionable message, and disables the Run button. Reused existing `.schedule-banner` CSS pattern with a new `.bt-catalog-banner` class for consistent styling.
+- **Files Changed**: `src/sam_trader/services/backtest/dashboard_api.py`, `src/sam_trader/services/dashboard.py`, `tests/unit/services/backtest/test_dashboard_api.py`, `tests/unit/services/test_dashboard.py`
+- **Validation Result**: PASS (RALPH_GATE_PASSED — 127/127 targeted tests, black/isort/flake8/mypy all green)
+- **Blockers / Notes**: None.
